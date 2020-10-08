@@ -22,4 +22,4 @@ func WithDelay(delay time.Duration) DeliveryOption {
 	}
 }
 
-type DeliveryOption func (o *deliveryOptions) error
+type DeliveryOption func(o *deliveryOptions) error

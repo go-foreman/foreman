@@ -24,12 +24,12 @@ func (a AmqpEndpoint) Name() string {
 	return a.name
 }
 
-func (a AmqpEndpoint) Send(ctx context.Context, message *message.Message, headers map[string]interface{}, userOpts ...DeliveryOption) error {
-	opts := &deliveryOptions{}
+func (a AmqpEndpoint) Send(ctx context.Context, message *message.Message, headers map[string]interface{}, opts ...DeliveryOption) error {
+	deliveryOpts := &deliveryOptions{}
 
-	if userOpts != nil {
-		for _, opt := range userOpts {
-			if err := opt(opts); err != nil {
+	if opts != nil {
+		for _, opt := range opts {
+			if err := opt(deliveryOpts); err != nil {
 				return errors.Wrapf(err, "error compiling delivery options for message %s", message.ID)
 			}
 		}
@@ -43,13 +43,14 @@ func (a AmqpEndpoint) Send(ctx context.Context, message *message.Message, header
 
 	toSend := pkg.NewOutboundPkg(dataToSend, "application/json", a.destination, headers)
 
-	if opts.delay != nil {
-		waiter: for {
+	if deliveryOpts.delay != nil {
+	waiter:
+		for {
 			select {
-			case <- ctx.Done():
+			case <-ctx.Done():
 				return errors.Errorf("Failed to send message %s. Was waiting for the delay and parent ctx closed.", message.ID)
-				case <- time.After(*opts.delay):
-					break waiter //break for statement
+			case <-time.After(*deliveryOpts.delay):
+				break waiter //break for statement
 			}
 		}
 	}

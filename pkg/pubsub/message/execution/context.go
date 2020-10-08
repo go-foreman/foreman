@@ -2,17 +2,13 @@ package execution
 
 import (
 	"context"
+	"github.com/kopaygorodsky/brigadier/pkg/log"
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/endpoint"
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message"
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/transport/pkg"
 	"github.com/kopaygorodsky/brigadier/pkg/runtime/scheme"
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 	"time"
-)
-
-const (
-	LogLevel = iota
 )
 
 type MessageExecutionCtx interface {
@@ -21,7 +17,7 @@ type MessageExecutionCtx interface {
 	Valid() bool
 	Send(message *message.Message, options ...endpoint.DeliveryOption) error
 	Return(delay time.Duration) error
-	LogMessage(msg string, level string)
+	LogMessage(level log.Level, msg string)
 }
 
 type messageExecutionCtx struct {
@@ -30,7 +26,7 @@ type messageExecutionCtx struct {
 	inPkg   pkg.IncomingPkg
 	message *message.Message
 	router  endpoint.Router
-	logger  *log.Logger
+	logger  log.Logger
 }
 
 func (m messageExecutionCtx) Valid() bool {
@@ -45,13 +41,13 @@ func (m messageExecutionCtx) Send(message *message.Message, options ...endpoint.
 	endpoints := m.router.Route(scheme.WithKey(message.Name))
 
 	if len(endpoints) == 0 {
-		m.logger.Warningf("No endpoints defined for message %s", message.Name)
+		m.logger.Logf(log.WarnLevel, "No endpoints defined for message %s", message.Name)
 		return nil
 	}
 
 	for _, endp := range endpoints {
 		if err := endp.Send(m.ctx, message, message.Headers, options...); err != nil {
-			m.logger.Errorf("Error sending message id %s", message.ID)
+			m.logger.Logf(log.ErrorLevel, "Error sending message id %s", message.ID)
 			return errors.WithStack(err)
 		}
 	}
@@ -63,11 +59,11 @@ func (m messageExecutionCtx) Return(delay time.Duration) error {
 	for {
 		select {
 		case <-m.ctx.Done():
-			m.logger.Infof("Context is closed, exiting without returning msg: %s, delay is too long", m.message.ID)
+			m.logger.Logf(log.InfoLevel, "Context is closed, exiting without returning msg: %s, delay is too long", m.message.ID)
 			return nil
 		case <-time.After(delay):
 			if err := m.Send(m.message); err != nil {
-				m.logger.Errorf("error when returning a message %s", m.message.ID)
+				m.logger.Logf(log.ErrorLevel, "error when returning a message %s", m.message.ID)
 				return errors.Wrapf(err, "error when returning a message %s", m.message.ID)
 			}
 		}
@@ -78,12 +74,7 @@ func (m messageExecutionCtx) Message() *message.Message {
 	return m.message
 }
 
-func (m messageExecutionCtx) LogMessage(msg string, level string) {
-	lvl, err := log.ParseLevel(level)
-	if err != nil {
-		//show msg on error lvl
-		m.logger.Error(err, msg)
-	}
+func (m messageExecutionCtx) LogMessage(lvl log.Level, msg string) {
 	m.logger.Log(lvl, msg)
 }
 
@@ -93,10 +84,10 @@ type MessageExecutionCtxFactory interface {
 
 type messageExecutionCtxFactory struct {
 	router endpoint.Router
-	logger *log.Logger
+	logger log.Logger
 }
 
-func NewMessageExecutionCtxFactory(router endpoint.Router, logger *log.Logger) MessageExecutionCtxFactory {
+func NewMessageExecutionCtxFactory(router endpoint.Router, logger log.Logger) MessageExecutionCtxFactory {
 	return &messageExecutionCtxFactory{router: router, logger: logger}
 }
 

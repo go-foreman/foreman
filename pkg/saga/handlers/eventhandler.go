@@ -1,16 +1,17 @@
 package handlers
 
 import (
+	log "github.com/kopaygorodsky/brigadier/pkg/log"
 	busErrs "github.com/kopaygorodsky/brigadier/pkg/pubsub/errors"
+	sagaPkg "github.com/kopaygorodsky/brigadier/pkg/saga"
+	sagaMutex "github.com/kopaygorodsky/brigadier/pkg/saga/mutex"
+
+	"fmt"
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message"
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message/execution"
 	"github.com/kopaygorodsky/brigadier/pkg/runtime/scheme"
-	sagaPkg "github.com/kopaygorodsky/brigadier/pkg/saga"
 	"github.com/kopaygorodsky/brigadier/pkg/saga/contracts"
-	sagaMutex "github.com/kopaygorodsky/brigadier/pkg/saga/mutex"
-	"fmt"
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 	"time"
 )
 
@@ -19,10 +20,10 @@ type SagaEventsHandler struct {
 	idExtractor   sagaPkg.IdExtractor
 	typesRegistry scheme.KnownTypesRegistry
 	mutex         sagaMutex.Mutex
-	logger        *log.Logger
+	logger        log.Logger
 }
 
-func NewEventsHandler(sagaStore sagaPkg.Store, extractor sagaPkg.IdExtractor, sagaRegistry scheme.KnownTypesRegistry, mutex sagaMutex.Mutex, logger *log.Logger) *SagaEventsHandler {
+func NewEventsHandler(sagaStore sagaPkg.Store, mutex sagaMutex.Mutex, sagaRegistry scheme.KnownTypesRegistry, extractor sagaPkg.IdExtractor, logger log.Logger) *SagaEventsHandler {
 	return &SagaEventsHandler{sagaStore: sagaStore, idExtractor: extractor, typesRegistry: sagaRegistry, mutex: mutex, logger: logger}
 }
 
@@ -47,7 +48,7 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 
 	defer func() {
 		if err := e.mutex.Release(ctx, sagaId); err != nil {
-			e.logger.Error(err)
+			e.logger.Log(log.ErrorLevel, err)
 		}
 	}()
 
@@ -73,19 +74,19 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 	if handler, exists := saga.EventHandlers()[msg.Name]; exists {
 
 		if err := handler(sagaCtx); err != nil {
-			execCtx.LogMessage(fmt.Sprintf("error handling saga event %s from message %s: %s", msg.Name, msg.ID, err), execution.LogError)
+			execCtx.LogMessage(log.ErrorLevel, fmt.Sprintf("error handling saga event %s from message %s: %s", msg.Name, msg.ID, err))
 			return errors.Wrapf(err, "error handling event %s from message %s", msg.Name, msg.ID)
 		}
 
 		for _, delivery := range sagaCtx.Deliveries() {
 			if err := execCtx.Send(delivery.Message, delivery.Options...); err != nil {
-				execCtx.LogMessage(fmt.Sprintf("error sending delivery for saga %s. Delivery: (%v). %s", sagaCtx.SagaInstance().ID(), delivery, err), execution.LogError)
+				execCtx.LogMessage(log.ErrorLevel, fmt.Sprintf("error sending delivery for saga %s. Delivery: (%v). %s", sagaCtx.SagaInstance().ID(), delivery, err))
 				return errors.Wrapf(err, "error sending delivery for saga %s. Delivery: (%v)", sagaCtx.SagaInstance().ID(), delivery)
 			}
 			sagaCtx.SagaInstance().AttachEvent(sagaPkg.HistoryEvent{Metadata: delivery.Message.Metadata, Payload: delivery.Message.Payload, CreatedAt: time.Now()})
 		}
 	} else {
-		e.logger.Warnf("No handler defined for event %s from message %s", msg.Name, msg.ID)
+		e.logger.Logf(log.WarnLevel, "No handler defined for event %s from message %s", msg.Name, msg.ID)
 	}
 
 	sagaInstance.AttachEvent(sagaPkg.HistoryEvent{Metadata: msg.Metadata, Payload: msg.Payload, CreatedAt: time.Now(), OriginSource: msg.OriginSource, SagaStatus: sagaInstance.Status(), Description: msg.Description})

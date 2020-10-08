@@ -7,7 +7,6 @@ import (
 )
 
 //KeyChoice is a type that was summoned from golang configurations world for giving you an ability to chose how to register endpoints, handlers for messages.
-
 type KeyChoice func() string
 
 //WithKey sets string key

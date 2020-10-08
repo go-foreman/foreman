@@ -7,7 +7,7 @@ import (
 	"reflect"
 )
 
-const MatchesAllKey = "*"
+const MatchesAllKeys = "*"
 
 type Dispatcher interface {
 	Match(message *message.Message) []execution.Executor
@@ -35,7 +35,7 @@ func (d dispatcher) Match(message *message.Message) []execution.Executor {
 
 		var listeners []execution.Executor
 
-		if catchAllListeners, ok := d.listeners[MatchesAllKey]; ok {
+		if catchAllListeners, ok := d.listeners[MatchesAllKeys]; ok {
 			listeners = append(listeners, catchAllListeners...)
 		}
 		if eventListeners, ok := d.listeners[message.Name]; ok {
@@ -55,7 +55,7 @@ func (d *dispatcher) RegisterCmdHandlerWithKey(keyChoice scheme.KeyChoice, execu
 	for _, handler := range d.handlers[key] {
 		handlerPtr := reflect.ValueOf(handler).Pointer()
 
-		//check if this handler was already registered. Since it's function - need to take value and then ptr of it.
+		//check if this handler was already registered. because it's a function - need to take value and then ptr of it.
 		if handlerPtr == executorPtr {
 			return d
 		}

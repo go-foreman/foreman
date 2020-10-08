@@ -1,10 +1,16 @@
 package mutex
 
+import (
+	"context"
+	"database/sql"
+	"github.com/pkg/errors"
+)
+
 type MysqlMutex struct {
 	db *sql.DB
 }
 
-func NewMysqlMutex(db *sql.DB) Mutex {
+func NewSqlMutex(db *sql.DB) Mutex {
 	return &MysqlMutex{db: db}
 }
 

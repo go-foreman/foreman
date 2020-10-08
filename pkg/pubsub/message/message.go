@@ -1,8 +1,8 @@
 package message
 
 import (
-	"github.com/kopaygorodsky/brigadier/pkg/runtime/scheme"
 	"github.com/google/uuid"
+	"github.com/kopaygorodsky/brigadier/pkg/runtime/scheme"
 	"time"
 )
 

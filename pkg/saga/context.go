@@ -2,16 +2,18 @@ package saga
 
 import (
 	"context"
+	"fmt"
+	"time"
+
+	"github.com/kopaygorodsky/brigadier/pkg/log"
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/endpoint"
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message"
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message/execution"
-	"fmt"
 	"github.com/pkg/errors"
-	"time"
 )
 
 //SagaContext is sealed interface due to deliver method, that takes all dispatched deliveries and start sending out them
-//Still not decided if this interface users should be able to implement
+//Still its' not decided if this interface users should be able to implement
 type SagaContext interface {
 	//execution.MessageExecutionCtx
 	Message() *message.Message
@@ -20,7 +22,7 @@ type SagaContext interface {
 	Dispatch(message *message.Message, options ...endpoint.DeliveryOption)
 	Deliveries() []*Delivery
 	Return(options ...endpoint.DeliveryOption)
-	LogMessage(msg string, level string)
+	LogMessage(level log.Level, msg string)
 	SagaInstance() Instance
 	deliver() error
 }
@@ -51,8 +53,8 @@ func (s sagaCtx) Return(options ...endpoint.DeliveryOption) {
 	s.Dispatch(s.Message(), options...)
 }
 
-func (s sagaCtx) LogMessage(msg string, level string) {
-	s.execCtx.LogMessage(fmt.Sprintf("SagaId: `%s`. %s", s.sagaInstance.ID(), msg), level)
+func (s sagaCtx) LogMessage(lvl log.Level, msg string) {
+	s.execCtx.LogMessage(lvl, fmt.Sprintf("SagaId: `%s`. %s", s.sagaInstance.ID(), msg))
 }
 
 func (s sagaCtx) SagaInstance() Instance {
@@ -70,7 +72,7 @@ func (s *sagaCtx) Dispatch(toDeliver *message.Message, options ...endpoint.Deliv
 func (s sagaCtx) deliver() error {
 	for _, delivery := range s.Deliveries() {
 		if err := s.execCtx.Send(delivery.Message, delivery.Options...); err != nil {
-			s.execCtx.LogMessage(fmt.Sprintf("error sending delivery for saga %s. Delivery: (%v). %s", s.SagaInstance().ID(), delivery, err), execution.LogError)
+			s.execCtx.LogMessage(log.ErrorLevel, fmt.Sprintf("error sending delivery for saga %s. Delivery: (%v). %s", s.SagaInstance().ID(), delivery, err))
 			return errors.Wrapf(err, "error sending delivery for saga %s. Delivery: (%v)", s.SagaInstance().ID(), delivery)
 		}
 		s.SagaInstance().AttachEvent(HistoryEvent{Metadata: delivery.Message.Metadata, Payload: delivery.Message.Payload, CreatedAt: time.Now()})

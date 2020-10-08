@@ -2,13 +2,13 @@ package subscriber
 
 import (
 	"context"
+	"github.com/kopaygorodsky/brigadier/pkg/log"
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/dispatcher"
 	pubsubErrs "github.com/kopaygorodsky/brigadier/pkg/pubsub/errors"
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message"
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message/execution"
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/transport/pkg"
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 	"time"
 )
 
@@ -17,27 +17,27 @@ type Processor interface {
 }
 
 type processor struct {
-	logger            *log.Logger
+	logger            log.Logger
 	decoder           message.Decoder
 	dispatcher        dispatcher.Dispatcher
 	msgExecCtxFactory execution.MessageExecutionCtxFactory
 }
 
-func NewHandler(decoder message.Decoder, msgExecCtxFactory execution.MessageExecutionCtxFactory, msgDispatcher dispatcher.Dispatcher, logger *log.Logger) Processor {
+func NewHandler(decoder message.Decoder, msgExecCtxFactory execution.MessageExecutionCtxFactory, msgDispatcher dispatcher.Dispatcher, logger log.Logger) Processor {
 	return &processor{decoder: decoder, msgExecCtxFactory: msgExecCtxFactory, dispatcher: msgDispatcher, logger: logger}
 }
 
 func (p *processor) Process(ctx context.Context, inPkg pkg.IncomingPkg) error {
 	msg, err := p.decoder.Decode(inPkg)
 	if err != nil {
-		p.logger.Errorf("Failed to decode IncomingPkg into Message. %s", err)
+		p.logger.Logf(log.ErrorLevel, "Failed to decode IncomingPkg into Message. %s", err)
 		return errors.WithStack(err)
 	}
 
 	executors := p.dispatcher.Match(msg)
 
 	if len(executors) == 0 {
-		p.logger.Errorf("No executors defined for message %s of type %s", msg.Name, msg.Type)
+		p.logger.Logf(log.ErrorLevel, "No executors defined for message %s of type %s", msg.Name, msg.Type)
 		return WithNoExecutorsDefinedErr(errors.Errorf("No executors defined for message %s of type %s", msg.Name, msg.Type))
 	}
 
@@ -45,15 +45,15 @@ func (p *processor) Process(ctx context.Context, inPkg pkg.IncomingPkg) error {
 
 	for _, exec := range executors {
 		if err := exec(execCtx); err != nil {
-			p.logger.Errorf("Error executing message %s of type %s. %s", msg.Name, msg.Type, err)
+			p.logger.Logf(log.ErrorLevel, "Error executing message %s of type %s. %s", msg.Name, msg.Type, err)
 			originalErr := errors.Cause(err)
 
 			if statusErr, ok := originalErr.(pubsubErrs.StatusErr); ok {
 				switch statusErr.Status {
 				case pubsubErrs.NoRetry:
-					p.logger.Errorf("Error executing message %s of type %s. %s. NoRetry", msg.Name, msg.Type, err)
+					p.logger.Logf(log.ErrorLevel, "Error executing message %s of type %s. %s. NoRetry", msg.Name, msg.Type, err)
 				default:
-					p.logger.Errorf("Error executing message %s of type %s. %s", msg.Name, msg.Type, err)
+					p.logger.Logf(log.ErrorLevel, "Error executing message %s of type %s. %s", msg.Name, msg.Type, err)
 					return execCtx.Return(time.Second * 3)
 				}
 			}

@@ -1,16 +1,17 @@
 package amqp
 
 import (
+	log "github.com/kopaygorodsky/brigadier/pkg/log"
+
 	"context"
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/transport"
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/transport/pkg"
 	"github.com/pkg/errors"
 	"github.com/streadway/amqp"
-	"log"
 	"sync"
 )
 
-func NewTransport(url string, logger *log.Logger) transport.Transport {
+func NewTransport(url string, logger log.Logger) transport.Transport {
 	return &amqpTransport{
 		url:    url,
 		logger: logger,
@@ -20,9 +21,8 @@ func NewTransport(url string, logger *log.Logger) transport.Transport {
 type amqpTransport struct {
 	url        string
 	connection *amqp.Connection
-	receivingChan *amqp.Channel
-	sendingChan *amqp.Channel
-	logger     *log.Logger
+	ch         *amqp.Channel
+	logger     log.Logger
 }
 
 func (t *amqpTransport) Connect(ctx context.Context) error {
@@ -31,31 +31,21 @@ func (t *amqpTransport) Connect(ctx context.Context) error {
 		return errors.WithStack(err)
 	}
 
-	sendingCh, err := conn.Channel()
+	ch, err := conn.Channel()
 
 	if err != nil {
 		return errors.WithStack(err)
 	}
 
 	t.connection = conn
-	t.sendingChan = sendingCh
-
-	receivingChan, err := conn.Channel()
-
-	if err != nil {
-		return errors.WithStack(err)
-	}
-
-	t.receivingChan = receivingChan
+	t.ch = ch
 
 	return nil
 }
 
 func (t *amqpTransport) CreateTopic(ctx context.Context, topic transport.Topic) error {
-	if t.connection == nil {
-		if err := t.Connect(ctx); err != nil {
-			return errors.WithStack(err)
-		}
+	if err := t.checkConnection(); err != nil {
+		return errors.WithStack(err)
 	}
 
 	amqpTopic, topicConv := topic.(amqpTopic)
@@ -64,7 +54,7 @@ func (t *amqpTransport) CreateTopic(ctx context.Context, topic transport.Topic) 
 		return errors.Errorf("Supplied topic is not an instance of amqp.Topic")
 	}
 
-	err := t.sendingChan.ExchangeDeclare(
+	err := t.ch.ExchangeDeclare(
 		amqpTopic.Name(),
 		"topic",
 		amqpTopic.durable,
@@ -81,10 +71,8 @@ func (t *amqpTransport) CreateTopic(ctx context.Context, topic transport.Topic) 
 }
 
 func (t *amqpTransport) CreateQueue(ctx context.Context, q transport.Queue, qbs ...transport.QueueBind) error {
-	if t.connection == nil {
-		if err := t.Connect(ctx); err != nil {
-			return errors.WithStack(err)
-		}
+	if err := t.checkConnection(); err != nil {
+		return errors.WithStack(err)
 	}
 
 	queue, queueConv := q.(amqpQueue)
@@ -105,7 +93,7 @@ func (t *amqpTransport) CreateQueue(ctx context.Context, q transport.Queue, qbs 
 		queueBinds = append(queueBinds, queueBind)
 	}
 
-	_, err := t.sendingChan.QueueDeclare(
+	_, err := t.ch.QueueDeclare(
 		queue.Name(),
 		queue.durable,
 		queue.autoDelete,
@@ -118,7 +106,7 @@ func (t *amqpTransport) CreateQueue(ctx context.Context, q transport.Queue, qbs 
 	}
 
 	for _, qb := range queueBinds {
-		err := t.sendingChan.QueueBind(
+		err := t.ch.QueueBind(
 			queue.Name(),
 			qb.BindingKey(),
 			qb.DestinationTopic(),
@@ -134,10 +122,8 @@ func (t *amqpTransport) CreateQueue(ctx context.Context, q transport.Queue, qbs 
 }
 
 func (t *amqpTransport) Send(ctx context.Context, outboundPkg pkg.OutboundPkg, options ...transport.SendOpts) error {
-	if t.connection == nil {
-		if err := t.Connect(ctx); err != nil {
-			return errors.WithStack(err)
-		}
+	if err := t.checkConnection(); err != nil {
+		return errors.WithStack(err)
 	}
 
 	sendOptions := &SendOptions{}
@@ -148,12 +134,13 @@ func (t *amqpTransport) Send(ctx context.Context, outboundPkg pkg.OutboundPkg, o
 		}
 	}
 
-	err := t.sendingChan.Publish(
+	err := t.ch.Publish(
 		outboundPkg.Destination().DestinationTopic,
 		outboundPkg.Destination().RoutingKey,
 		sendOptions.Mandatory,
 		sendOptions.Immediate,
 		amqp.Publishing{
+
 			Headers:     outboundPkg.Headers(),
 			ContentType: outboundPkg.ContentType(),
 			Body:        outboundPkg.Payload(),
@@ -167,10 +154,8 @@ func (t *amqpTransport) Send(ctx context.Context, outboundPkg pkg.OutboundPkg, o
 }
 
 func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, options ...transport.ConsumeOpts) (<-chan pkg.IncomingPkg, error) {
-	if t.connection == nil {
-		if err := t.Connect(ctx); err != nil {
-			return nil, errors.WithStack(err)
-		}
+	if err := t.checkConnection(); err != nil {
+		return nil, errors.WithStack(err)
 	}
 
 	consumeOptions := &ConsumeOptions{}
@@ -193,13 +178,13 @@ func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, o
 			ch, err := t.connection.Channel()
 
 			if err != nil {
-				t.logger.Print(err)
+				t.logger.Log(log.ErrorLevel, err)
 				return
 			}
 
 			defer func() {
 				if err := ch.Close(); err != nil {
-					t.logger.Print(err)
+					t.logger.Log(log.ErrorLevel, err)
 				}
 			}()
 
@@ -214,7 +199,7 @@ func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, o
 			)
 
 			if err != nil {
-				t.logger.Print(err)
+				t.logger.Log(log.ErrorLevel, err)
 				return
 			}
 
@@ -222,14 +207,14 @@ func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, o
 				select {
 				case msg, open := <-msgs:
 					if !open {
-						t.logger.Printf("Amqp consumer closed channel for queue %s", queue.Name())
+						t.logger.Logf(log.WarnLevel, "Amqp consumer closed channel for queue %s", queue.Name())
 						return
 					}
 					inPkg := pkg.NewAmqpIncomingPackage(msg, msg.MessageId, queue.Name())
 
 					income <- inPkg
 				case <-ctx.Done():
-					t.logger.Printf("Canceled context. Stopped consuming queue %s", queue.Name())
+					t.logger.Logf(log.WarnLevel, "Canceled context. Stopped consuming queue %s", queue.Name())
 					return
 				}
 			}
@@ -245,16 +230,24 @@ func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, o
 }
 
 func (t *amqpTransport) Disconnect(ctx context.Context) error {
-	if t.connection == nil || t.channel == nil {
+	if t.connection == nil || t.ch == nil {
 		return nil
 	}
 
-	if err := t.channel.Close(); err != nil {
+	if err := t.ch.Close(); err != nil {
 		return errors.WithStack(err)
 	}
 
 	if err := t.connection.Close(); err != nil {
 		return errors.WithStack(err)
+	}
+
+	return nil
+}
+
+func (t *amqpTransport) checkConnection() error {
+	if t.connection == nil {
+		return errors.Errorf("Connection wasn't established. Use transport.Connect first")
 	}
 
 	return nil

@@ -2,8 +2,6 @@ package mutex
 
 import (
 	"context"
-	"database/sql"
-	"github.com/pkg/errors"
 )
 
 type MutexErr struct {
@@ -18,5 +16,3 @@ type Mutex interface {
 	Lock(ctx context.Context, sagaId string) error
 	Release(ctx context.Context, sagaId string) error
 }
-
-

@@ -1,21 +1,22 @@
 package handlers
 
 import (
+	log "github.com/kopaygorodsky/brigadier/pkg/log"
+	sagaPkg "github.com/kopaygorodsky/brigadier/pkg/saga"
+
 	"context"
+	"fmt"
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message"
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message/execution"
 	"github.com/kopaygorodsky/brigadier/pkg/runtime/scheme"
-	sagaPkg "github.com/kopaygorodsky/brigadier/pkg/saga"
 	"github.com/kopaygorodsky/brigadier/pkg/saga/contracts"
 	"github.com/kopaygorodsky/brigadier/pkg/saga/mutex"
-	"fmt"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 	"time"
 )
 
-func NewSagaStartedHandler(sagaRegistry scheme.KnownTypesRegistry, sagaStore sagaPkg.Store, mutex mutex.Mutex, logger *log.Logger) *SagaControlHandler {
+func NewSagaControlHandler(sagaStore sagaPkg.Store, mutex mutex.Mutex, sagaRegistry scheme.KnownTypesRegistry, logger log.Logger) *SagaControlHandler {
 	return &SagaControlHandler{typesRegistry: sagaRegistry, store: sagaStore, mutex: mutex, logger: logger}
 }
 
@@ -23,7 +24,7 @@ type SagaControlHandler struct {
 	typesRegistry scheme.KnownTypesRegistry
 	store         sagaPkg.Store
 	mutex         mutex.Mutex
-	logger        *log.Logger
+	logger        log.Logger
 }
 
 func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error {
@@ -60,7 +61,7 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 
 		defer func() {
 			if err := h.mutex.Release(ctx, cmd.SagaId); err != nil {
-				h.logger.Error(err)
+				h.logger.Log(log.ErrorLevel, err)
 			}
 		}()
 
@@ -71,7 +72,7 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 		}
 
 		if !sagaInstance.Failed() || sagaInstance.Completed() || sagaInstance.Recovering() || sagaInstance.Compensating() {
-			h.logger.Infof("Saga `%s` has status %s, you can't start recovering the process", sagaInstance.Status(), sagaInstance.ID())
+			h.logger.Logf(log.InfoLevel, "Saga `%s` has status %s, you can't start recovering the process", sagaInstance.Status(), sagaInstance.ID())
 			return nil
 		}
 
@@ -88,7 +89,7 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 
 		defer func() {
 			if err := h.mutex.Release(ctx, cmd.SagaId); err != nil {
-				h.logger.Error(err)
+				h.logger.Log(log.ErrorLevel, err)
 			}
 		}()
 
@@ -99,7 +100,7 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 		}
 
 		if !sagaInstance.Failed() || sagaInstance.Compensating() {
-			h.logger.Infof("Saga `%s` has status `%s`, you can't compensate the process", sagaInstance.ID(), sagaInstance.Status())
+			h.logger.Logf(log.InfoLevel, "Saga `%s` has status `%s`, you can't compensate the process", sagaInstance.ID(), sagaInstance.Status())
 			return nil
 		}
 
@@ -115,7 +116,7 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 
 	for _, delivery := range sagaCtx.Deliveries() {
 		if err := execCtx.Send(delivery.Message, delivery.Options...); err != nil {
-			execCtx.LogMessage(fmt.Sprintf("error sending delivery for saga %s. Delivery: (%v). %s", sagaCtx.SagaInstance().ID(), delivery, err), execution.LogError)
+			execCtx.LogMessage(log.ErrorLevel, fmt.Sprintf("error sending delivery for saga %s. Delivery: (%v). %s", sagaCtx.SagaInstance().ID(), delivery, err))
 			return errors.Wrapf(err, "error sending delivery for saga %s. Delivery: (%v)", sagaCtx.SagaInstance().ID(), delivery)
 		}
 		sagaCtx.SagaInstance().AttachEvent(sagaPkg.HistoryEvent{Metadata: delivery.Message.Metadata, Payload: delivery.Message.Payload, CreatedAt: time.Now()})
