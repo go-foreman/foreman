@@ -4,7 +4,6 @@ import (
 	log "github.com/kopaygorodsky/brigadier/pkg/log"
 
 	"context"
-	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message"
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/transport"
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/transport/pkg"
 	"github.com/pkg/errors"
@@ -15,7 +14,7 @@ import (
 const maxTasksInProgress = 1000
 
 type Subscriber interface {
-	Subscribe(ctx context.Context, queues []transport.Queue) error
+	Subscribe(ctx context.Context, queues... transport.Queue) error
 	Stop(ctx context.Context) error
 }
 
@@ -31,7 +30,7 @@ func NewSubscriber(transport transport.Transport, processor Processor, logger lo
 	return &subscriber{transport: transport, logger: logger, processor: processor}
 }
 
-func (s *subscriber) Subscribe(ctx context.Context, queues []transport.Queue) error {
+func (s *subscriber) Subscribe(ctx context.Context, queues... transport.Queue) error {
 	s.logger.Logf(log.InfoLevel, "Started subscriber. Listening to queues: %v", queues)
 
 	consumedPkgs, err := s.transport.Consume(ctx, queues)
@@ -62,18 +61,16 @@ func (s *subscriber) Subscribe(ctx context.Context, queues []transport.Queue) er
 			if err := s.processor.Process(ctx, inPkg); err != nil {
 				s.logger.Logf(log.ErrorLevel, "Error happened while processing pkg %s from %s. %s\n", inPkg.TraceId(), inPkg.Origin(), err)
 
-				switch errors.Cause(err).(type) {
-				case message.DecoderErr:
-
-					//todo configure DLX for such cases if you want to requeue message
-					if err := inPkg.Nack(); err != nil {
-						s.logger.Logf(log.ErrorLevel, "Error nacking package %s. %s", inPkg.TraceId(), err)
-					}
-				default:
-					if err := inPkg.Ack(); err != nil {
-						s.logger.Logf(log.ErrorLevel, "Error acking package %s. %s", inPkg.TraceId(), err)
-					}
-				}
+				//switch errors.Cause(err).(type) {
+				//case message.DecoderErr:
+				//
+				//	//todo configure DLX for such cases if you want to requeue message
+				//	if err := inPkg.Nack(); err != nil {
+				//		s.logger.Logf(log.ErrorLevel, "Error nacking package %s. %s", inPkg.TraceId(), err)
+				//	}
+				//default:
+				//	s.logger.Logf(log.ErrorLevel, "Error acking package %s. %s", inPkg.TraceId(), err)
+				//}
 			} else {
 				if err := inPkg.Ack(); err != nil {
 					s.logger.Logf(log.ErrorLevel, "Error acking package %s. %s", inPkg.TraceId(), err)

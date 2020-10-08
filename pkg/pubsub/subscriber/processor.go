@@ -23,7 +23,7 @@ type processor struct {
 	msgExecCtxFactory execution.MessageExecutionCtxFactory
 }
 
-func NewHandler(decoder message.Decoder, msgExecCtxFactory execution.MessageExecutionCtxFactory, msgDispatcher dispatcher.Dispatcher, logger log.Logger) Processor {
+func NewMessageProcessor(decoder message.Decoder, msgExecCtxFactory execution.MessageExecutionCtxFactory, msgDispatcher dispatcher.Dispatcher, logger log.Logger) Processor {
 	return &processor{decoder: decoder, msgExecCtxFactory: msgExecCtxFactory, dispatcher: msgDispatcher, logger: logger}
 }
 

@@ -1,4 +1,4 @@
-package saga
+package usecase
 
 import (
 	"github.com/kopaygorodsky/brigadier/pkg/saga"

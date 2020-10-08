@@ -33,7 +33,7 @@ func NewCommandMessage(payload interface{}, options ...MsgOption) *Message {
 
 //NewMessage accepts only structs as payload. If you want to pass scalar data type - wrap it in a struct.
 func NewMessage(keyChoice scheme.KeyChoice, msgType string, payload interface{}, passedOptions ...MsgOption) *Message {
-	opts := make(map[string]interface{})
+	opts := &opts{}
 
 	if len(passedOptions) > 0 {
 		for _, passedOpt := range passedOptions {
@@ -45,27 +45,32 @@ func NewMessage(keyChoice scheme.KeyChoice, msgType string, payload interface{},
 
 	msg := &Message{Metadata: Metadata{ID: uuid.New().String(), Name: keyChoice(), Type: msgType, Headers: make(Headers)}, Payload: payload}
 
-	if v, exists := opts["description"]; exists {
-		msg.Description = v.(string)
+	if opts.description != "" {
+		msg.Description = opts.description
 	}
 
-	if v, exists := opts["headers"]; exists {
-		msg.Headers = v.(Headers)
+	if opts.headers != nil {
+		msg.Headers = opts.headers
 	}
 
 	return msg
 }
 
-type MsgOption func(attr map[string]interface{})
+type MsgOption func(attr *opts)
+
+type opts struct {
+	description string
+	headers Headers
+}
 
 func WithDescription(description string) MsgOption {
-	return func(attr map[string]interface{}) {
-		attr["description"] = description
+	return func(attr *opts) {
+		attr.description = description
 	}
 }
 
 func WithHeaders(headers Headers) MsgOption {
-	return func(attr map[string]interface{}) {
-		attr["headers"] = headers
+	return func(attr *opts) {
+		attr.headers = headers
 	}
 }

@@ -1,23 +1,33 @@
-package saga
+package main
 
 import (
 	"context"
-	transportPackage "github.com/kopaygorodsky/brigadier/pkg/pubsub/transport/pkg"
-	logger "github.com/sirupsen/logrus"
-
+	"database/sql"
 	"fmt"
+	_ "github.com/go-sql-driver/mysql"
+	"github.com/google/uuid"
+	"github.com/kopaygorodsky/brigadier/example/saga/handlers"
+	"github.com/kopaygorodsky/brigadier/example/saga/usecase"
+	"github.com/kopaygorodsky/brigadier/example/saga/usecase/account"
+	"github.com/kopaygorodsky/brigadier/example/saga/usecase/account/contracts"
 	"github.com/kopaygorodsky/brigadier/pkg"
+	"github.com/kopaygorodsky/brigadier/pkg/log"
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/endpoint"
+	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message"
+	transportPackage "github.com/kopaygorodsky/brigadier/pkg/pubsub/transport/pkg"
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/transport/plugins/amqp"
 	"github.com/kopaygorodsky/brigadier/pkg/runtime/scheme"
 	"github.com/kopaygorodsky/brigadier/pkg/saga"
+	"github.com/kopaygorodsky/brigadier/pkg/saga/component"
+	sagaContracts "github.com/kopaygorodsky/brigadier/pkg/saga/contracts"
 	"github.com/kopaygorodsky/brigadier/pkg/saga/mutex"
+	"time"
 )
 
-var defaultLogger = &logger.Logger{}
+var defaultLogger = log.DefaultLogger()
 
 func main() {
-	sagaStore, err := saga.NewSqlSagaStore(nil, scheme.KnownTypesRegistryInstance)
+	db, err := sql.Open("mysql", "root:root@tcp(127.0.0.1:3306)/watcher?charset=utf8&parseTime=True&timeout=30s")
 	if err != nil {
 		panic(err)
 	}
@@ -30,27 +40,67 @@ func main() {
 	ctx := context.Background()
 
 	if err := amqpTransport.Connect(ctx); err != nil {
-		defaultLogger.Errorf("Error connecting to amqp. %s", err)
+		defaultLogger.Logf(log.ErrorLevel, "Error connecting to amqp. %s", err)
 		panic(err)
 	}
 
 	if err := amqpTransport.CreateTopic(ctx, topic); err != nil {
-		defaultLogger.Errorf("Error creating topic %s. %s", topic.Name(), err)
+		defaultLogger.Logf(log.ErrorLevel, "Error creating topic %s. %s", topic.Name(), err)
 		panic(err)
 	}
 
 	if err := amqpTransport.CreateQueue(ctx, queue, binds); err != nil {
-		defaultLogger.Errorf("Error creating queue %s. %s", queue.Name(), err)
+		defaultLogger.Logf(log.ErrorLevel, "Error creating queue %s. %s", queue.Name(), err)
 		panic(err)
 	}
 
 	amqpEndpoint := endpoint.NewAmqpEndpoint(fmt.Sprintf("%s_endpoint", queue.Name()), amqpTransport, transportPackage.DeliveryDestination{DestinationTopic: topic.Name(), RoutingKey: fmt.Sprintf("%s.eventAndCommands", topic.Name())})
 
-	sagaModule := saga.NewSagaModule(sagaStore, mutex.NewSqlMutex(nil), scheme.KnownTypesRegistryInstance, saga.WithSagaIdExtractor(saga.NewSagaIdExtractor()))
-	sagaModule.RegisterSagaEndpoints(amqpEndpoint)
-	sagaModule.RegisterSagas(DefaultSagasCollection.Sagas()...)
-	sagaModule.RegisterContracts(DefaultSagasCollection.Contracts()...)
+	sagaComponent := component.NewSagaModule(
+		func(scheme scheme.KnownTypesRegistry) (saga.Store, error) {
+			return saga.NewSqlSagaStore(db, scheme)
+		},
+		mutex.NewSqlMutex(db),
+	)
+	sagaComponent.RegisterSagaEndpoints(amqpEndpoint)
+	sagaComponent.RegisterSagas(usecase.DefaultSagasCollection.Sagas()...)
+	sagaComponent.RegisterContracts(usecase.DefaultSagasCollection.Contracts()...)
 
-	bootstrapper := &pkg.Bootstrapper{}
-	bootstrapper.ApplyModule(sagaModule)
+	bus, err := pkg.NewMessageBus(defaultLogger, pkg.DefaultWithTransport(amqpTransport), pkg.WithSchemeRegistry(scheme.KnownTypesRegistryInstance), pkg.WithComponents(sagaComponent))
+
+	if err != nil {
+		panic(err)
+	}
+
+	accountHandler := handlers.NewAccountHandler()
+	//here goes registration of handlers
+	bus.Dispatcher().RegisterCmdHandler(&contracts.RegisterAccountCmd{}, accountHandler.RegisterAccount)
+	bus.Dispatcher().RegisterCmdHandler(&contracts.SendConfirmationCmd{}, accountHandler.SendConfirmation)
+
+	//since we have access here to amqp, let's simulate some sagas
+	go generateSomeSagas(amqpEndpoint)
+
+	defaultLogger.Log(log.PanicLevel, bus.Subscriber().Subscribe(context.Background(), queue))
+}
+
+func generateSomeSagas(sendToEndpoint endpoint.Endpoint) {
+	for {
+		time.Sleep(time.Second * 5)
+		uid := uuid.New().String()
+		registerAccountSaga := &account.RegisterAccountSaga{
+			UID: uid,
+			Email: fmt.Sprintf("account-%s@github.com", uid),
+			RetriesLimit: 10,
+		}
+		startSagaCmd := &sagaContracts.StartSagaCommand{
+			SagaId:   uuid.New().String(),
+			SagaName: scheme.WithStruct(registerAccountSaga)(),
+			Saga:     registerAccountSaga,
+		}
+		messageToDeliver := message.NewCommandMessage(startSagaCmd)
+
+		if err := sendToEndpoint.Send(context.Background(), messageToDeliver, nil); err != nil {
+			panic(err)
+		}
+	}
 }

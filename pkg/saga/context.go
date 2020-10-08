@@ -54,7 +54,7 @@ func (s sagaCtx) Return(options ...endpoint.DeliveryOption) {
 }
 
 func (s sagaCtx) LogMessage(lvl log.Level, msg string) {
-	s.execCtx.LogMessage(lvl, fmt.Sprintf("SagaId: `%s`. %s", s.sagaInstance.ID(), msg))
+	s.execCtx.LogMessage(lvl, fmt.Sprintf("SagaId: %s`. %s", s.sagaInstance.ID(), msg))
 }
 
 func (s sagaCtx) SagaInstance() Instance {
