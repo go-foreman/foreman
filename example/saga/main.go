@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/google/uuid"
@@ -21,6 +22,7 @@ import (
 	"github.com/kopaygorodsky/brigadier/pkg/saga/component"
 	sagaContracts "github.com/kopaygorodsky/brigadier/pkg/saga/contracts"
 	"github.com/kopaygorodsky/brigadier/pkg/saga/mutex"
+	streadwayAmqp "github.com/streadway/amqp"
 	"time"
 )
 
@@ -31,6 +33,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	db.SetMaxIdleConns(100)
 
 	amqpTransport := amqp.NewTransport("amqp://admin:admin123@127.0.0.1:5672", defaultLogger)
 	queue := amqp.Queue("messages", false, false, false, false)
@@ -77,13 +80,23 @@ func main() {
 	bus.Dispatcher().RegisterCmdHandler(&contracts.RegisterAccountCmd{}, accountHandler.RegisterAccount)
 	bus.Dispatcher().RegisterCmdHandler(&contracts.SendConfirmationCmd{}, accountHandler.SendConfirmation)
 
-	//since we have access here to amqp, let's simulate some sagas
-	go generateSomeSagas(amqpEndpoint)
+	//let's simulate some sagas
+	go generateSomeSagas()
 
 	defaultLogger.Log(log.PanicLevel, bus.Subscriber().Subscribe(context.Background(), queue))
 }
 
-func generateSomeSagas(sendToEndpoint endpoint.Endpoint) {
+func generateSomeSagas() {
+	conn, err := streadwayAmqp.Dial("amqp://admin:admin123@127.0.0.1:5672")
+	if err != nil {
+		panic(err)
+	}
+
+	ch, err := conn.Channel()
+
+	if err != nil {
+		panic(err)
+	}
 	for {
 		time.Sleep(time.Second * 5)
 		uid := uuid.New().String()
@@ -98,9 +111,24 @@ func generateSomeSagas(sendToEndpoint endpoint.Endpoint) {
 			Saga:     registerAccountSaga,
 		}
 		messageToDeliver := message.NewCommandMessage(startSagaCmd)
-
-		if err := sendToEndpoint.Send(context.Background(), messageToDeliver, nil); err != nil {
+		msgBytes, err := json.Marshal(messageToDeliver)
+		if err != nil {
 			panic(err)
 		}
+
+		err = ch.Publish(
+			"messages_exchange",
+			"messages_exchange.eventAndCommands",
+			false,
+			false,
+			streadwayAmqp.Publishing{
+				ContentType: "application/json",
+				Body:        msgBytes,
+			},
+		)
+		if err != nil {
+			panic(err)
+		}
+
 	}
 }

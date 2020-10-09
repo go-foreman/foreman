@@ -6,6 +6,7 @@ import (
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message"
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message/execution"
 	"math/rand"
+	"sync"
 	"time"
 )
 
@@ -20,6 +21,7 @@ type Account struct {
 }
 
 type AccountHandler struct {
+	lock sync.Mutex
 	runtimeDb map[string]*Account
 }
 
@@ -42,8 +44,9 @@ func (h *AccountHandler) RegisterAccount(execCtx execution.MessageExecutionCtx) 
 		email: registerAccountCmd.Email,
 	}
 
-	h.runtimeDb[account.uid] = account
+	h.saveAccount(account)
 
+	time.Sleep(time.Second * 3)
 	successEvent := &contracts.AccountedRegistered{UID: registerAccountCmd.UID}
 	return execCtx.Send(message.NewEventMessage(successEvent, message.WithHeaders(receivedMsg.Headers), message.WithDescription(fmt.Sprintf("Account %s was registered", registerAccountCmd.UID))))
 }
@@ -52,7 +55,7 @@ func (h *AccountHandler) SendConfirmation(execCtx execution.MessageExecutionCtx)
 	receivedMsg := execCtx.Message()
 	sendConfirmationCmd, _ := receivedMsg.Payload.(*contracts.SendConfirmationCmd)
 
-	account, exists := h.runtimeDb[sendConfirmationCmd.UID]
+	account, exists := h.getAccount(sendConfirmationCmd.UID)
 	if !exists {
 		failedEvent := &contracts.RegistrationFailed{UID: sendConfirmationCmd.UID, Reason: "account does not exist"}
 		return execCtx.Send(message.NewEventMessage(failedEvent, message.WithHeaders(receivedMsg.Headers), message.WithDescription(failedEvent.Reason)))
@@ -66,7 +69,19 @@ func (h *AccountHandler) SendConfirmation(execCtx execution.MessageExecutionCtx)
 		execCtx.Send(message.NewEventMessage(accountConfirmedEvent, message.WithHeaders(receivedMsg.Headers), message.WithDescription(fmt.Sprintf("Confirmation to %s sent", sendConfirmationCmd.Email))))
 	}(execCtx, sendConfirmationCmd.UID, receivedMsg.Headers)
 
+	time.Sleep(time.Second * 4)
 	account.confirmationSentAt = time.Now()
 	successEvent := &contracts.ConfirmationSent{UID: sendConfirmationCmd.UID}
 	return execCtx.Send(message.NewEventMessage(successEvent, message.WithHeaders(receivedMsg.Headers), message.WithDescription(fmt.Sprintf("Confirmation to %s sent", sendConfirmationCmd.Email))))
+}
+
+func (h *AccountHandler) getAccount(uid string) (*Account, bool) {
+	acc, exists := h.runtimeDb[uid]
+	return acc, exists
+}
+
+func (h *AccountHandler) saveAccount(acc *Account) {
+	h.lock.Lock()
+	h.runtimeDb[acc.uid] = acc
+	h.lock.Unlock()
 }

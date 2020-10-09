@@ -183,9 +183,7 @@ func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, o
 			}
 
 			defer func() {
-				if err := ch.Close(); err != nil {
-					t.logger.Log(log.ErrorLevel, err)
-				}
+				ch.Close()
 			}()
 
 			msgs, err := ch.Consume(
@@ -235,11 +233,11 @@ func (t *amqpTransport) Disconnect(ctx context.Context) error {
 	}
 
 	if err := t.ch.Close(); err != nil {
-		return errors.WithStack(err)
+		return errors.Wrap(err, "error closing channel")
 	}
 
 	if err := t.connection.Close(); err != nil {
-		return errors.WithStack(err)
+		return errors.Wrap(err, "error closing connection")
 	}
 
 	return nil
