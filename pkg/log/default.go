@@ -17,6 +17,6 @@ func (l defaultLogger) Log(level Level, v interface{}) {
 	l.logger.Printf("%s", v)
 }
 
-func (l defaultLogger) Logf(level Level, template string, args... interface{}) {
+func (l defaultLogger) Logf(level Level, template string, args ...interface{}) {
 	l.logger.Printf(template, args...)
 }

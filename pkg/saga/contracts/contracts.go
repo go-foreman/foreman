@@ -3,11 +3,14 @@ package contracts
 import "github.com/kopaygorodsky/brigadier/pkg/runtime/scheme"
 
 func init() {
-	scheme.KnownTypesRegistryInstance.RegisterTypes(&StartSagaCommand{})
-	scheme.KnownTypesRegistryInstance.RegisterTypes(&RecoverSagaCommand{})
-	scheme.KnownTypesRegistryInstance.RegisterTypes(&CompensateSagaCommand{})
-	scheme.KnownTypesRegistryInstance.RegisterTypes(&SagaCompletedEvent{})
-	scheme.KnownTypesRegistryInstance.RegisterTypes(&SagaChildCompletedEvent{})
+	contractsList := []interface{}{
+		&StartSagaCommand{},
+		&RecoverSagaCommand{},
+		&CompensateSagaCommand{},
+		&SagaCompletedEvent{},
+		&SagaChildCompletedEvent{},
+	}
+	scheme.KnownTypesRegistryInstance.RegisterTypes(contractsList...)
 }
 
 type StartSagaCommand struct {

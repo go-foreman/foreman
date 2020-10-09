@@ -88,8 +88,8 @@ func generateSomeSagas(sendToEndpoint endpoint.Endpoint) {
 		time.Sleep(time.Second * 5)
 		uid := uuid.New().String()
 		registerAccountSaga := &account.RegisterAccountSaga{
-			UID: uid,
-			Email: fmt.Sprintf("account-%s@github.com", uid),
+			UID:          uid,
+			Email:        fmt.Sprintf("account-%s@github.com", uid),
 			RetriesLimit: 10,
 		}
 		startSagaCmd := &sagaContracts.StartSagaCommand{

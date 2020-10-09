@@ -14,8 +14,8 @@ func init() {
 }
 
 type Account struct {
-	uid string
-	email string
+	uid                string
+	email              string
 	confirmationSentAt time.Time
 }
 
@@ -32,13 +32,13 @@ func (h *AccountHandler) RegisterAccount(execCtx execution.MessageExecutionCtx) 
 	registerAccountCmd, _ := receivedMsg.Payload.(*contracts.RegisterAccountCmd)
 
 	time.Sleep(time.Second * 3)
-	if rand.Intn(10) % 2 != 0 {
+	if rand.Intn(10)%2 != 0 {
 		failedEvent := &contracts.RegistrationFailed{UID: registerAccountCmd.UID, Reason: "idk, some error happened :)"}
 		return execCtx.Send(message.NewEventMessage(failedEvent, message.WithHeaders(receivedMsg.Headers), message.WithDescription(failedEvent.Reason)))
 	}
 
 	account := &Account{
-		uid: registerAccountCmd.UID,
+		uid:   registerAccountCmd.UID,
 		email: registerAccountCmd.Email,
 	}
 

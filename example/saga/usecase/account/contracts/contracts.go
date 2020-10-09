@@ -21,7 +21,7 @@ func init() {
 }
 
 type RegisterAccountCmd struct {
-	UID string `json:"uid"`
+	UID   string `json:"uid"`
 	Email string `json:"name"`
 }
 
@@ -30,12 +30,12 @@ type AccountedRegistered struct {
 }
 
 type RegistrationFailed struct {
-	UID string `json:"uid"`
+	UID    string `json:"uid"`
 	Reason string `json:"reason"`
 }
 
 type SendConfirmationCmd struct {
-	UID string `json:"uid"`
+	UID   string `json:"uid"`
 	Email string `json:"email"`
 }
 
@@ -44,7 +44,7 @@ type ConfirmationSent struct {
 }
 
 type ConfirmationSendingFailed struct {
-	UID string `json:"uid"`
+	UID    string `json:"uid"`
 	Reason string `json:"reason"`
 }
 

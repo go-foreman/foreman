@@ -16,7 +16,7 @@ type Component interface {
 	Init(b *MessageBus) error
 }
 
-type SubscriberOption func (subscriberOpts *subscriberOpts, c *container)
+type SubscriberOption func(subscriberOpts *subscriberOpts, c *container)
 
 type subscriberOpts struct {
 	subscriber subscriber.Subscriber
@@ -35,7 +35,7 @@ func DefaultWithTransport(transport transport.Transport) SubscriberOption {
 	}
 }
 
-type SubscriberFactory func (processor subscriber.Processor, decoder message.Decoder) subscriber.Subscriber
+type SubscriberFactory func(processor subscriber.Processor, decoder message.Decoder) subscriber.Subscriber
 
 func WithSubscriberFactory(factory SubscriberFactory) SubscriberOption {
 	return func(subscriberOpts *subscriberOpts, c *container) {
@@ -43,8 +43,7 @@ func WithSubscriberFactory(factory SubscriberFactory) SubscriberOption {
 	}
 }
 
-
-type ConfigOption func (o *container)
+type ConfigOption func(o *container)
 
 type container struct {
 	messageExuctionCtxFactory execution.MessageExecutionCtxFactory
@@ -57,7 +56,7 @@ type container struct {
 	components                []Component
 }
 
-func WithComponents(components...Component) ConfigOption {
+func WithComponents(components ...Component) ConfigOption {
 	return func(c *container) {
 		c.components = append(c.components, components...)
 	}
@@ -100,7 +99,7 @@ type MessageBus struct {
 	subscriber         subscriber.Subscriber
 }
 
-func NewMessageBus(logger log.Logger, subscriberOption SubscriberOption, configOpts... ConfigOption) (*MessageBus, error) {
+func NewMessageBus(logger log.Logger, subscriberOption SubscriberOption, configOpts ...ConfigOption) (*MessageBus, error) {
 	b := &MessageBus{}
 
 	opts := &container{}
@@ -171,4 +170,3 @@ func (b *MessageBus) SchemeRegistry() scheme.KnownTypesRegistry {
 func (b *MessageBus) Subscriber() subscriber.Subscriber {
 	return b.subscriber
 }
-

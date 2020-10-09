@@ -26,7 +26,7 @@ type opts struct {
 
 type ConfigOption func(o *opts)
 
-func NewSagaModule(sagaStoreFactory StoreFactory, sagaMutex mutex.Mutex, opts...ConfigOption) *Component {
+func NewSagaModule(sagaStoreFactory StoreFactory, sagaMutex mutex.Mutex, opts ...ConfigOption) *Component {
 	return &Component{sagaStoreFactory: sagaStoreFactory, sagaMutex: sagaMutex, configOpts: opts}
 }
 
@@ -46,9 +46,8 @@ func (c Component) Init(mBus *pkg.MessageBus) error {
 		return err
 	}
 
-	eventHandler := handlers.NewEventsHandler(store, c.sagaMutex, c.schema,opts.idExtractor, nil)
+	eventHandler := handlers.NewEventsHandler(store, c.sagaMutex, c.schema, opts.idExtractor, nil)
 	sagaControlHandler := handlers.NewSagaControlHandler(store, c.sagaMutex, mBus.SchemeRegistry(), nil)
-
 
 	mBus.Dispatcher().RegisterCmdHandler(&contracts.StartSagaCommand{}, sagaControlHandler.Handle)
 	mBus.Dispatcher().RegisterCmdHandler(&contracts.RecoverSagaCommand{}, sagaControlHandler.Handle)
@@ -77,15 +76,15 @@ func (c Component) Init(mBus *pkg.MessageBus) error {
 	return nil
 }
 
-func (c *Component) RegisterSagas(sagas...saga.Saga) {
+func (c *Component) RegisterSagas(sagas ...saga.Saga) {
 	c.sagas = append(c.sagas, sagas...)
 }
 
-func (c *Component) RegisterContracts(contracts... interface{}) {
+func (c *Component) RegisterContracts(contracts ...interface{}) {
 	c.contracts = append(c.contracts, contracts...)
 }
 
-func (c *Component) RegisterSagaEndpoints(endpoints... endpoint.Endpoint) {
+func (c *Component) RegisterSagaEndpoints(endpoints ...endpoint.Endpoint) {
 	c.endpoints = append(c.endpoints, endpoints...)
 }
 
@@ -95,5 +94,4 @@ func WithSagaIdExtractor(extractor saga.IdExtractor) ConfigOption {
 	}
 }
 
-type StoreFactory func (scheme scheme.KnownTypesRegistry) (saga.Store, error)
-
+type StoreFactory func(scheme scheme.KnownTypesRegistry) (saga.Store, error)

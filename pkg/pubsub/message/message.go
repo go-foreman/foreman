@@ -60,7 +60,7 @@ type MsgOption func(attr *opts)
 
 type opts struct {
 	description string
-	headers Headers
+	headers     Headers
 }
 
 func WithDescription(description string) MsgOption {

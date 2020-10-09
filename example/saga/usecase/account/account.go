@@ -33,7 +33,7 @@ func (r *RegisterAccountSaga) Init() {
 func (r RegisterAccountSaga) Start(execCtx saga.SagaContext) error {
 	execCtx.LogMessage(log.InfoLevel, fmt.Sprintf("Starting saga %s", execCtx.SagaInstance().ID()))
 	execCtx.Dispatch(message.NewCommandMessage(contracts.RegisterAccountCmd{
-		UID:  r.UID,
+		UID:   r.UID,
 		Email: r.Email,
 	}))
 	return nil
@@ -64,7 +64,7 @@ func (r *RegisterAccountSaga) RegistrationFailed(execCtx saga.SagaContext) error
 
 	if r.RetriesLimit > 0 {
 		execCtx.Dispatch(message.NewCommandMessage(contracts.RegisterAccountCmd{
-			UID:  r.UID,
+			UID:   r.UID,
 			Email: r.Email,
 		}))
 		r.RetriesLimit--
@@ -95,5 +95,3 @@ func (r *RegisterAccountSaga) AccountConfirmed(execCtx saga.SagaContext) error {
 	execCtx.SagaInstance().Completed()
 	return nil
 }
-
-
