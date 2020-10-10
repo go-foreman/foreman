@@ -1,13 +1,13 @@
 package pkg
 
 func WithRequeue() AcknowledgmentOption {
-	return func(options map[string]interface{}) {
-		options["requeue"] = true
+	return func(options *ackOpts) {
+		options.requeue = true
 	}
 }
 
 func WithMultiple() AcknowledgmentOption {
-	return func(options map[string]interface{}) {
-		options["multiple"] = true
+	return func(options *ackOpts) {
+		options.multiple = true
 	}
 }

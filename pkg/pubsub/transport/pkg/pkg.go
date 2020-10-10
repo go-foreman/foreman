@@ -18,7 +18,12 @@ type IncomingPkg interface {
 	PublishedAt() time.Time
 }
 
-type AcknowledgmentOption func(options map[string]interface{})
+type ackOpts struct {
+	multiple bool
+	requeue  bool
+}
+
+type AcknowledgmentOption func(options *ackOpts)
 
 func NewAmqpIncomingPackage(delivery amqp.Delivery, traceId, origin string) IncomingPkg {
 	return &inAmqpPkg{traceId: traceId, origin: origin, receivedAt: time.Now(), delivery: delivery}
@@ -53,52 +58,30 @@ func (i inAmqpPkg) Attributes() map[string]string {
 }
 
 func (i inAmqpPkg) Ack(options ...AcknowledgmentOption) error {
-	attrs := make(map[string]interface{})
+	attrs := &ackOpts{}
 	for _, opt := range options {
 		opt(attrs)
 	}
 
-	var multiple bool
-
-	if v, exists := attrs["multiple"]; exists && v == true {
-		multiple = true
-	}
-
-	return i.delivery.Ack(multiple)
+	return i.delivery.Ack(attrs.multiple)
 }
 
 func (i inAmqpPkg) Nack(options ...AcknowledgmentOption) error {
-	attrs := make(map[string]interface{})
+	ackOpts := &ackOpts{}
 	for _, opt := range options {
-		opt(attrs)
+		opt(ackOpts)
 	}
 
-	var multiple, requeue bool
-
-	if v, exists := attrs["multiple"]; exists && v == true {
-		multiple = true
-	}
-
-	if v, exists := attrs["requeue"]; exists && v == true {
-		requeue = true
-	}
-
-	return i.delivery.Nack(multiple, requeue)
+	return i.delivery.Nack(ackOpts.multiple, ackOpts.requeue)
 }
 
 func (i inAmqpPkg) Reject(options ...AcknowledgmentOption) error {
-	attrs := make(map[string]interface{})
+	opts := &ackOpts{}
 	for _, opt := range options {
-		opt(attrs)
+		opt(opts)
 	}
 
-	var requeue bool
-
-	if v, exists := attrs["requeue"]; exists && v == true {
-		requeue = true
-	}
-
-	return i.delivery.Reject(requeue)
+	return i.delivery.Reject(opts.requeue)
 }
 
 func (i inAmqpPkg) TraceId() string {
