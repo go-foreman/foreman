@@ -72,10 +72,10 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 
 func (s *subscriber) processPackage(ctx context.Context, inPkg pkg.IncomingPkg) {
 	if err := s.processor.Process(ctx, inPkg); err != nil {
-		s.logger.Logf(log.ErrorLevel, "Error happened while processing pkg %s from %s. %s\n", inPkg.TraceId(), inPkg.Origin(), err)
+		s.logger.Logf(log.ErrorLevel, "error happened while processing pkg %s from %s. %s\n", inPkg.TraceId(), inPkg.Origin(), err)
 	} else {
 		if err := inPkg.Ack(); err != nil {
-			s.logger.Logf(log.ErrorLevel, "Error acking package %s. %s", inPkg.TraceId(), err)
+			s.logger.Logf(log.ErrorLevel, "error acking package %s. %s", inPkg.TraceId(), err)
 		}
 	}
 }
