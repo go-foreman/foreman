@@ -25,7 +25,7 @@ type subscriber struct {
 	transport       transport.Transport
 	logger          log.Logger
 	processor       Processor
-	workerDispatcher *Dispatcher
+	workerDispatcher *dispatcher
 }
 
 func NewSubscriber(transport transport.Transport, processor Processor, logger log.Logger) Subscriber {

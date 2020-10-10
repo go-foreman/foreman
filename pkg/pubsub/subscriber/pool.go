@@ -17,7 +17,7 @@ type worker struct {
 	myTasks         workerQueue
 }
 
-func (w *worker) WorkerQueue() workerQueue {
+func (w *worker) workerQueue() workerQueue {
 	return w.myTasks
 }
 
@@ -47,25 +47,25 @@ func(w *worker) start() {
 	}()
 }
 
-func newDispatcher(workersCount uint) *Dispatcher {
-	return &Dispatcher{
+func newDispatcher(workersCount uint) *dispatcher {
+	return &dispatcher{
 		workersCount: workersCount,
 		workersQueues: make(dispatcherQueue, workersCount),
 		workersWorkplaces: make([]workerQueue, workersCount),
 	}
 }
 
-type Dispatcher struct {
+type dispatcher struct {
 	workersCount      uint
 	workersQueues      dispatcherQueue
 	workersWorkplaces []workerQueue
 }
 
-func (d *Dispatcher) busyWorkers() int {
+func (d *dispatcher) busyWorkers() int {
 	return len(d.workersQueues)
 }
 
-func (d *Dispatcher) start(ctx context.Context) {
+func (d *dispatcher) start(ctx context.Context) {
 	go func() {
 		<- ctx.Done()
 		d.workersQueues = nil
@@ -83,7 +83,7 @@ func (d *Dispatcher) start(ctx context.Context) {
 	}
 }
 
-func (d Dispatcher) schedule(task task) {
+func (d dispatcher) schedule(task task) {
 	worker := <- d.workersQueues
 	worker <- task
 }

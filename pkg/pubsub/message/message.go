@@ -13,6 +13,18 @@ type Metadata struct {
 	Headers Headers `json:"headers"`
 }
 
+func (m *Message) ReturnsCount() int {
+	v, exists := m.Headers["returnsCount"]
+	if !exists {
+		return 0
+	}
+	returnsCount, ok := v.(int)
+	if !ok {
+		return 0
+	}
+	return returnsCount
+}
+
 type Message struct {
 	Metadata     `json:"metadata"`
 	Payload      interface{} `json:"payload"`
@@ -22,6 +34,33 @@ type Message struct {
 }
 
 type Headers map[string]interface{}
+
+func (m Headers) ReturnsCount() int {
+	v, exists := m["returnsCount"]
+	if !exists {
+		return 0
+	}
+	returnsCount, ok := v.(int)
+	if !ok {
+		return 0
+	}
+	return returnsCount
+}
+
+func (m Headers) RegisterReturn() {
+	v, exists := m["returnsCount"]
+	if !exists {
+		m["returnsCount"] = 1
+		return
+	}
+
+	returnsCount, ok := v.(int)
+	if !ok {
+		return
+	}
+	returnsCount++
+	m["returnsCount"] = returnsCount
+}
 
 func NewEventMessage(payload interface{}, options ...MsgOption) *Message {
 	return NewMessage(scheme.WithStruct(payload), "event", payload, options...)

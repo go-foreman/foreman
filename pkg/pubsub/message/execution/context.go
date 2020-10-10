@@ -62,6 +62,7 @@ func (m messageExecutionCtx) Return(delay time.Duration) error {
 			m.logger.Logf(log.InfoLevel, "Context is closed, exiting without returning msg: %s, delay is too long", m.message.ID)
 			return nil
 		case <-time.After(delay):
+			m.message.Headers.RegisterReturn()
 			if err := m.Send(m.message); err != nil {
 				m.logger.Logf(log.ErrorLevel, "error when returning a message %s", m.message.ID)
 				return errors.Wrapf(err, "error when returning a message %s", m.message.ID)

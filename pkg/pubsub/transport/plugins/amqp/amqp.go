@@ -140,7 +140,6 @@ func (t *amqpTransport) Send(ctx context.Context, outboundPkg pkg.OutboundPkg, o
 		sendOptions.Mandatory,
 		sendOptions.Immediate,
 		amqp.Publishing{
-
 			Headers:     outboundPkg.Headers(),
 			ContentType: outboundPkg.ContentType(),
 			Body:        outboundPkg.Payload(),

@@ -6,7 +6,9 @@ import (
 	"github.com/kopaygorodsky/brigadier/pkg/log"
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message"
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message/execution"
+	"io/ioutil"
 	"math/rand"
+	"path"
 	"sync"
 	"time"
 )
@@ -25,10 +27,11 @@ type AccountHandler struct {
 	lock sync.Mutex
 	runtimeDb map[string]*Account
 	logger log.Logger
+	confirmationsDir string
 }
 
-func NewAccountHandler(logger log.Logger) *AccountHandler {
-	return &AccountHandler{runtimeDb: make(map[string]*Account), logger: logger}
+func NewAccountHandler(logger log.Logger, confirmationsDir string) (*AccountHandler, error) {
+	return &AccountHandler{runtimeDb: make(map[string]*Account), logger: logger, confirmationsDir: confirmationsDir}, nil
 }
 
 func (h *AccountHandler) RegisterAccount(execCtx execution.MessageExecutionCtx) error {
@@ -69,19 +72,26 @@ func (h *AccountHandler) SendConfirmation(execCtx execution.MessageExecutionCtx)
 		return execCtx.Send(message.NewEventMessage(failedEvent, message.WithHeaders(receivedMsg.Headers), message.WithDescription(failedEvent.Reason)))
 	}
 
-	//trying to simulate user who confirms the account. This action should be done in some API handler... A bit lazy to simulate API server now.
-	go func(execCtx execution.MessageExecutionCtx, uid string, headers message.Headers) {
-		time.Sleep(time.Second * 30)
-		accountConfirmedEvent := &contracts.AccountRegistered{UID: sendConfirmationCmd.UID}
-		//we can reuse context to send this message to the endpoint
-		err := execCtx.Send(message.NewEventMessage(accountConfirmedEvent, message.WithHeaders(receivedMsg.Headers), message.WithDescription(fmt.Sprintf("Confirmation to %s sent", sendConfirmationCmd.Email))))
-		if err != nil {
-			h.logger.Logf(log.ErrorLevel, "error confirming account: %s", err)
-		}
-	}(execCtx, sendConfirmationCmd.UID, receivedMsg.Headers)
-
-	time.Sleep(time.Second * 4)
 	account.confirmationSentAt = time.Now()
+
+	//only for this use-case we need to write sagaId into file, usually it will be stored in db->
+	//user confirms registration with a token, we should look for an account in db by token, take sagaId and finishing our process.
+	v, ok := receivedMsg.Headers["sagaId"]
+	if !ok {
+		panic("sagaId header is empty")
+	}
+
+	sagaId, ok := v.(string)
+	if !ok {
+		panic("sagaId is not a string")
+	}
+
+	err := ioutil.WriteFile(path.Join(h.confirmationsDir, sagaId), []byte(sendConfirmationCmd.UID), 0777)
+	if err != nil {
+		failedEvent := &contracts.RegistrationFailed{UID: sendConfirmationCmd.UID, Reason: err.Error()}
+		return execCtx.Send(message.NewEventMessage(failedEvent, message.WithHeaders(receivedMsg.Headers), message.WithDescription(failedEvent.Reason)))
+	}
+
 	successEvent := &contracts.ConfirmationSent{UID: sendConfirmationCmd.UID}
 	return execCtx.Send(message.NewEventMessage(successEvent, message.WithHeaders(receivedMsg.Headers), message.WithDescription(fmt.Sprintf("Confirmation to %s sent", sendConfirmationCmd.Email))))
 }

@@ -34,6 +34,10 @@ func (p *processor) Process(ctx context.Context, inPkg pkg.IncomingPkg) error {
 		return errors.WithStack(err)
 	}
 
+	if msg.Headers.ReturnsCount() >= 10 {
+		return errors.Errorf("Message %s was returned more that 10 times. Not acking. It will be removed once TTL expires.")
+	}
+
 	executors := p.dispatcher.Match(msg)
 
 	if len(executors) == 0 {
@@ -45,20 +49,19 @@ func (p *processor) Process(ctx context.Context, inPkg pkg.IncomingPkg) error {
 
 	for _, exec := range executors {
 		if err := exec(execCtx); err != nil {
-			p.logger.Logf(log.ErrorLevel, "Error executing message %s of type %s. %s", msg.Name, msg.Type, err)
 			originalErr := errors.Cause(err)
 
 			if statusErr, ok := originalErr.(pubsubErrs.StatusErr); ok {
 				switch statusErr.Status {
 				case pubsubErrs.NoRetry:
-					p.logger.Logf(log.ErrorLevel, "Error executing message %s of type %s. %s. NoRetry", msg.Name, msg.Type, err)
+					p.logger.Logf(log.ErrorLevel, "Error executing message %s of type %s. %s. NoRetry.", msg.Name, msg.Type, err)
 				default:
 					p.logger.Logf(log.ErrorLevel, "Error executing message %s of type %s. %s", msg.Name, msg.Type, err)
 					return execCtx.Return(time.Second * 3)
 				}
 			}
 
-			return errors.Wrapf(err, "Error executing message %s of type %s. %s", msg.Name, msg.Type, err)
+			return errors.Wrapf(err, "Error executing message %s of type %s. %s. NoRetry.", msg.Name, msg.Type, err)
 		}
 	}
 

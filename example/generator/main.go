@@ -43,8 +43,8 @@ func main() {
 		}
 
 		err = ch.Publish(
-			"messages_exchange",
-			"messages_exchange.eventAndCommands",
+			"messagebus_exchange",
+			"messagebus_exchange.eventAndCommands",
 			false,
 			false,
 			streadwayAmqp.Publishing{
