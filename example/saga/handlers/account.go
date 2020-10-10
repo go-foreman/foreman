@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"github.com/kopaygorodsky/brigadier/example/saga/usecase/account/contracts"
+	"github.com/kopaygorodsky/brigadier/pkg/log"
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message"
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message/execution"
 	"math/rand"
@@ -23,10 +24,11 @@ type Account struct {
 type AccountHandler struct {
 	lock sync.Mutex
 	runtimeDb map[string]*Account
+	logger log.Logger
 }
 
-func NewAccountHandler() *AccountHandler {
-	return &AccountHandler{runtimeDb: make(map[string]*Account)}
+func NewAccountHandler(logger log.Logger) *AccountHandler {
+	return &AccountHandler{runtimeDb: make(map[string]*Account), logger: logger}
 }
 
 func (h *AccountHandler) RegisterAccount(execCtx execution.MessageExecutionCtx) error {
@@ -39,7 +41,13 @@ func (h *AccountHandler) RegisterAccount(execCtx execution.MessageExecutionCtx) 
 		return execCtx.Send(message.NewEventMessage(failedEvent, message.WithHeaders(receivedMsg.Headers), message.WithDescription(failedEvent.Reason)))
 	}
 
-	account := &Account{
+	account, exists := h.getAccount(registerAccountCmd.UID)
+	if exists {
+		failedEvent := &contracts.RegistrationFailed{UID: registerAccountCmd.UID, Reason: "account already created"}
+		return execCtx.Send(message.NewEventMessage(failedEvent, message.WithHeaders(receivedMsg.Headers), message.WithDescription(failedEvent.Reason)))
+	}
+
+	account = &Account{
 		uid:   registerAccountCmd.UID,
 		email: registerAccountCmd.Email,
 	}
@@ -66,7 +74,10 @@ func (h *AccountHandler) SendConfirmation(execCtx execution.MessageExecutionCtx)
 		time.Sleep(time.Second * 30)
 		accountConfirmedEvent := &contracts.AccountedRegistered{UID: sendConfirmationCmd.UID}
 		//we can reuse context to send this message to the endpoint
-		execCtx.Send(message.NewEventMessage(accountConfirmedEvent, message.WithHeaders(receivedMsg.Headers), message.WithDescription(fmt.Sprintf("Confirmation to %s sent", sendConfirmationCmd.Email))))
+		err := execCtx.Send(message.NewEventMessage(accountConfirmedEvent, message.WithHeaders(receivedMsg.Headers), message.WithDescription(fmt.Sprintf("Confirmation to %s sent", sendConfirmationCmd.Email))))
+		if err != nil {
+			h.logger.Logf(log.ErrorLevel, "error confirming account: %s", err)
+		}
 	}(execCtx, sendConfirmationCmd.UID, receivedMsg.Headers)
 
 	time.Sleep(time.Second * 4)

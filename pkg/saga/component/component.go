@@ -55,7 +55,7 @@ func (c Component) Init(mBus *pkg.MessageBus) error {
 
 	for _, s := range c.sagas {
 		s.Init()
-		scheme.KnownTypesRegistryInstance.RegisterTypes(s)
+		mBus.SchemeRegistry().RegisterTypes(s)
 
 		for eventKey := range s.EventHandlers() {
 			mBus.Dispatcher().RegisterEventListenerWithKey(scheme.WithKey(eventKey), eventHandler.Handle)

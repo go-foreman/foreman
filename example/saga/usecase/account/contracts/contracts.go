@@ -8,7 +8,7 @@ import (
 func init() {
 	contractsList := []interface{}{
 		&RegisterAccountCmd{},
-		&AccountedRegistered{},
+		&AccountRegistered{},
 		&RegistrationFailed{},
 		&SendConfirmationCmd{},
 		&ConfirmationSent{},
@@ -25,7 +25,7 @@ type RegisterAccountCmd struct {
 	Email string `json:"name"`
 }
 
-type AccountedRegistered struct {
+type AccountRegistered struct {
 	UID string `json:"uid"`
 }
 

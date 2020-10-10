@@ -3,27 +3,22 @@ package main
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/google/uuid"
 	"github.com/kopaygorodsky/brigadier/example/saga/handlers"
 	"github.com/kopaygorodsky/brigadier/example/saga/usecase"
-	"github.com/kopaygorodsky/brigadier/example/saga/usecase/account"
 	"github.com/kopaygorodsky/brigadier/example/saga/usecase/account/contracts"
 	"github.com/kopaygorodsky/brigadier/pkg"
 	"github.com/kopaygorodsky/brigadier/pkg/log"
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/endpoint"
-	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message"
 	transportPackage "github.com/kopaygorodsky/brigadier/pkg/pubsub/transport/pkg"
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/transport/plugins/amqp"
 	"github.com/kopaygorodsky/brigadier/pkg/runtime/scheme"
 	"github.com/kopaygorodsky/brigadier/pkg/saga"
 	"github.com/kopaygorodsky/brigadier/pkg/saga/component"
-	sagaContracts "github.com/kopaygorodsky/brigadier/pkg/saga/contracts"
 	"github.com/kopaygorodsky/brigadier/pkg/saga/mutex"
-	streadwayAmqp "github.com/streadway/amqp"
-	"time"
+
+	_ "github.com/kopaygorodsky/brigadier/example/saga/usecase/account"
 )
 
 var defaultLogger = log.DefaultLogger()
@@ -75,60 +70,10 @@ func main() {
 		panic(err)
 	}
 
-	accountHandler := handlers.NewAccountHandler()
+	accountHandler := handlers.NewAccountHandler(defaultLogger)
 	//here goes registration of handlers
 	bus.Dispatcher().RegisterCmdHandler(&contracts.RegisterAccountCmd{}, accountHandler.RegisterAccount)
 	bus.Dispatcher().RegisterCmdHandler(&contracts.SendConfirmationCmd{}, accountHandler.SendConfirmation)
 
-	//let's simulate some sagas
-	go generateSomeSagas()
-
 	defaultLogger.Log(log.PanicLevel, bus.Subscriber().Subscribe(context.Background(), queue))
-}
-
-func generateSomeSagas() {
-	conn, err := streadwayAmqp.Dial("amqp://admin:admin123@127.0.0.1:5672")
-	if err != nil {
-		panic(err)
-	}
-
-	ch, err := conn.Channel()
-
-	if err != nil {
-		panic(err)
-	}
-	for {
-		time.Sleep(time.Second * 5)
-		uid := uuid.New().String()
-		registerAccountSaga := &account.RegisterAccountSaga{
-			UID:          uid,
-			Email:        fmt.Sprintf("account-%s@github.com", uid),
-			RetriesLimit: 10,
-		}
-		startSagaCmd := &sagaContracts.StartSagaCommand{
-			SagaId:   uuid.New().String(),
-			SagaName: scheme.WithStruct(registerAccountSaga)(),
-			Saga:     registerAccountSaga,
-		}
-		messageToDeliver := message.NewCommandMessage(startSagaCmd)
-		msgBytes, err := json.Marshal(messageToDeliver)
-		if err != nil {
-			panic(err)
-		}
-
-		err = ch.Publish(
-			"messages_exchange",
-			"messages_exchange.eventAndCommands",
-			false,
-			false,
-			streadwayAmqp.Publishing{
-				ContentType: "application/json",
-				Body:        msgBytes,
-			},
-		)
-		if err != nil {
-			panic(err)
-		}
-
-	}
 }
