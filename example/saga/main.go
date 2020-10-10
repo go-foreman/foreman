@@ -54,7 +54,7 @@ func main() {
 
 	amqpEndpoint := endpoint.NewAmqpEndpoint(fmt.Sprintf("%s_endpoint", queue.Name()), amqpTransport, transportPackage.DeliveryDestination{DestinationTopic: topic.Name(), RoutingKey: fmt.Sprintf("%s.eventAndCommands", topic.Name())})
 
-	sagaComponent := component.NewSagaModule(
+	sagaComponent := component.NewSagaComponent(
 		func(scheme scheme.KnownTypesRegistry) (saga.Store, error) {
 			return saga.NewSqlSagaStore(db, scheme)
 		},

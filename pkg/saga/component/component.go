@@ -26,7 +26,7 @@ type opts struct {
 
 type ConfigOption func(o *opts)
 
-func NewSagaModule(sagaStoreFactory StoreFactory, sagaMutex mutex.Mutex, opts ...ConfigOption) *Component {
+func NewSagaComponent(sagaStoreFactory StoreFactory, sagaMutex mutex.Mutex, opts ...ConfigOption) *Component {
 	return &Component{sagaStoreFactory: sagaStoreFactory, sagaMutex: sagaMutex, configOpts: opts}
 }
 
