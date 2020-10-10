@@ -75,5 +75,5 @@ func main() {
 	bus.Dispatcher().RegisterCmdHandler(&contracts.RegisterAccountCmd{}, accountHandler.RegisterAccount)
 	bus.Dispatcher().RegisterCmdHandler(&contracts.SendConfirmationCmd{}, accountHandler.SendConfirmation)
 
-	defaultLogger.Log(log.PanicLevel, bus.Subscriber().Subscribe(context.Background(), queue))
+	defaultLogger.Log(log.PanicLevel, bus.Subscriber().Run(context.Background(), queue))
 }

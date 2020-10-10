@@ -23,7 +23,7 @@ type RegisterAccountSaga struct {
 
 func (r *RegisterAccountSaga) Init() {
 	r.
-		AddEventHandler(&contracts.AccountedRegistered{}, r.AccountRegistered).
+		AddEventHandler(&contracts.AccountRegistered{}, r.AccountRegistered).
 		AddEventHandler(&contracts.RegistrationFailed{}, r.RegistrationFailed).
 		AddEventHandler(&contracts.ConfirmationSent{}, r.ConfirmationSent).
 		AddEventHandler(&contracts.ConfirmationSendingFailed{}, r.ConfirmationSendingFailed).

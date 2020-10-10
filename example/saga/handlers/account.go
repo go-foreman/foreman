@@ -55,7 +55,7 @@ func (h *AccountHandler) RegisterAccount(execCtx execution.MessageExecutionCtx) 
 	h.saveAccount(account)
 
 	time.Sleep(time.Second * 3)
-	successEvent := &contracts.AccountedRegistered{UID: registerAccountCmd.UID}
+	successEvent := &contracts.AccountRegistered{UID: registerAccountCmd.UID}
 	return execCtx.Send(message.NewEventMessage(successEvent, message.WithHeaders(receivedMsg.Headers), message.WithDescription(fmt.Sprintf("Account %s was registered", registerAccountCmd.UID))))
 }
 
@@ -72,7 +72,7 @@ func (h *AccountHandler) SendConfirmation(execCtx execution.MessageExecutionCtx)
 	//trying to simulate user who confirms the account. This action should be done in some API handler... A bit lazy to simulate API server now.
 	go func(execCtx execution.MessageExecutionCtx, uid string, headers message.Headers) {
 		time.Sleep(time.Second * 30)
-		accountConfirmedEvent := &contracts.AccountedRegistered{UID: sendConfirmationCmd.UID}
+		accountConfirmedEvent := &contracts.AccountRegistered{UID: sendConfirmationCmd.UID}
 		//we can reuse context to send this message to the endpoint
 		err := execCtx.Send(message.NewEventMessage(accountConfirmedEvent, message.WithHeaders(receivedMsg.Headers), message.WithDescription(fmt.Sprintf("Confirmation to %s sent", sendConfirmationCmd.Email))))
 		if err != nil {

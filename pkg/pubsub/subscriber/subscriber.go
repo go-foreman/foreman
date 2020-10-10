@@ -17,7 +17,7 @@ import (
 const maxTasksInProgress = 100
 
 type Subscriber interface {
-	Subscribe(ctx context.Context, queues ...transport.Queue) error
+	Run(ctx context.Context, queues ...transport.Queue) error
 	Stop(ctx context.Context) error
 }
 
@@ -32,7 +32,7 @@ func NewSubscriber(transport transport.Transport, processor Processor, logger lo
 	return &subscriber{transport: transport, logger: logger, processor: processor, workerDispatcher: newDispatcher(maxTasksInProgress)}
 }
 
-func (s *subscriber) Subscribe(ctx context.Context, queues ...transport.Queue) error {
+func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 	s.logger.Logf(log.InfoLevel, "Started subscriber. Listening to queues: %v", queues)
 
 	consumedPkgs, err := s.transport.Consume(ctx, queues)
