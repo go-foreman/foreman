@@ -92,6 +92,6 @@ func (r *RegisterAccountSaga) ConfirmationSendingFailed(execCtx saga.SagaContext
 
 func (r *RegisterAccountSaga) AccountConfirmed(execCtx saga.SagaContext) error {
 	execCtx.LogMessage(log.InfoLevel, fmt.Sprintf("Account %s confirmed by %s", r.UID, r.Email))
-	execCtx.SagaInstance().Completed()
+	execCtx.SagaInstance().Complete()
 	return nil
 }

@@ -62,16 +62,17 @@ type dispatcher struct {
 }
 
 func (d *dispatcher) busyWorkers() int {
-	return len(d.workersQueues)
+	return len(d.workersWorkplaces) - len(d.workersQueues)
 }
 
 func (d *dispatcher) start(ctx context.Context) {
 	go func() {
 		<- ctx.Done()
 		d.workersQueues = nil
-		for _, c := range d.workersWorkplaces {
-			close(c)
-		}
+		//goroutine could be asleep, we can't close it's channel
+		//for _, c := range d.workersWorkplaces {
+		//	close(c)
+		//}
 	}()
 
 	var i uint

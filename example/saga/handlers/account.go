@@ -38,7 +38,7 @@ func (h *AccountHandler) RegisterAccount(execCtx execution.MessageExecutionCtx) 
 	receivedMsg := execCtx.Message()
 	registerAccountCmd, _ := receivedMsg.Payload.(*contracts.RegisterAccountCmd)
 
-	time.Sleep(time.Second * 3)
+	time.Sleep(time.Second * 1)
 	if rand.Intn(10)%2 != 0 {
 		failedEvent := &contracts.RegistrationFailed{UID: registerAccountCmd.UID, Reason: "idk, some error happened :)"}
 		return execCtx.Send(message.NewEventMessage(failedEvent, message.WithHeaders(receivedMsg.Headers), message.WithDescription(failedEvent.Reason)))
@@ -56,8 +56,6 @@ func (h *AccountHandler) RegisterAccount(execCtx execution.MessageExecutionCtx) 
 	}
 
 	h.saveAccount(account)
-
-	time.Sleep(time.Second * 3)
 	successEvent := &contracts.AccountRegistered{UID: registerAccountCmd.UID}
 	return execCtx.Send(message.NewEventMessage(successEvent, message.WithHeaders(receivedMsg.Headers), message.WithDescription(fmt.Sprintf("Account %s was registered", registerAccountCmd.UID))))
 }

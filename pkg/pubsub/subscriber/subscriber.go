@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-const maxTasksInProgress = 100
+const maxTasksInProgress = 1
 
 type Subscriber interface {
 	Run(ctx context.Context, queues ...transport.Queue) error
@@ -71,6 +71,7 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 }
 
 func (s *subscriber) processPackage(ctx context.Context, inPkg pkg.IncomingPkg) {
+	ctx, _ = context.WithTimeout(ctx, time.Second * 10)
 	if err := s.processor.Process(ctx, inPkg); err != nil {
 		s.logger.Logf(log.ErrorLevel, "error happened while processing pkg %s from %s. %s\n", inPkg.TraceId(), inPkg.Origin(), err)
 	} else {
