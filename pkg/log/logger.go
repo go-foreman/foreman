@@ -24,6 +24,6 @@ const (
 type Level uint32
 
 type Logger interface {
-	Log(level Level, v interface{})
+	Log(level Level, v ...interface{})
 	Logf(level Level, template string, args ...interface{})
 }

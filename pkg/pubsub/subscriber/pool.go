@@ -31,11 +31,16 @@ func newWorker(ctx context.Context, dispatcherQueue dispatcherQueue, myTasks wor
 
 func(w *worker) start() {
 	go func() {
+		defer close(w.myTasks)
 		for {
 			//tell dispatcher that I'm ready to work
 			w.dispatcherQueue <- w.myTasks
 			select {
 			case <-w.ctx.Done():
+				//we may already told dispatcher that we are ready to work, but if ctx is canceled,
+				//channel is closed and dispatcher could try to send a task into closed channel.
+				//let's just put a dump task, myTasks isn't empty and
+				w.myTasks <- &dumpTask{}
 				return
 			case task, open := <- w.myTasks:
 				if !open {
@@ -67,7 +72,7 @@ func (d *dispatcher) busyWorkers() int {
 
 func (d *dispatcher) start(ctx context.Context) {
 	go func() {
-		<- ctx.Done()
+		<-ctx.Done()
 		d.workersQueues = nil
 		//goroutine could be asleep, we can't close it's channel
 		//for _, c := range d.workersWorkplaces {
@@ -93,5 +98,4 @@ type dumpTask struct {
 
 }
 func (t *dumpTask) do() {
-
 }

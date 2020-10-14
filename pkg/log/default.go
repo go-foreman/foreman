@@ -1,22 +1,23 @@
 package log
 
 import (
+	"fmt"
 	"log"
 	"os"
 )
 
 func DefaultLogger() Logger {
-	return &defaultLogger{logger: log.New(os.Stdout, "[messagebus] ", log.Ldate | log.Ltime | log.Lmicroseconds)}
+	return &defaultLogger{log.New(os.Stdout, "[messagebus] ", log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)}
 }
 
 type defaultLogger struct {
-	logger *log.Logger
+	*log.Logger
 }
 
-func (l defaultLogger) Log(level Level, v interface{}) {
-	l.logger.Printf("%s", v)
+func (l defaultLogger) Log(level Level, v ...interface{}) {
+	l.Output(3, fmt.Sprint(v...))
 }
 
 func (l defaultLogger) Logf(level Level, template string, args ...interface{}) {
-	l.logger.Printf(template, args...)
+	l.Output(3, fmt.Sprintf(template, args...))
 }
