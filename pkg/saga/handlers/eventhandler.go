@@ -102,12 +102,8 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 		if sagaInstance.ParentID() != "" {
 			msg = message.NewEventMessage(contracts.SagaChildCompletedEvent{SagaId: sagaInstance.ID()})
 			msg.Headers[sagaPkg.SagaIdKey] = sagaInstance.ParentID()
-		} else {
-			//if not - just add id, so when this event comes to eventhandler it will know what to do.
-			msg = message.NewEventMessage(contracts.SagaCompletedEvent{SagaId: sagaInstance.ID()})
+			return execCtx.Send(msg)
 		}
-
-		return execCtx.Send(msg)
 	}
 
 	return nil

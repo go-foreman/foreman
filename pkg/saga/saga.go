@@ -157,7 +157,6 @@ type Saga interface {
 	Compensate(execCtx SagaContext) error
 	Recover(execCtx SagaContext) error
 	EventHandlers() map[string]Executor
-	//Name() string
 }
 
 type BaseSaga struct {
