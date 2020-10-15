@@ -6,11 +6,11 @@ import (
 )
 
 type ConsumeOptions struct {
-	Consumer  string
 	AutoAck   bool
 	Exclusive bool
 	NoLocal   bool
 	NoWait    bool
+	PrefetchCount  int
 }
 
 func convertConsumeOptsType(options interface{}) (*ConsumeOptions, error) {
@@ -33,20 +33,6 @@ func convertSendOptsType(options interface{}) (*SendOptions, error) {
 	return opts, nil
 }
 
-func WithConsumer(consumer string) transport.ConsumeOpts {
-	return func(options interface{}) error {
-		opts, err := convertConsumeOptsType(options)
-
-		if err != nil {
-			return errors.WithStack(err)
-		}
-
-		opts.Consumer = consumer
-
-		return nil
-	}
-}
-
 func WithAutoAck() transport.ConsumeOpts {
 	return func(options interface{}) error {
 		opts, err := convertConsumeOptsType(options)
@@ -57,6 +43,18 @@ func WithAutoAck() transport.ConsumeOpts {
 
 		opts.AutoAck = true
 
+		return nil
+	}
+}
+
+func WithQosPrefetchCount(limit int) transport.ConsumeOpts {
+	return func(options interface{}) error {
+		opts, err := convertConsumeOptsType(options)
+
+		if err != nil {
+			return errors.WithStack(err)
+		}
+		opts.PrefetchCount = limit
 		return nil
 	}
 }

@@ -21,8 +21,9 @@ func NewTransport(url string, logger log.Logger) transport.Transport {
 type amqpTransport struct {
 	url        string
 	connection *amqp.Connection
-	ch         *amqp.Channel
+	publishingChannel         *amqp.Channel
 	logger     log.Logger
+	consumingChannel  *amqp.Channel
 }
 
 func (t *amqpTransport) Connect(ctx context.Context) error {
@@ -31,14 +32,21 @@ func (t *amqpTransport) Connect(ctx context.Context) error {
 		return errors.WithStack(err)
 	}
 
-	ch, err := conn.Channel()
+	publishingChannel, err := conn.Channel()
+
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	consumingChannel, err := conn.Channel()
 
 	if err != nil {
 		return errors.WithStack(err)
 	}
 
 	t.connection = conn
-	t.ch = ch
+	t.publishingChannel = publishingChannel
+	t.consumingChannel = consumingChannel
 
 	return nil
 }
@@ -54,7 +62,7 @@ func (t *amqpTransport) CreateTopic(ctx context.Context, topic transport.Topic) 
 		return errors.Errorf("Supplied topic is not an instance of amqp.Topic")
 	}
 
-	err := t.ch.ExchangeDeclare(
+	err := t.publishingChannel.ExchangeDeclare(
 		amqpTopic.Name(),
 		"topic",
 		amqpTopic.durable,
@@ -93,7 +101,7 @@ func (t *amqpTransport) CreateQueue(ctx context.Context, q transport.Queue, qbs 
 		queueBinds = append(queueBinds, queueBind)
 	}
 
-	_, err := t.ch.QueueDeclare(
+	_, err := t.publishingChannel.QueueDeclare(
 		queue.Name(),
 		queue.durable,
 		queue.autoDelete,
@@ -106,7 +114,7 @@ func (t *amqpTransport) CreateQueue(ctx context.Context, q transport.Queue, qbs 
 	}
 
 	for _, qb := range queueBinds {
-		err := t.ch.QueueBind(
+		err := t.publishingChannel.QueueBind(
 			queue.Name(),
 			qb.BindingKey(),
 			qb.DestinationTopic(),
@@ -134,7 +142,7 @@ func (t *amqpTransport) Send(ctx context.Context, outboundPkg pkg.OutboundPkg, o
 		}
 	}
 
-	err := t.ch.Publish(
+	err := t.publishingChannel.Publish(
 		outboundPkg.Destination().DestinationTopic,
 		outboundPkg.Destination().RoutingKey,
 		sendOptions.Mandatory,
@@ -165,6 +173,12 @@ func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, o
 		}
 	}
 
+	if consumeOptions.PrefetchCount > 0 {
+		if err := t.consumingChannel.Qos(consumeOptions.PrefetchCount, 0, false); err != nil {
+			return nil, errors.WithStack(err)
+		}
+	}
+
 	income := make(chan pkg.IncomingPkg)
 
 	consumersWait := sync.WaitGroup{}
@@ -174,20 +188,20 @@ func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, o
 		go func(queue transport.Queue) {
 			defer consumersWait.Done()
 
-			ch, err := t.connection.Channel()
-
-			if err != nil {
-				t.logger.Log(log.ErrorLevel, err)
-				return
-			}
+			//if err := ch.Qos(1, 0, true); err != nil {
+			//	t.logger.Log(log.ErrorLevel, err)
+			//	return
+			//}
 
 			defer func() {
-				ch.Close()
+				if err := t.consumingChannel.Cancel(queue.Name(), false); err != nil {
+					t.logger.Logf(log.ErrorLevel, "error canceling consumer %s", err)
+				}
 			}()
 
-			msgs, err := ch.Consume(
+			msgs, err := t.consumingChannel.Consume(
 				queue.Name(),
-				consumeOptions.Consumer,
+				queue.Name(),
 				consumeOptions.AutoAck,
 				consumeOptions.Exclusive,
 				consumeOptions.NoLocal,
@@ -207,9 +221,8 @@ func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, o
 						t.logger.Logf(log.WarnLevel, "Amqp consumer closed channel for queue %s", queue.Name())
 						return
 					}
-					inPkg := pkg.NewAmqpIncomingPackage(msg, msg.MessageId, queue.Name())
 
-					income <- inPkg
+					income <- pkg.NewAmqpIncomingPackage(msg, msg.MessageId, queue.Name())
 				case <-ctx.Done():
 					t.logger.Logf(log.WarnLevel, "Canceled context. Stopped consuming queue %s", queue.Name())
 					return
@@ -227,12 +240,16 @@ func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, o
 }
 
 func (t *amqpTransport) Disconnect(ctx context.Context) error {
-	if t.connection == nil || t.ch == nil {
+	if t.connection == nil || t.publishingChannel == nil || t.consumingChannel == nil {
 		return nil
 	}
 
-	if err := t.ch.Close(); err != nil {
-		return errors.Wrap(err, "error closing channel")
+	if err := t.publishingChannel.Close(); err != nil {
+		return errors.Wrap(err, "error closing publishing channel")
+	}
+
+	if err := t.consumingChannel.Close(); err != nil {
+		return errors.Wrap(err, "error closing consuming channel")
 	}
 
 	if err := t.connection.Close(); err != nil {

@@ -2,6 +2,7 @@ package subscriber
 
 import (
 	log "github.com/kopaygorodsky/brigadier/pkg/log"
+	"github.com/kopaygorodsky/brigadier/pkg/pubsub/transport/plugins/amqp"
 	"os"
 	"os/signal"
 	"syscall"
@@ -10,11 +11,10 @@ import (
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/transport"
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/transport/pkg"
 	"github.com/pkg/errors"
-	"sync"
 	"time"
 )
 
-const maxTasksInProgress = 1
+const maxTasksInProgress = 100
 
 type Subscriber interface {
 	Run(ctx context.Context, queues ...transport.Queue) error
@@ -35,43 +35,49 @@ func NewSubscriber(transport transport.Transport, processor Processor, logger lo
 func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 	s.logger.Logf(log.InfoLevel, "Started subscriber. Listening to queues: %v", queues)
 
-	consumedPkgs, err := s.transport.Consume(ctx, queues)
+	signalChan := make(chan os.Signal)
+	defer close(signalChan)
+
+	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
+
+	consumerCtx, cancelConsumerCtx := context.WithCancel(ctx)
+	dispatcherCtx, cancelWorkers := context.WithCancel(ctx)
+	shutdownCtx, _ := context.WithTimeout(context.Background(), time.Second * 30)
+
+	consumedPkgs, err := s.transport.Consume(consumerCtx, queues, amqp.WithQosPrefetchCount(maxTasksInProgress))
 
 	if err != nil {
 		return errors.WithStack(err)
 	}
 
-	var waitFor sync.WaitGroup
-	waitFor.Add(1)
-
-	dispatcherCtx, stopWorkers := context.WithCancel(ctx)
-	go func() {
-		defer waitFor.Done()
-
-		signalChan := make(chan os.Signal)
-		signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
-		<-signalChan
-		stopWorkers()
-		shutdownCtx, _ := context.WithTimeout(context.Background(), time.Second * 300)
-		if err := s.Stop(shutdownCtx); err != nil {
-			s.logger.Logf(log.ErrorLevel, "Error stopping subscriber gracefully %s", err)
-		}
-	}()
-
 	s.workerDispatcher.start(dispatcherCtx)
 
-	for incomingPkg := range consumedPkgs {
-		s.workerDispatcher.schedule(newTaskProcessPkg(ctx, incomingPkg, s))
+	for {
+		select {
+		case incomingPkg, opened := <- consumedPkgs:
+			if !opened {
+				return nil
+			}
+			s.workerDispatcher.schedule(newTaskProcessPkg(ctx, incomingPkg, s))
+		case <- ctx.Done():
+			s.logger.Logf(log.InfoLevel, "Subscriber's context was canceled")
+			if err := s.Stop(shutdownCtx); err != nil {
+				s.logger.Logf(log.ErrorLevel, "Error stopping subscriber gracefully %s", err)
+			}
+			return nil
+		case <- signalChan:
+			s.logger.Logf(log.InfoLevel, "Received kill signal")
+			cancelConsumerCtx()
+			if err := s.Stop(shutdownCtx); err != nil {
+				s.logger.Logf(log.ErrorLevel, "Error stopping subscriber gracefully %s", err)
+			}
+			cancelWorkers()
+			return nil
+		}
 	}
-
-	waitFor.Wait()
-
-	return nil
-
 }
 
 func (s *subscriber) processPackage(ctx context.Context, inPkg pkg.IncomingPkg) {
-	ctx, _ = context.WithTimeout(ctx, time.Second * 10)
 	if err := s.processor.Process(ctx, inPkg); err != nil {
 		s.logger.Logf(log.ErrorLevel, "error happened while processing pkg %s from %s. %s\n", inPkg.TraceId(), inPkg.Origin(), err)
 	} else {

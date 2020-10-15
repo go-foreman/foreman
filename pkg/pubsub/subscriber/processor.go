@@ -1,6 +1,7 @@
 package subscriber
 
 import (
+	"fmt"
 	msgDispatcher "github.com/kopaygorodsky/brigadier/pkg/pubsub/dispatcher"
 
 	"context"
@@ -40,8 +41,9 @@ func (p *processor) Process(ctx context.Context, inPkg pkg.IncomingPkg) error {
 	executors := p.dispatcher.Match(msg)
 
 	if len(executors) == 0 {
-		p.logger.Logf(log.ErrorLevel, "No executors defined for message %s of type %s", msg.Name, msg.Type)
-		return WithNoExecutorsDefinedErr(errors.Errorf("No executors defined for message %s of type %s", msg.Name, msg.Type))
+		errMsg := fmt.Sprintf("No executors defined for message %s %s of type %s.", msg.ID, msg.Name, msg.Type)
+		p.logger.Log(log.ErrorLevel, errMsg)
+		return WithNoExecutorsDefinedErr(errors.New(errMsg))
 	}
 
 	execCtx := p.msgExecCtxFactory.CreateCtx(ctx, inPkg, msg)
