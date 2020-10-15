@@ -59,15 +59,14 @@ func (r *RegisterAccountSaga) AccountRegistered(execCtx saga.SagaContext) error 
 func (r *RegisterAccountSaga) RegistrationFailed(execCtx saga.SagaContext) error {
 	msg, _ := execCtx.Message().Payload.(*contracts.RegistrationFailed)
 
-	//here you can do retries if you want
 	execCtx.LogMessage(log.ErrorLevel, fmt.Sprintf("Account registration failed. Reason %s", msg.Reason))
 
 	if r.RetriesLimit > 0 {
+		r.RetriesLimit--
 		execCtx.Dispatch(message.NewCommandMessage(contracts.RegisterAccountCmd{
 			UID:   r.UID,
 			Email: r.Email,
 		}))
-		r.RetriesLimit--
 		return nil
 	}
 
@@ -83,7 +82,7 @@ func (r *RegisterAccountSaga) ConfirmationSent(execCtx saga.SagaContext) error {
 func (r *RegisterAccountSaga) ConfirmationSendingFailed(execCtx saga.SagaContext) error {
 	msg, _ := execCtx.Message().Payload.(*contracts.ConfirmationSendingFailed)
 
-	//some retry logic
+	//some retry logic if you want
 	execCtx.LogMessage(log.ErrorLevel, fmt.Sprintf("Failed sending account confirmation for %s. Reason %s", r.Email, msg.Reason))
 	execCtx.SagaInstance().Fail()
 
