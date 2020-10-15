@@ -46,7 +46,7 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 
 	consumerCtx, cancelConsumerCtx := context.WithCancel(ctx)
 	dispatcherCtx, cancelWorkers := context.WithCancel(ctx)
-	shutdownCtx, _ := context.WithTimeout(context.Background(), time.Second * v)
+	shutdownCtx, _ := context.WithTimeout(context.Background(), time.Second * gracefulShutdownTimeoutSeconds)
 
 	consumedPkgs, err := s.transport.Consume(consumerCtx, queues, amqp.WithQosPrefetchCount(maxTasksInProgress))
 
