@@ -101,6 +101,6 @@ func (h *AccountHandler) getAccount(uid string) (*Account, bool) {
 
 func (h *AccountHandler) saveAccount(acc *Account) {
 	h.lock.Lock()
+	defer h.lock.Unlock()
 	h.runtimeDb[acc.uid] = acc
-	h.lock.Unlock()
 }

@@ -1,11 +1,10 @@
 package subscriber
 
 import (
-	"fmt"
-	msgDispatcher "github.com/kopaygorodsky/brigadier/pkg/pubsub/dispatcher"
-
 	"context"
+	"fmt"
 	"github.com/kopaygorodsky/brigadier/pkg/log"
+	msgDispatcher "github.com/kopaygorodsky/brigadier/pkg/pubsub/dispatcher"
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message"
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message/execution"
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/transport/pkg"

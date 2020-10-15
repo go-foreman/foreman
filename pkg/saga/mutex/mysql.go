@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"github.com/pkg/errors"
-	"time"
 )
 
 type MysqlMutex struct {
@@ -36,7 +35,6 @@ func (m MysqlMutex) Lock(ctx context.Context, sagaId string) error {
 
 func (m MysqlMutex) Release(ctx context.Context, sagaId string) error {
 	r := sql.NullInt64{}
-	ctx, _ = context.WithTimeout(ctx, time.Second * 5)
 	if err := m.db.QueryRowContext(ctx, "SELECT RELEASE_LOCK(?)", sagaId).Scan(&r); err != nil {
 		return WithMutexErr(errors.Errorf("Got 0 when releasing lock for saga %s", sagaId))
 	}

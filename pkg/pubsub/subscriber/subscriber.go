@@ -14,7 +14,11 @@ import (
 	"time"
 )
 
-const maxTasksInProgress = 100
+const (
+	maxTasksInProgress = 100
+	packageProcessingMaxTimeSeconds = 60
+	gracefulShutdownTimeoutSeconds = 120
+)
 
 type Subscriber interface {
 	Run(ctx context.Context, queues ...transport.Queue) error
@@ -42,7 +46,7 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 
 	consumerCtx, cancelConsumerCtx := context.WithCancel(ctx)
 	dispatcherCtx, cancelWorkers := context.WithCancel(ctx)
-	shutdownCtx, _ := context.WithTimeout(context.Background(), time.Second * 30)
+	shutdownCtx, _ := context.WithTimeout(context.Background(), time.Second * v)
 
 	consumedPkgs, err := s.transport.Consume(consumerCtx, queues, amqp.WithQosPrefetchCount(maxTasksInProgress))
 
@@ -78,7 +82,8 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 }
 
 func (s *subscriber) processPackage(ctx context.Context, inPkg pkg.IncomingPkg) {
-	if err := s.processor.Process(ctx, inPkg); err != nil {
+	processorCtx, _ := context.WithTimeout(ctx, time.Second * packageProcessingMaxTimeSeconds)
+	if err := s.processor.Process(processorCtx, inPkg); err != nil {
 		s.logger.Logf(log.ErrorLevel, "error happened while processing pkg %s from %s. %s\n", inPkg.TraceId(), inPkg.Origin(), err)
 	} else {
 		if err := inPkg.Ack(); err != nil {
