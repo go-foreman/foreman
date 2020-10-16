@@ -24,7 +24,7 @@ type Account struct {
 }
 
 type AccountHandler struct {
-	lock sync.Mutex
+	sync.Mutex
 	runtimeDb map[string]*Account
 	logger log.Logger
 	confirmationsDir string
@@ -95,12 +95,14 @@ func (h *AccountHandler) SendConfirmation(execCtx execution.MessageExecutionCtx)
 }
 
 func (h *AccountHandler) getAccount(uid string) (*Account, bool) {
+	h.Lock()
+	defer h.Unlock()
 	acc, exists := h.runtimeDb[uid]
 	return acc, exists
 }
 
 func (h *AccountHandler) saveAccount(acc *Account) {
-	h.lock.Lock()
-	defer h.lock.Unlock()
+	h.Lock()
+	defer h.Unlock()
 	h.runtimeDb[acc.uid] = acc
 }

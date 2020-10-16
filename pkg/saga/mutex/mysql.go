@@ -21,7 +21,6 @@ func (m *MysqlMutex) Lock(ctx context.Context, sagaId string) error {
 	conn, err := m.db.Conn(ctx)
 
 	if err != nil {
-		conn.Close()
 		return WithMutexErr(errors.Wrapf(err, "error obtaining mutex mysql connection from pool for saga %s", sagaId))
 	}
 
@@ -50,13 +49,13 @@ func (m *MysqlMutex) Lock(ctx context.Context, sagaId string) error {
 }
 
 func (m *MysqlMutex) Release(ctx context.Context, sagaId string) error {
+	m.mapLock.Lock()
 	conn, exists := m.connections[sagaId]
 	if !exists {
 		return WithMutexErr(errors.Errorf("connection which acquiring lock is not found in runtime map. Was Release() called after processing a message?"))
 	}
 	defer conn.Close()
 
-	m.mapLock.Lock()
 	delete(m.connections, sagaId)
 	m.mapLock.Unlock()
 

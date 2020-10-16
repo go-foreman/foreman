@@ -36,7 +36,6 @@ var defaultLogger = log.DefaultLogger()
 func main() {
 	db, err := sql.Open("mysql", "root:root@tcp(127.0.0.1:3306)/watcher?charset=utf8&parseTime=True&timeout=30s")
 	handleErr(err)
-	db.SetMaxIdleConns(100)
 
 	amqpTransport := amqp.NewTransport("amqp://admin:admin123@127.0.0.1:5672", defaultLogger)
 	queue := amqp.Queue(queueName, false, false, false, false)

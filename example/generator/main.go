@@ -24,7 +24,7 @@ func main() {
 		panic(err)
 	}
 	for {
-		time.Sleep(time.Second * 5)
+		time.Sleep(time.Millisecond * 100)
 		uid := uuid.New().String()
 		registerAccountSaga := &account.RegisterAccountSaga{
 			UID:          uid,
