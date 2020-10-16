@@ -97,10 +97,11 @@ type MessageBus struct {
 	router             endpoint.Router
 	scheme             scheme.KnownTypesRegistry
 	subscriber         subscriber.Subscriber
+	logger             log.Logger
 }
 
 func NewMessageBus(logger log.Logger, subscriberOption SubscriberOption, configOpts ...ConfigOption) (*MessageBus, error) {
-	b := &MessageBus{}
+	b := &MessageBus{logger: logger}
 
 	opts := &container{}
 	for _, config := range configOpts {
@@ -169,4 +170,8 @@ func (b *MessageBus) SchemeRegistry() scheme.KnownTypesRegistry {
 
 func (b *MessageBus) Subscriber() subscriber.Subscriber {
 	return b.subscriber
+}
+
+func (b *MessageBus) Logger() log.Logger {
+	return b.logger
 }

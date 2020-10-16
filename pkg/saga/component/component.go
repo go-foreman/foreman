@@ -46,8 +46,8 @@ func (c Component) Init(mBus *pkg.MessageBus) error {
 		return err
 	}
 
-	eventHandler := handlers.NewEventsHandler(store, c.sagaMutex, c.schema, opts.idExtractor, nil)
-	sagaControlHandler := handlers.NewSagaControlHandler(store, c.sagaMutex, mBus.SchemeRegistry(), nil)
+	eventHandler := handlers.NewEventsHandler(store, c.sagaMutex, c.schema, opts.idExtractor, mBus.Logger())
+	sagaControlHandler := handlers.NewSagaControlHandler(store, c.sagaMutex, mBus.SchemeRegistry(), mBus.Logger())
 
 	mBus.Dispatcher().RegisterCmdHandler(&contracts.StartSagaCommand{}, sagaControlHandler.Handle)
 	mBus.Dispatcher().RegisterCmdHandler(&contracts.RecoverSagaCommand{}, sagaControlHandler.Handle)
