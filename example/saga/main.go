@@ -109,12 +109,11 @@ func watchAndConfirmRegistration(dir string, logger log.Logger) {
 
 	for {
 		select {
-		case <- time.After(time.Second * 5):
+		case <- time.After(time.Second * 4):
 			files, err := ioutil.ReadDir(dir)
 			handleErr(err)
 
 			for _, info := range files {
-				time.Sleep(time.Second)
 				handleErr(err)
 				filePath := dir+"/"+info.Name()
 				uid, err := ioutil.ReadFile(filePath)
