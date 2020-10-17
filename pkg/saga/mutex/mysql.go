@@ -3,8 +3,9 @@ package mutex
 import (
 	"context"
 	"database/sql"
-	"github.com/pkg/errors"
 	"sync"
+
+	"github.com/pkg/errors"
 )
 
 type MysqlMutex struct {

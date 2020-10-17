@@ -1,14 +1,15 @@
 package amqp
 
 import (
-	log "github.com/kopaygorodsky/brigadier/pkg/log"
+	"github.com/kopaygorodsky/brigadier/pkg/log"
 
 	"context"
+	"sync"
+
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/transport"
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/transport/pkg"
 	"github.com/pkg/errors"
 	"github.com/streadway/amqp"
-	"sync"
 )
 
 func NewTransport(url string, logger log.Logger) transport.Transport {

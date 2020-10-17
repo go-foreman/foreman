@@ -3,6 +3,7 @@ package subscriber
 import (
 	"context"
 	"fmt"
+
 	"github.com/kopaygorodsky/brigadier/pkg/log"
 	msgDispatcher "github.com/kopaygorodsky/brigadier/pkg/pubsub/dispatcher"
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message"
