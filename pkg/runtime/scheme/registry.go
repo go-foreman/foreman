@@ -23,12 +23,11 @@ type reflectSagaRegistry struct {
 }
 
 func (r *reflectSagaRegistry) RegisterTypeWithKey(keyChoice KeyChoice, someStruct interface{}) {
-	if r.types == nil {
-		r.types = make(map[string]reflect.Type)
-	}
-
 	structType := reflect.TypeOf(someStruct)
-	//some validation here ????
+
+	if structType.Kind() != reflect.Ptr {
+		structType = reflect.PtrTo(structType)
+	}
 
 	r.types[keyChoice()] = structType
 }
@@ -56,11 +55,5 @@ func (r reflectSagaRegistry) LoadType(keyChoice KeyChoice) (interface{}, error) 
 		return nil, errors.Errorf("Type with key %s is not registered in KnownTypes", keyChoice())
 	}
 
-	data := reflect.New(structType.Elem()).Interface()
-
-	if data == nil {
-		return nil, errors.Errorf("Object was not created from it's type %s", structType.Kind().String())
-	}
-
-	return data, nil
+	return reflect.New(structType.Elem()).Interface(), nil
 }
