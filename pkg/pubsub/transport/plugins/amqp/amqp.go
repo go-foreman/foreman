@@ -19,10 +19,10 @@ func NewTransport(url string, logger log.Logger) transport.Transport {
 }
 
 type amqpTransport struct {
-	url        string
-	connection *amqp.Connection
-	publishingChannel         *amqp.Channel
-	logger     log.Logger
+	url               string
+	connection        *amqp.Connection
+	publishingChannel *amqp.Channel
+	logger            log.Logger
 	consumingChannel  *amqp.Channel
 }
 
@@ -202,7 +202,7 @@ func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, o
 			msgs, err := t.consumingChannel.Consume(
 				queue.Name(),
 				queue.Name(),
-				consumeOptions.AutoAck,
+				false,
 				consumeOptions.Exclusive,
 				consumeOptions.NoLocal,
 				consumeOptions.NoWait,

@@ -9,7 +9,6 @@ import (
 	"github.com/kopaygorodsky/brigadier/pkg/runtime/scheme"
 	sagaContracts "github.com/kopaygorodsky/brigadier/pkg/saga/contracts"
 	streadwayAmqp "github.com/streadway/amqp"
-	"time"
 )
 
 func main() {
@@ -23,8 +22,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	for {
-		time.Sleep(time.Millisecond * 100)
+	for i := 0; i < 100000; i++ {
 		uid := uuid.New().String()
 		registerAccountSaga := &account.RegisterAccountSaga{
 			UID:          uid,

@@ -5,6 +5,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"time"
+
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/kopaygorodsky/brigadier/example/saga/handlers"
 	"github.com/kopaygorodsky/brigadier/example/saga/usecase"
@@ -21,9 +25,6 @@ import (
 	"github.com/kopaygorodsky/brigadier/pkg/saga/component"
 	"github.com/kopaygorodsky/brigadier/pkg/saga/mutex"
 	amqp2 "github.com/streadway/amqp"
-	"io/ioutil"
-	"os"
-	"time"
 )
 
 const (
@@ -34,8 +35,10 @@ const (
 var defaultLogger = log.DefaultLogger()
 
 func main() {
-	db, err := sql.Open("mysql", "root:root@tcp(127.0.0.1:3306)/watcher?charset=utf8&parseTime=True&timeout=30s")
+	db, err := sql.Open("mysql", "root:root@tcp(127.0.0.1:3306)/brigadier?charset=utf8&parseTime=True&timeout=30s")
 	handleErr(err)
+	db.SetMaxOpenConns(100)
+	db.SetMaxIdleConns(100)
 
 	amqpTransport := amqp.NewTransport("amqp://admin:admin123@127.0.0.1:5672", defaultLogger)
 	queue := amqp.Queue(queueName, false, false, false, false)
@@ -109,13 +112,13 @@ func watchAndConfirmRegistration(dir string, logger log.Logger) {
 
 	for {
 		select {
-		case <- time.After(time.Second * 4):
+		case <-time.After(time.Second * 4):
 			files, err := ioutil.ReadDir(dir)
 			handleErr(err)
 
 			for _, info := range files {
 				handleErr(err)
-				filePath := dir+"/"+info.Name()
+				filePath := dir + "/" + info.Name()
 				uid, err := ioutil.ReadFile(filePath)
 				handleErr(err)
 				accountConfirmedEvent := &contracts.AccountConfirmed{UID: string(uid)}
@@ -126,12 +129,12 @@ func watchAndConfirmRegistration(dir string, logger log.Logger) {
 					Headers: map[string]interface{}{
 						"sagaId": info.Name(),
 					},
-					ContentType:     "application/json",
-					Body:            msgBytes,
+					ContentType: "application/json",
+					Body:        msgBytes,
 				})
 				handleErr(err)
 				handleErr(os.Remove(filePath))
-				logger.Logf(log.InfoLevel, "SagaId: %s. Sent msg that account %s confirmed",info.Name(), uid)
+				logger.Logf(log.InfoLevel, "SagaId: %s. Sent msg that account %s confirmed", info.Name(), uid)
 			}
 			handleErr(err)
 
@@ -144,5 +147,3 @@ func handleErr(err error) {
 		panic(err)
 	}
 }
-
-

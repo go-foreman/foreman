@@ -25,8 +25,8 @@ type Account struct {
 
 type AccountHandler struct {
 	sync.Mutex
-	runtimeDb map[string]*Account
-	logger log.Logger
+	runtimeDb        map[string]*Account
+	logger           log.Logger
 	confirmationsDir string
 }
 
@@ -90,8 +90,11 @@ func (h *AccountHandler) SendConfirmation(execCtx execution.MessageExecutionCtx)
 		return execCtx.Send(message.NewEventMessage(failedEvent, message.WithHeaders(receivedMsg.Headers), message.WithDescription(failedEvent.Reason)))
 	}
 
-	successEvent := &contracts.ConfirmationSent{UID: sendConfirmationCmd.UID}
-	return execCtx.Send(message.NewEventMessage(successEvent, message.WithHeaders(receivedMsg.Headers), message.WithDescription(fmt.Sprintf("Confirmation to %s sent", sendConfirmationCmd.Email))))
+	return nil
+
+	//don't need to send an event about confirmation being sent. Need to handle only sending failure if such exists.
+	//successEvent := &contracts.ConfirmationSent{UID: sendConfirmationCmd.UID}
+	//return execCtx.Send(message.NewEventMessage(successEvent, message.WithHeaders(receivedMsg.Headers), message.WithDescription(fmt.Sprintf("Confirmation to %s sent", sendConfirmationCmd.Email))))
 }
 
 func (h *AccountHandler) getAccount(uid string) (*Account, bool) {

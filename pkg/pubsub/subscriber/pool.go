@@ -23,13 +23,13 @@ func (w *worker) workerQueue() workerQueue {
 
 func newWorker(ctx context.Context, dispatcherQueue dispatcherQueue) worker {
 	return worker{
-		ctx: ctx,
+		ctx:             ctx,
 		dispatcherQueue: dispatcherQueue,
-		myTasks: make(workerQueue),
+		myTasks:         make(workerQueue),
 	}
 }
 
-func(w *worker) start() {
+func (w *worker) start() {
 	go func() {
 		defer close(w.myTasks)
 		for {
@@ -38,7 +38,7 @@ func(w *worker) start() {
 			select {
 			case <-w.ctx.Done():
 				return
-			case task, open := <- w.myTasks:
+			case task, open := <-w.myTasks:
 				if !open {
 					return
 				}
@@ -50,15 +50,15 @@ func(w *worker) start() {
 
 func newDispatcher(workersCount uint) *dispatcher {
 	return &dispatcher{
-		workersCount: workersCount,
+		workersCount:  workersCount,
 		workersQueues: make(dispatcherQueue, workersCount),
 	}
 }
 
 type dispatcher struct {
-	ctx context.Context
-	workersCount      uint
-	workersQueues      dispatcherQueue
+	ctx           context.Context
+	workersCount  uint
+	workersQueues dispatcherQueue
 }
 
 func (d *dispatcher) busyWorkers() int {
@@ -80,9 +80,9 @@ func (d *dispatcher) start(ctx context.Context) {
 func (d dispatcher) schedule(task task) {
 	for {
 		select {
-		case <- d.ctx.Done():
+		case <-d.ctx.Done():
 			return
-		case worker, opened := <- d.workersQueues:
+		case worker, opened := <-d.workersQueues:
 			if !opened {
 				return
 			}

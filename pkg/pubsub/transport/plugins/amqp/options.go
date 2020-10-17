@@ -6,11 +6,10 @@ import (
 )
 
 type ConsumeOptions struct {
-	AutoAck   bool
-	Exclusive bool
-	NoLocal   bool
-	NoWait    bool
-	PrefetchCount  int
+	Exclusive     bool
+	NoLocal       bool
+	NoWait        bool
+	PrefetchCount int
 }
 
 func convertConsumeOptsType(options interface{}) (*ConsumeOptions, error) {
@@ -31,20 +30,6 @@ func convertSendOptsType(options interface{}) (*SendOptions, error) {
 	}
 
 	return opts, nil
-}
-
-func WithAutoAck() transport.ConsumeOpts {
-	return func(options interface{}) error {
-		opts, err := convertConsumeOptsType(options)
-
-		if err != nil {
-			return errors.WithStack(err)
-		}
-
-		opts.AutoAck = true
-
-		return nil
-	}
 }
 
 func WithQosPrefetchCount(limit int) transport.ConsumeOpts {

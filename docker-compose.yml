@@ -12,7 +12,7 @@ services:
       RABBITMQ_ERLANG_COOKIE: f6fAjy5yes
       RABBITMQ_DEFAULT_USER: admin
       RABBITMQ_DEFAULT_PASS: admin123
-  db:
+  mysql:
     image: mysql:8.0.21
     command: ["--default-authentication-plugin=mysql_native_password"]
     volumes:
@@ -20,11 +20,27 @@ services:
     restart: always
     environment:
       MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: watcher
-      MYSQL_USER: watcher
-      MYSQL_PASSWORD: watcher
+      MYSQL_DATABASE: brigadier
+      MYSQL_USER: brigadier
+      MYSQL_PASSWORD: brigadier
     ports:
       - 3306:3306
+
+#  postgres:
+#    build:
+#      context: ./.docker/postgres
+#    restart: always
+#    volumes:
+#      - ./.docker/postgres/conf/postgresql.conf:/etc/postgresql.conf
+#      - ./.docker/postgres/data/customers.sql:/docker-entrypoint-initdb.d/init.sql
+#    environment:
+#      POSTGRES_PASSWORD: 123456789
+#      POSTGRES_USER: brigadier
+#      DB_NAME: brigadier
+#
+#    ports:
+#      - 5432:5432
+#    command: postgres -c config_file=/etc/postgresql.conf
 
 volumes:
   db-data: ~

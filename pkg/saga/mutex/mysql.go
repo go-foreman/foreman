@@ -8,8 +8,8 @@ import (
 )
 
 type MysqlMutex struct {
-	mapLock sync.Mutex
-	db *sql.DB
+	mapLock     sync.Mutex
+	db          *sql.DB
 	connections map[string]*sql.Conn
 }
 
@@ -25,7 +25,7 @@ func (m *MysqlMutex) Lock(ctx context.Context, sagaId string) error {
 	}
 
 	r := sql.NullInt64{}
-	if err := conn.QueryRowContext(ctx, "SELECT GET_LOCK(?, -1)", sagaId).Scan(&r); err != nil {
+	if err := conn.QueryRowContext(ctx, "SELECT GET_LOCK(?, -1);", sagaId).Scan(&r); err != nil {
 		conn.Close()
 		return WithMutexErr(errors.Wrapf(err, "error acquiring lock for saga %s", sagaId))
 	}
@@ -60,7 +60,7 @@ func (m *MysqlMutex) Release(ctx context.Context, sagaId string) error {
 	m.mapLock.Unlock()
 
 	r := sql.NullInt64{}
-	if err := conn.QueryRowContext(ctx, "SELECT RELEASE_LOCK(?)", sagaId).Scan(&r); err != nil {
+	if err := conn.QueryRowContext(ctx, "SELECT RELEASE_LOCK(?);", sagaId).Scan(&r); err != nil {
 		return WithMutexErr(errors.Errorf("error releasing lock for saga %s. %s", sagaId, err))
 	}
 

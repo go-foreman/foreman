@@ -86,7 +86,7 @@ func (s sqlStore) Create(ctx context.Context, sagaInstance Instance) error {
 		return errors.WithStack(err)
 	}
 
-	_, err = tx.ExecContext(ctx, fmt.Sprintf("INSERT INTO %v VALUES (?, ?, ?, ?, ?, ?, ?)", sagaTableName),
+	_, err = tx.ExecContext(ctx, fmt.Sprintf("INSERT INTO %v VALUES (?, ?, ?, ?, ?, ?, ?);", sagaTableName),
 		data.ID,
 		data.ParentID,
 		data.Name,
@@ -133,7 +133,7 @@ func (s sqlStore) Update(ctx context.Context, sagaInstance Instance) error {
 		return errors.WithStack(err)
 	}
 
-	_, err = tx.ExecContext(ctx, fmt.Sprintf("UPDATE %v SET parent_id=?, name=?, payload=?, status=?, started_at=?, updated_at=? WHERE id=?", sagaTableName),
+	_, err = tx.ExecContext(ctx, fmt.Sprintf("UPDATE %v SET parent_id=?, name=?, payload=?, status=?, started_at=?, updated_at=? WHERE id=?;", sagaTableName),
 		sagaData.ParentID,
 		sagaData.Name,
 		sagaData.Payload,
@@ -149,7 +149,7 @@ func (s sqlStore) Update(ctx context.Context, sagaInstance Instance) error {
 		return errors.WithStack(err)
 	}
 
-	rows, err := tx.QueryContext(ctx, fmt.Sprintf("SELECT id FROM %v WHERE saga_id=?", sagaHistoryTableName), sagaData.ID)
+	rows, err := tx.QueryContext(ctx, fmt.Sprintf("SELECT id FROM %v WHERE saga_id=?;", sagaHistoryTableName), sagaData.ID)
 
 	if err != nil {
 		if rErr := tx.Rollback(); rErr != nil {
@@ -189,7 +189,7 @@ func (s sqlStore) Update(ctx context.Context, sagaInstance Instance) error {
 				return errors.WithStack(err)
 			}
 
-			_, err = tx.Exec(fmt.Sprintf("INSERT INTO %v VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", sagaHistoryTableName),
+			_, err = tx.Exec(fmt.Sprintf("INSERT INTO %v VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);", sagaHistoryTableName),
 				m.ID,
 				sagaData.ID,
 				m.Name,
@@ -217,7 +217,7 @@ func (s sqlStore) Update(ctx context.Context, sagaInstance Instance) error {
 
 func (s sqlStore) GetById(ctx context.Context, sagaId string) (Instance, error) {
 	sagaData := sagaModel{}
-	err := s.db.QueryRowContext(ctx, fmt.Sprintf("SELECT * FROM %v WHERE id=?", sagaTableName), sagaId).
+	err := s.db.QueryRowContext(ctx, fmt.Sprintf("SELECT * FROM %v WHERE id=?;", sagaTableName), sagaId).
 		Scan(
 			&sagaData.ID,
 			&sagaData.ParentID,
@@ -295,6 +295,10 @@ func (s sqlStore) GetByFilter(ctx context.Context, filters []FilterOption) ([]In
 		if i < len(conditions)-1 {
 			query += " AND"
 		}
+
+		if i == len(conditions)-1 {
+			query += ";"
+		}
 	}
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
@@ -365,7 +369,7 @@ func (s sqlStore) GetByFilter(ctx context.Context, filters []FilterOption) ([]In
 }
 
 func (s sqlStore) Delete(ctx context.Context, sagaId string) error {
-	_, err := s.db.ExecContext(ctx, fmt.Sprintf("DELETE FROM %v WHERE id=?", sagaTableName), sagaId)
+	_, err := s.db.ExecContext(ctx, fmt.Sprintf("DELETE FROM %v WHERE id=?;", sagaTableName), sagaId)
 	if err != nil {
 		return errors.WithStack(err)
 	}
@@ -374,7 +378,7 @@ func (s sqlStore) Delete(ctx context.Context, sagaId string) error {
 }
 
 func (s sqlStore) queryEvents(sagaId string) ([]HistoryEvent, error) {
-	rows, err := s.db.Query(fmt.Sprintf("SELECT id, name, type, status, payload, description, origin_source, created_at FROM %v WHERE saga_id=? ORDER BY created_at", sagaHistoryTableName), sagaId)
+	rows, err := s.db.Query(fmt.Sprintf("SELECT id, name, type, status, payload, description, origin_source, created_at FROM %v WHERE saga_id=? ORDER BY created_at;", sagaHistoryTableName), sagaId)
 
 	if err != nil {
 		return nil, errors.WithStack(err)

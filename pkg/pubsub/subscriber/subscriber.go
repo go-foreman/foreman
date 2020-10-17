@@ -16,9 +16,9 @@ import (
 )
 
 const (
-	maxTasksInProgress = 100
+	maxTasksInProgress              = 100
 	packageProcessingMaxTimeSeconds = 60
-	gracefulShutdownTimeoutSeconds = 120
+	gracefulShutdownTimeoutSeconds  = 120
 )
 
 type Subscriber interface {
@@ -27,9 +27,9 @@ type Subscriber interface {
 }
 
 type subscriber struct {
-	transport       transport.Transport
-	logger          log.Logger
-	processor       Processor
+	transport        transport.Transport
+	logger           log.Logger
+	processor        Processor
 	workerDispatcher *dispatcher
 }
 
@@ -47,7 +47,7 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 
 	consumerCtx, cancelConsumerCtx := context.WithCancel(ctx)
 	dispatcherCtx, cancelWorkers := context.WithCancel(ctx)
-	shutdownCtx, _ := context.WithTimeout(context.Background(), time.Second * gracefulShutdownTimeoutSeconds)
+	shutdownCtx, _ := context.WithTimeout(context.Background(), time.Second*gracefulShutdownTimeoutSeconds)
 
 	consumedPkgs, err := s.transport.Consume(consumerCtx, queues, amqp.WithQosPrefetchCount(maxTasksInProgress))
 
@@ -59,18 +59,18 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 
 	for {
 		select {
-		case incomingPkg, opened := <- consumedPkgs:
+		case incomingPkg, opened := <-consumedPkgs:
 			if !opened {
 				return nil
 			}
 			s.workerDispatcher.schedule(newTaskProcessPkg(ctx, incomingPkg, s))
-		case <- ctx.Done():
+		case <-ctx.Done():
 			s.logger.Logf(log.InfoLevel, "Subscriber's context was canceled")
 			if err := s.Stop(shutdownCtx); err != nil {
 				s.logger.Logf(log.ErrorLevel, "Error stopping subscriber gracefully %s", err)
 			}
 			return nil
-		case <- signalChan:
+		case <-signalChan:
 			s.logger.Logf(log.InfoLevel, "Received kill signal")
 			cancelConsumerCtx()
 			if err := s.Stop(shutdownCtx); err != nil {
@@ -83,7 +83,7 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 }
 
 func (s *subscriber) processPackage(ctx context.Context, inPkg pkg.IncomingPkg) {
-	processorCtx, _ := context.WithTimeout(ctx, time.Second * packageProcessingMaxTimeSeconds)
+	processorCtx, _ := context.WithTimeout(ctx, time.Second*packageProcessingMaxTimeSeconds)
 	var toAck bool
 
 	if err := s.processor.Process(processorCtx, inPkg); err != nil {
@@ -127,8 +127,8 @@ func (s *subscriber) Stop(ctx context.Context) error {
 }
 
 type processPkg struct {
-	ctx context.Context
-	pkg pkg.IncomingPkg
+	ctx        context.Context
+	pkg        pkg.IncomingPkg
 	subscriber *subscriber
 }
 
@@ -140,6 +140,6 @@ func newTaskProcessPkg(ctx context.Context, pkg pkg.IncomingPkg, subscriber *sub
 	}
 }
 
-func(p *processPkg) do() {
+func (p *processPkg) do() {
 	p.subscriber.processPackage(p.ctx, p.pkg)
 }

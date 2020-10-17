@@ -7,7 +7,7 @@ import (
 )
 
 func DefaultLogger() Logger {
-	return &defaultLogger{log.New(os.Stdout, "[messagebus] ", log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)}
+	return &defaultLogger{log.New(os.Stdout, "[messagebus] ", log.Ldate|log.Ltime|log.Lmicroseconds|log.Lshortfile)}
 }
 
 type defaultLogger struct {

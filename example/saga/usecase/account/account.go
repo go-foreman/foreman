@@ -15,17 +15,17 @@ func init() {
 
 type RegisterAccountSaga struct {
 	saga.BaseSaga
-	UID          string
-	Email        string
-	Password     string
-	RetriesLimit int
+	UID                 string
+	Email               string
+	Password            string
+	RetriesLimit        int
+	confirmationWasSent bool
 }
 
 func (r *RegisterAccountSaga) Init() {
 	r.
 		AddEventHandler(&contracts.AccountRegistered{}, r.AccountRegistered).
 		AddEventHandler(&contracts.RegistrationFailed{}, r.RegistrationFailed).
-		AddEventHandler(&contracts.ConfirmationSent{}, r.ConfirmationSent).
 		AddEventHandler(&contracts.ConfirmationSendingFailed{}, r.ConfirmationSendingFailed).
 		AddEventHandler(&contracts.AccountConfirmed{}, r.AccountConfirmed)
 }
@@ -71,11 +71,6 @@ func (r *RegisterAccountSaga) RegistrationFailed(execCtx saga.SagaContext) error
 	}
 
 	execCtx.SagaInstance().Fail()
-	return nil
-}
-
-func (r *RegisterAccountSaga) ConfirmationSent(execCtx saga.SagaContext) error {
-	execCtx.LogMessage(log.InfoLevel, fmt.Sprintf("Account confirmation sent out to %s", r.Email))
 	return nil
 }
 
