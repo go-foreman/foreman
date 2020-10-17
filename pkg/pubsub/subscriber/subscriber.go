@@ -2,6 +2,7 @@ package subscriber
 
 import (
 	log "github.com/kopaygorodsky/brigadier/pkg/log"
+	pubsubErr "github.com/kopaygorodsky/brigadier/pkg/pubsub/errors"
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/transport/plugins/amqp"
 	"os"
 	"os/signal"
@@ -83,9 +84,22 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 
 func (s *subscriber) processPackage(ctx context.Context, inPkg pkg.IncomingPkg) {
 	processorCtx, _ := context.WithTimeout(ctx, time.Second * packageProcessingMaxTimeSeconds)
+	var toAck bool
+
 	if err := s.processor.Process(processorCtx, inPkg); err != nil {
 		s.logger.Logf(log.ErrorLevel, "error happened while processing pkg %s from %s. %s\n", inPkg.TraceId(), inPkg.Origin(), err)
+		originalErr := errors.Cause(err)
+
+		if statusErr, ok := originalErr.(pubsubErr.StatusErr); ok {
+			if statusErr.Status == pubsubErr.NoRetry {
+				toAck = true
+			}
+		}
 	} else {
+		toAck = true
+	}
+
+	if toAck {
 		if err := inPkg.Ack(); err != nil {
 			s.logger.Logf(log.ErrorLevel, "error acking package %s. %s", inPkg.TraceId(), err)
 		}
