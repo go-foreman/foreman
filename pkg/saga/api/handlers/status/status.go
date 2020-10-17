@@ -3,10 +3,10 @@ package status
 import (
 	"context"
 	"encoding/json"
+	"github.com/kopaygorodsky/brigadier/pkg/log"
 	"github.com/kopaygorodsky/brigadier/pkg/saga"
 	sagaApiErrors "github.com/kopaygorodsky/brigadier/pkg/saga/api/errors"
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 	"net/http"
 	"strings"
 )
@@ -103,10 +103,10 @@ func (s statusService) GetFilteredBy(ctx context.Context, sagaId, status, sagaTy
 
 type StatusHandler struct {
 	service StatusService
-	logger  *log.Logger
+	logger  log.Logger
 }
 
-func NewStatusHandler(logger *log.Logger, service StatusService) *StatusHandler {
+func NewStatusHandler(logger log.Logger, service StatusService) *StatusHandler {
 	return &StatusHandler{service: service, logger: logger}
 }
 
@@ -118,7 +118,7 @@ func (h *StatusHandler) GetStatus(resp http.ResponseWriter, r *http.Request) {
 		resp.WriteHeader(http.StatusBadRequest)
 
 		if _, err := resp.Write([]byte("Saga id is empty")); err != nil {
-			h.logger.Error(err)
+			h.logger.Log(log.ErrorLevel, err)
 		}
 
 		return
@@ -127,7 +127,7 @@ func (h *StatusHandler) GetStatus(resp http.ResponseWriter, r *http.Request) {
 	statusResp, err := h.service.GetStatus(r.Context(), sagaId)
 
 	if err != nil {
-		h.logger.Error(err)
+		h.logger.Log(log.ErrorLevel, err)
 
 		if respErr, ok := err.(sagaApiErrors.ResponseError); ok {
 			resp.WriteHeader(respErr.Status())
@@ -136,7 +136,7 @@ func (h *StatusHandler) GetStatus(resp http.ResponseWriter, r *http.Request) {
 		}
 
 		if _, err := resp.Write([]byte(err.Error())); err != nil {
-			h.logger.Error(err)
+			h.logger.Log(log.ErrorLevel, err)
 		}
 		return
 	}
@@ -144,7 +144,7 @@ func (h *StatusHandler) GetStatus(resp http.ResponseWriter, r *http.Request) {
 	status, err := json.Marshal(statusResp)
 
 	if err != nil {
-		h.logger.Error(err)
+		h.logger.Log(log.ErrorLevel, err)
 		resp.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -152,7 +152,7 @@ func (h *StatusHandler) GetStatus(resp http.ResponseWriter, r *http.Request) {
 	resp.Header().Set("Content-Type", "application/json")
 
 	if _, err := resp.Write(status); err != nil {
-		h.logger.Error(err)
+		h.logger.Log(log.ErrorLevel, err)
 	}
 }
 
@@ -165,7 +165,7 @@ func (h *StatusHandler) GetFilteredBy(resp http.ResponseWriter, r *http.Request)
 	statusesResp, err := h.service.GetFilteredBy(r.Context(), sagaId, status, sagaType)
 
 	if err != nil {
-		h.logger.Error(err)
+		h.logger.Log(log.ErrorLevel, err)
 
 		if respErr, ok := err.(sagaApiErrors.ResponseError); ok {
 			resp.WriteHeader(respErr.Status())
@@ -174,7 +174,7 @@ func (h *StatusHandler) GetFilteredBy(resp http.ResponseWriter, r *http.Request)
 		}
 
 		if _, err := resp.Write([]byte(err.Error())); err != nil {
-			h.logger.Error(err)
+			h.logger.Log(log.ErrorLevel, err)
 		}
 		return
 	}
@@ -182,7 +182,7 @@ func (h *StatusHandler) GetFilteredBy(resp http.ResponseWriter, r *http.Request)
 	rawResponse, err := json.Marshal(statusesResp)
 
 	if err != nil {
-		h.logger.Error(err)
+		h.logger.Log(log.ErrorLevel, err)
 		resp.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -190,6 +190,6 @@ func (h *StatusHandler) GetFilteredBy(resp http.ResponseWriter, r *http.Request)
 	resp.Header().Set("Content-Type", "application/json")
 
 	if _, err := resp.Write(rawResponse); err != nil {
-		h.logger.Error(err)
+		h.logger.Log(log.ErrorLevel, err)
 	}
 }
