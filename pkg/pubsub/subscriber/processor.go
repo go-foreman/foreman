@@ -35,7 +35,7 @@ func (p *processor) Process(ctx context.Context, inPkg pkg.IncomingPkg) error {
 	}
 
 	if msg.Headers.ReturnsCount() >= 10 {
-		return errors.Errorf("Message %s was returned more that 10 times. Not acking. It will be removed once TTL expires.")
+		return errors.Errorf("Message %s was returned more that 10 times. Not acking. It will be removed once TTL expires.", msg.ID)
 	}
 
 	executors := p.dispatcher.Match(msg)
