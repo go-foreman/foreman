@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-const someTypeTypePkgPath = "github.com/kopaygorodsky/brigadier/pkg/runtime/scheme.sometesttype"
+const someTypeTypePkgPath = "github.com/go-foreman/foreman/pkg/runtime/scheme.sometesttype"
 
 type SomeTestType struct {
 	A int
@@ -18,43 +18,43 @@ type SomeAnotherTestType struct {
 }
 
 func TestRegisterTypes(t *testing.T) {
-	testCases :=  []struct {
-		registry KnownTypesRegistry
-		registerType interface{}
+	testCases := []struct {
+		registry        KnownTypesRegistry
+		registerType    interface{}
 		registerWithKey bool
-		key string
-		isType interface{}
-		loadBy []KeyChoice
-	} {
+		key             string
+		isType          interface{}
+		loadBy          []KeyChoice
+	}{
 		//registered ptr, loaded by struct with a ptr, as value and by key which is pkg path
 		{
-			registry: NewKnownTypesRegistry(),
+			registry:     NewKnownTypesRegistry(),
 			registerType: &SomeTestType{},
-			isType: &SomeTestType{},
-			loadBy: []KeyChoice{WithStruct(&SomeTestType{}), WithStruct(SomeTestType{}), WithKey(someTypeTypePkgPath)},
+			isType:       &SomeTestType{},
+			loadBy:       []KeyChoice{WithStruct(&SomeTestType{}), WithStruct(SomeTestType{}), WithKey(someTypeTypePkgPath)},
 		},
 		//registered by value, loaded by struct with a ptr, as value and by key. Loaded type is ptr.
 		{
-			registry: NewKnownTypesRegistry(),
+			registry:     NewKnownTypesRegistry(),
 			registerType: SomeTestType{},
-			isType: &SomeTestType{},
-			loadBy: []KeyChoice{WithStruct(&SomeTestType{}), WithStruct(SomeTestType{}), WithKey(someTypeTypePkgPath)},
+			isType:       &SomeTestType{},
+			loadBy:       []KeyChoice{WithStruct(&SomeTestType{}), WithStruct(SomeTestType{}), WithKey(someTypeTypePkgPath)},
 		},
 		{
-			registry: NewKnownTypesRegistry(),
-			registerType: &SomeTestType{},
+			registry:        NewKnownTypesRegistry(),
+			registerType:    &SomeTestType{},
 			registerWithKey: true,
-			key: "someKey",
-			isType: &SomeTestType{},
-			loadBy: []KeyChoice{WithKey("someKey")},
+			key:             "someKey",
+			isType:          &SomeTestType{},
+			loadBy:          []KeyChoice{WithKey("someKey")},
 		},
 		{
-			registry: NewKnownTypesRegistry(),
-			registerType: SomeTestType{},
+			registry:        NewKnownTypesRegistry(),
+			registerType:    SomeTestType{},
 			registerWithKey: true,
-			key: "someKey",
-			isType: &SomeTestType{},
-			loadBy: []KeyChoice{WithKey("someKey")},
+			key:             "someKey",
+			isType:          &SomeTestType{},
+			loadBy:          []KeyChoice{WithKey("someKey")},
 		},
 	}
 

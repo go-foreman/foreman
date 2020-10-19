@@ -1,5 +1,5 @@
 package main
 
 import (
-	_ "github.com/kopaygorodsky/brigadier/example/saga/usecase/account"
+	_ "github.com/go-foreman/foreman/example/saga/usecase/account"
 )

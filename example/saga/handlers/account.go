@@ -2,10 +2,10 @@ package handlers
 
 import (
 	"fmt"
-	"github.com/kopaygorodsky/brigadier/example/saga/usecase/account/contracts"
-	"github.com/kopaygorodsky/brigadier/pkg/log"
-	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message"
-	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message/execution"
+	"github.com/go-foreman/foreman/example/saga/usecase/account/contracts"
+	"github.com/go-foreman/foreman/pkg/log"
+	"github.com/go-foreman/foreman/pkg/pubsub/message"
+	"github.com/go-foreman/foreman/pkg/pubsub/message/execution"
 	"io/ioutil"
 	"math/rand"
 	"path"

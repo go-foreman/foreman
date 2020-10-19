@@ -2,7 +2,7 @@ package transport
 
 import (
 	"context"
-	"github.com/kopaygorodsky/brigadier/pkg/pubsub/transport/pkg"
+	"github.com/go-foreman/foreman/pkg/pubsub/transport/pkg"
 )
 
 type Transport interface {

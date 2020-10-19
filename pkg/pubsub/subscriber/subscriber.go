@@ -1,16 +1,16 @@
 package subscriber
 
 import (
-	log "github.com/kopaygorodsky/brigadier/pkg/log"
-	pubsubErr "github.com/kopaygorodsky/brigadier/pkg/pubsub/errors"
-	"github.com/kopaygorodsky/brigadier/pkg/pubsub/transport/plugins/amqp"
+	log "github.com/go-foreman/foreman/pkg/log"
+	pubsubErr "github.com/go-foreman/foreman/pkg/pubsub/errors"
+	"github.com/go-foreman/foreman/pkg/pubsub/transport/plugins/amqp"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"context"
-	"github.com/kopaygorodsky/brigadier/pkg/pubsub/transport"
-	"github.com/kopaygorodsky/brigadier/pkg/pubsub/transport/pkg"
+	"github.com/go-foreman/foreman/pkg/pubsub/transport"
+	"github.com/go-foreman/foreman/pkg/pubsub/transport/pkg"
 	"github.com/pkg/errors"
 	"time"
 )

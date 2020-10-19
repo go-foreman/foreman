@@ -1,9 +1,9 @@
 package dispatcher
 
 import (
-	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message"
-	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message/execution"
-	"github.com/kopaygorodsky/brigadier/pkg/runtime/scheme"
+	"github.com/go-foreman/foreman/pkg/pubsub/message"
+	"github.com/go-foreman/foreman/pkg/pubsub/message/execution"
+	"github.com/go-foreman/foreman/pkg/runtime/scheme"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -25,8 +25,8 @@ func allExecutor(execCtx execution.MessageExecutionCtx) error {
 }
 
 type service struct {
-
 }
+
 func (h *service) handle(execCtx execution.MessageExecutionCtx) error {
 	return nil
 }

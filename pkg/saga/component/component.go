@@ -1,15 +1,15 @@
 package component
 
 import (
-	"github.com/kopaygorodsky/brigadier/pkg"
-	"github.com/kopaygorodsky/brigadier/pkg/log"
-	"github.com/kopaygorodsky/brigadier/pkg/pubsub/endpoint"
-	"github.com/kopaygorodsky/brigadier/pkg/runtime/scheme"
-	"github.com/kopaygorodsky/brigadier/pkg/saga"
-	"github.com/kopaygorodsky/brigadier/pkg/saga/api/handlers/status"
-	"github.com/kopaygorodsky/brigadier/pkg/saga/contracts"
-	"github.com/kopaygorodsky/brigadier/pkg/saga/handlers"
-	"github.com/kopaygorodsky/brigadier/pkg/saga/mutex"
+	"github.com/go-foreman/foreman/pkg"
+	"github.com/go-foreman/foreman/pkg/log"
+	"github.com/go-foreman/foreman/pkg/pubsub/endpoint"
+	"github.com/go-foreman/foreman/pkg/runtime/scheme"
+	"github.com/go-foreman/foreman/pkg/saga"
+	"github.com/go-foreman/foreman/pkg/saga/api/handlers/status"
+	"github.com/go-foreman/foreman/pkg/saga/contracts"
+	"github.com/go-foreman/foreman/pkg/saga/handlers"
+	"github.com/go-foreman/foreman/pkg/saga/mutex"
 	"net/http"
 )
 
@@ -25,7 +25,7 @@ type Component struct {
 }
 
 type opts struct {
-	idExtractor saga.IdExtractor
+	idExtractor  saga.IdExtractor
 	apiServerMux *http.ServeMux
 }
 
@@ -109,11 +109,10 @@ func WithSagaApiServer(mux *http.ServeMux) configOption {
 	}
 }
 
-func initApiServer(mux *http.ServeMux, store saga.Store, logger log.Logger)  {
+func initApiServer(mux *http.ServeMux, store saga.Store, logger log.Logger) {
 	statusHandler := status.NewStatusHandler(logger, status.NewStatusService(store))
 	mux.HandleFunc("/sagas", statusHandler.GetFilteredBy)
 	mux.HandleFunc("/sagas/", statusHandler.GetStatus)
 }
-
 
 type StoreFactory func(scheme scheme.KnownTypesRegistry) (saga.Store, error)

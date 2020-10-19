@@ -1,16 +1,16 @@
 package handlers
 
 import (
-	log "github.com/kopaygorodsky/brigadier/pkg/log"
-	sagaPkg "github.com/kopaygorodsky/brigadier/pkg/saga"
+	log "github.com/go-foreman/foreman/pkg/log"
+	sagaPkg "github.com/go-foreman/foreman/pkg/saga"
 
 	"context"
 	"fmt"
-	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message"
-	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message/execution"
-	"github.com/kopaygorodsky/brigadier/pkg/runtime/scheme"
-	"github.com/kopaygorodsky/brigadier/pkg/saga/contracts"
-	"github.com/kopaygorodsky/brigadier/pkg/saga/mutex"
+	"github.com/go-foreman/foreman/pkg/pubsub/message"
+	"github.com/go-foreman/foreman/pkg/pubsub/message/execution"
+	"github.com/go-foreman/foreman/pkg/runtime/scheme"
+	"github.com/go-foreman/foreman/pkg/saga/contracts"
+	"github.com/go-foreman/foreman/pkg/saga/mutex"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"time"

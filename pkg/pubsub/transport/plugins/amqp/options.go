@@ -1,7 +1,7 @@
 package amqp
 
 import (
-	"github.com/kopaygorodsky/brigadier/pkg/pubsub/transport"
+	"github.com/go-foreman/foreman/pkg/pubsub/transport"
 	"github.com/pkg/errors"
 )
 

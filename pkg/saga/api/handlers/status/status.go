@@ -3,9 +3,9 @@ package status
 import (
 	"context"
 	"encoding/json"
-	"github.com/kopaygorodsky/brigadier/pkg/log"
-	"github.com/kopaygorodsky/brigadier/pkg/saga"
-	sagaApiErrors "github.com/kopaygorodsky/brigadier/pkg/saga/api/errors"
+	"github.com/go-foreman/foreman/pkg/log"
+	"github.com/go-foreman/foreman/pkg/saga"
+	sagaApiErrors "github.com/go-foreman/foreman/pkg/saga/api/errors"
 	"github.com/pkg/errors"
 	"net/http"
 	"strings"

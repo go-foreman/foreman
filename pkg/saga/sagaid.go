@@ -1,7 +1,7 @@
 package saga
 
 import (
-	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message"
+	"github.com/go-foreman/foreman/pkg/pubsub/message"
 	"github.com/pkg/errors"
 )
 

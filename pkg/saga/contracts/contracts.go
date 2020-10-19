@@ -1,6 +1,6 @@
 package contracts
 
-import "github.com/kopaygorodsky/brigadier/pkg/runtime/scheme"
+import "github.com/go-foreman/foreman/pkg/runtime/scheme"
 
 func init() {
 	contractsList := []interface{}{

@@ -2,11 +2,11 @@ package execution
 
 import (
 	"context"
-	"github.com/kopaygorodsky/brigadier/pkg/log"
-	"github.com/kopaygorodsky/brigadier/pkg/pubsub/endpoint"
-	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message"
-	"github.com/kopaygorodsky/brigadier/pkg/pubsub/transport/pkg"
-	"github.com/kopaygorodsky/brigadier/pkg/runtime/scheme"
+	"github.com/go-foreman/foreman/pkg/log"
+	"github.com/go-foreman/foreman/pkg/pubsub/endpoint"
+	"github.com/go-foreman/foreman/pkg/pubsub/message"
+	"github.com/go-foreman/foreman/pkg/pubsub/transport/pkg"
+	"github.com/go-foreman/foreman/pkg/runtime/scheme"
 	"github.com/pkg/errors"
 	"time"
 )

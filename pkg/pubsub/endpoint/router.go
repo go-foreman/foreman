@@ -1,7 +1,7 @@
 package endpoint
 
 import (
-	"github.com/kopaygorodsky/brigadier/pkg/runtime/scheme"
+	"github.com/go-foreman/foreman/pkg/runtime/scheme"
 )
 
 type Router interface {

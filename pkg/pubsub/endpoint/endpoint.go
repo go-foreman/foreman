@@ -2,7 +2,7 @@ package endpoint
 
 import (
 	"context"
-	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message"
+	"github.com/go-foreman/foreman/pkg/pubsub/message"
 	"time"
 )
 

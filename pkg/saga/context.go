@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/kopaygorodsky/brigadier/pkg/log"
-	"github.com/kopaygorodsky/brigadier/pkg/pubsub/endpoint"
-	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message"
-	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message/execution"
+	"github.com/go-foreman/foreman/pkg/log"
+	"github.com/go-foreman/foreman/pkg/pubsub/endpoint"
+	"github.com/go-foreman/foreman/pkg/pubsub/message"
+	"github.com/go-foreman/foreman/pkg/pubsub/message/execution"
 	"github.com/pkg/errors"
 )
 

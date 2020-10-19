@@ -1,13 +1,13 @@
 package amqp
 
 import (
-	"github.com/kopaygorodsky/brigadier/pkg/log"
+	"github.com/go-foreman/foreman/pkg/log"
 
 	"context"
 	"sync"
 
-	"github.com/kopaygorodsky/brigadier/pkg/pubsub/transport"
-	"github.com/kopaygorodsky/brigadier/pkg/pubsub/transport/pkg"
+	"github.com/go-foreman/foreman/pkg/pubsub/transport"
+	"github.com/go-foreman/foreman/pkg/pubsub/transport/pkg"
 	"github.com/pkg/errors"
 	"github.com/streadway/amqp"
 )

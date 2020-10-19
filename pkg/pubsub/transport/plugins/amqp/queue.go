@@ -1,6 +1,6 @@
 package amqp
 
-import "github.com/kopaygorodsky/brigadier/pkg/pubsub/transport"
+import "github.com/go-foreman/foreman/pkg/pubsub/transport"
 
 func Queue(name string, durable, autoDelete, exclusive, noWait bool) transport.Queue {
 	return amqpQueue{queueName: name, durable: durable, autoDelete: autoDelete, exclusive: exclusive, noWait: noWait}

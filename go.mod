@@ -1,4 +1,4 @@
-module github.com/kopaygorodsky/brigadier
+module github.com/go-foreman/foreman
 
 go 1.14
 

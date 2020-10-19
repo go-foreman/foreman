@@ -1,6 +1,6 @@
 package amqp
 
-import "github.com/kopaygorodsky/brigadier/pkg/pubsub/transport"
+import "github.com/go-foreman/foreman/pkg/pubsub/transport"
 
 func Topic(name string, durable, autoDelete, internal, noWait bool) transport.Topic {
 	return amqpTopic{topicName: name, durable: durable, autoDelete: autoDelete, internal: internal, noWait: noWait}

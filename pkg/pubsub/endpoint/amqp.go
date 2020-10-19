@@ -3,9 +3,9 @@ package endpoint
 import (
 	"context"
 	"encoding/json"
-	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message"
-	"github.com/kopaygorodsky/brigadier/pkg/pubsub/transport"
-	"github.com/kopaygorodsky/brigadier/pkg/pubsub/transport/pkg"
+	"github.com/go-foreman/foreman/pkg/pubsub/message"
+	"github.com/go-foreman/foreman/pkg/pubsub/transport"
+	"github.com/go-foreman/foreman/pkg/pubsub/transport/pkg"
 	"github.com/pkg/errors"
 	"time"
 )

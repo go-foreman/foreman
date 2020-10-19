@@ -1,16 +1,16 @@
 package handlers
 
 import (
-	log "github.com/kopaygorodsky/brigadier/pkg/log"
-	busErrs "github.com/kopaygorodsky/brigadier/pkg/pubsub/errors"
-	sagaPkg "github.com/kopaygorodsky/brigadier/pkg/saga"
-	sagaMutex "github.com/kopaygorodsky/brigadier/pkg/saga/mutex"
+	log "github.com/go-foreman/foreman/pkg/log"
+	busErrs "github.com/go-foreman/foreman/pkg/pubsub/errors"
+	sagaPkg "github.com/go-foreman/foreman/pkg/saga"
+	sagaMutex "github.com/go-foreman/foreman/pkg/saga/mutex"
 
 	"fmt"
-	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message"
-	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message/execution"
-	"github.com/kopaygorodsky/brigadier/pkg/runtime/scheme"
-	"github.com/kopaygorodsky/brigadier/pkg/saga/contracts"
+	"github.com/go-foreman/foreman/pkg/pubsub/message"
+	"github.com/go-foreman/foreman/pkg/pubsub/message/execution"
+	"github.com/go-foreman/foreman/pkg/runtime/scheme"
+	"github.com/go-foreman/foreman/pkg/saga/contracts"
 	"github.com/pkg/errors"
 	"time"
 )

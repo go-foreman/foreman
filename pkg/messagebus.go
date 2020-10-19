@@ -2,14 +2,14 @@ package pkg
 
 import (
 	"errors"
-	"github.com/kopaygorodsky/brigadier/pkg/log"
-	"github.com/kopaygorodsky/brigadier/pkg/pubsub/dispatcher"
-	"github.com/kopaygorodsky/brigadier/pkg/pubsub/endpoint"
-	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message"
-	"github.com/kopaygorodsky/brigadier/pkg/pubsub/message/execution"
-	"github.com/kopaygorodsky/brigadier/pkg/pubsub/subscriber"
-	"github.com/kopaygorodsky/brigadier/pkg/pubsub/transport"
-	"github.com/kopaygorodsky/brigadier/pkg/runtime/scheme"
+	"github.com/go-foreman/foreman/pkg/log"
+	"github.com/go-foreman/foreman/pkg/pubsub/dispatcher"
+	"github.com/go-foreman/foreman/pkg/pubsub/endpoint"
+	"github.com/go-foreman/foreman/pkg/pubsub/message"
+	"github.com/go-foreman/foreman/pkg/pubsub/message/execution"
+	"github.com/go-foreman/foreman/pkg/pubsub/subscriber"
+	"github.com/go-foreman/foreman/pkg/pubsub/transport"
+	"github.com/go-foreman/foreman/pkg/runtime/scheme"
 )
 
 type Component interface {

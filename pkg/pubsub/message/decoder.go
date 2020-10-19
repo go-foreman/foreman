@@ -2,8 +2,8 @@ package message
 
 import (
 	"encoding/json"
-	"github.com/kopaygorodsky/brigadier/pkg/pubsub/transport/pkg"
-	"github.com/kopaygorodsky/brigadier/pkg/runtime/scheme"
+	"github.com/go-foreman/foreman/pkg/pubsub/transport/pkg"
+	"github.com/go-foreman/foreman/pkg/runtime/scheme"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )

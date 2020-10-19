@@ -1,7 +1,7 @@
 package usecase
 
 import (
-	"github.com/kopaygorodsky/brigadier/pkg/saga"
+	"github.com/go-foreman/foreman/pkg/saga"
 )
 
 var DefaultSagasCollection = SagasCollection{}
