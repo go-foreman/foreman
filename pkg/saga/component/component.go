@@ -2,12 +2,15 @@ package component
 
 import (
 	"github.com/kopaygorodsky/brigadier/pkg"
+	"github.com/kopaygorodsky/brigadier/pkg/log"
 	"github.com/kopaygorodsky/brigadier/pkg/pubsub/endpoint"
 	"github.com/kopaygorodsky/brigadier/pkg/runtime/scheme"
 	"github.com/kopaygorodsky/brigadier/pkg/saga"
+	"github.com/kopaygorodsky/brigadier/pkg/saga/api/handlers/status"
 	"github.com/kopaygorodsky/brigadier/pkg/saga/contracts"
 	"github.com/kopaygorodsky/brigadier/pkg/saga/handlers"
 	"github.com/kopaygorodsky/brigadier/pkg/saga/mutex"
+	"net/http"
 )
 
 type Component struct {
@@ -17,16 +20,18 @@ type Component struct {
 	sagaMutex        mutex.Mutex
 	schema           scheme.KnownTypesRegistry
 	endpoints        []endpoint.Endpoint
-	configOpts       []ConfigOption
+	configOpts       []configOption
+	store            saga.Store
 }
 
 type opts struct {
 	idExtractor saga.IdExtractor
+	apiServerMux *http.ServeMux
 }
 
-type ConfigOption func(o *opts)
+type configOption func(o *opts)
 
-func NewSagaComponent(sagaStoreFactory StoreFactory, sagaMutex mutex.Mutex, opts ...ConfigOption) *Component {
+func NewSagaComponent(sagaStoreFactory StoreFactory, sagaMutex mutex.Mutex, opts ...configOption) *Component {
 	return &Component{sagaStoreFactory: sagaStoreFactory, sagaMutex: sagaMutex, configOpts: opts}
 }
 
@@ -44,6 +49,10 @@ func (c Component) Init(mBus *pkg.MessageBus) error {
 
 	if err != nil {
 		return err
+	}
+
+	if opts.apiServerMux != nil {
+		initApiServer(opts.apiServerMux, store, mBus.Logger())
 	}
 
 	eventHandler := handlers.NewEventsHandler(store, c.sagaMutex, c.schema, opts.idExtractor, mBus.Logger())
@@ -88,10 +97,23 @@ func (c *Component) RegisterSagaEndpoints(endpoints ...endpoint.Endpoint) {
 	c.endpoints = append(c.endpoints, endpoints...)
 }
 
-func WithSagaIdExtractor(extractor saga.IdExtractor) ConfigOption {
+func WithSagaIdExtractor(extractor saga.IdExtractor) configOption {
 	return func(o *opts) {
 		o.idExtractor = extractor
 	}
 }
+
+func WithSagaApiServer(mux *http.ServeMux) configOption {
+	return func(o *opts) {
+		o.apiServerMux = mux
+	}
+}
+
+func initApiServer(mux *http.ServeMux, store saga.Store, logger log.Logger)  {
+	statusHandler := status.NewStatusHandler(logger, status.NewStatusService(store))
+	mux.HandleFunc("/sagas", statusHandler.GetFilteredBy)
+	mux.HandleFunc("/sagas/", statusHandler.GetStatus)
+}
+
 
 type StoreFactory func(scheme scheme.KnownTypesRegistry) (saga.Store, error)

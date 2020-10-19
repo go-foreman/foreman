@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"time"
 
@@ -64,12 +65,16 @@ func main() {
 
 	amqpEndpoint := endpoint.NewAmqpEndpoint(fmt.Sprintf("%s_endpoint", queue.Name()), amqpTransport, transportPackage.DeliveryDestination{DestinationTopic: topic.Name(), RoutingKey: fmt.Sprintf("%s.eventAndCommands", topic.Name())})
 
+	httpMux := http.NewServeMux()
+
 	sagaComponent := component.NewSagaComponent(
 		func(scheme scheme.KnownTypesRegistry) (saga.Store, error) {
 			return saga.NewSqlSagaStore(db, scheme)
 		},
 		mutex.NewSqlMutex(db),
+		component.WithSagaApiServer(httpMux),
 	)
+
 	sagaComponent.RegisterSagaEndpoints(amqpEndpoint)
 	sagaComponent.RegisterSagas(usecase.DefaultSagasCollection.Sagas()...)
 	sagaComponent.RegisterContracts(usecase.DefaultSagasCollection.Contracts()...)
@@ -82,8 +87,14 @@ func main() {
 	//here goes loading of DI container with all handlers, business entities etc
 	loadSomeDIContainer(bus, defaultLogger)
 
+	//start API server
+	go func() {
+		defaultLogger.Log(log.InfoLevel, "Started saga http server on :8080")
+		defaultLogger.Log(log.FatalLevel, http.ListenAndServe(":8080", httpMux))
+	}()
+
 	//run subscriber
-	defaultLogger.Log(log.PanicLevel, bus.Subscriber().Run(context.Background(), queue))
+	defaultLogger.Log(log.FatalLevel, bus.Subscriber().Run(context.Background(), queue))
 }
 
 func loadSomeDIContainer(bus *pkg.MessageBus, defaultLogger log.Logger) {

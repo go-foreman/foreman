@@ -15,16 +15,17 @@ type defaultLogger struct {
 }
 
 func (l defaultLogger) Log(level Level, v ...interface{}) {
-	l.Output(3, fmt.Sprint(v...))
-	if level == PanicLevel {
-		panic(v)
+	if level == FatalLevel {
+		l.Fatal(v)
+		return
 	}
+	l.Output(3, fmt.Sprint(v...))
 }
 
 func (l defaultLogger) Logf(level Level, template string, args ...interface{}) {
-	msg := fmt.Sprintf(template, args...)
-	l.Output(3, fmt.Sprintf(template, args...))
-	if level == PanicLevel {
-		panic(msg)
+	if level == FatalLevel {
+		l.Fatalf(template, args)
+		return
 	}
+	l.Output(3, fmt.Sprintf(template, args...))
 }
