@@ -21,14 +21,14 @@ func NewTransport(url string, logger log.Logger) transport.Transport {
 
 type amqpTransport struct {
 	url               string
-	connection        *amqp.Connection
-	publishingChannel *amqp.Channel
+	connection        *Connection
+	publishingChannel *Channel
 	logger            log.Logger
-	consumingChannel  *amqp.Channel
+	consumingChannel  *Channel
 }
 
 func (t *amqpTransport) Connect(ctx context.Context) error {
-	conn, err := amqp.Dial(t.url)
+	conn, err := Dial(t.url, t.logger)
 	if err != nil {
 		return errors.WithStack(err)
 	}
