@@ -119,6 +119,7 @@ func Dial(url string, logger log.Logger) (*Connection, error) {
 
 	connection := &Connection{
 		Connection: conn,
+		logger: logger,
 	}
 
 	go func() {
