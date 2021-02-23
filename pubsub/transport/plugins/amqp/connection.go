@@ -7,7 +7,11 @@ import (
 	"time"
 )
 
-const delay = 3 // reconnect after delay seconds
+const (
+	delay = 3 // reconnect after delay seconds
+	reconnectCount = 10
+	reconnectDelay = time.Second * 5
+)
 
 type Connection struct {
 	logger log.Logger
@@ -85,12 +89,18 @@ func (ch *Channel) Close() error {
 func (ch *Channel) Consume(queue, consumer string, autoAck, exclusive, noLocal, noWait bool, args amqp.Table) (<-chan amqp.Delivery, error) {
 	deliveries := make(chan amqp.Delivery)
 
+	var reconnectedCount uint
+
 	go func() {
 		for {
 			d, err := ch.Channel.Consume(queue, consumer, autoAck, exclusive, noLocal, noWait, args)
 			if err != nil {
 				ch.logger.Logf(log.ErrorLevel, "consume failed, err: %v", err)
 				time.Sleep(delay * time.Second)
+				if reconnectedCount > reconnectCount {
+					ch.logger.Logf(log.FatalLevel, "Reached limit of reconnects %d", reconnectCount)
+				}
+				reconnectedCount++
 				continue
 			}
 
@@ -122,6 +132,8 @@ func Dial(url string, logger log.Logger) (*Connection, error) {
 		logger: logger,
 	}
 
+	var reconnectedCount uint
+
 	go func() {
 		for {
 			reason, ok := <-connection.Connection.NotifyClose(make(chan *amqp.Error))
@@ -136,6 +148,11 @@ func Dial(url string, logger log.Logger) (*Connection, error) {
 			for {
 				// wait 1s for reconnect
 				time.Sleep(delay * time.Second)
+
+				if reconnectedCount > reconnectCount {
+					logger.Logf(log.FatalLevel, "Reached limit of reconnects %d", reconnectCount)
+				}
+				reconnectedCount++
 
 				conn, err := amqp.Dial(url)
 				if err == nil {
