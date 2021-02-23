@@ -10,7 +10,6 @@ import (
 const (
 	delay = 3 // reconnect after delay seconds
 	reconnectCount = 10
-	reconnectDelay = time.Second * 5
 )
 
 type Connection struct {
