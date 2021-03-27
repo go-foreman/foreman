@@ -16,31 +16,27 @@ services:
     image: mysql:8.0.21
     command: ["--default-authentication-plugin=mysql_native_password"]
     volumes:
-      - db-data:/var/lib/mysql
+      - mysql-data:/var/lib/mysql
     restart: always
     environment:
       MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: brigadier
-      MYSQL_USER: brigadier
-      MYSQL_PASSWORD: brigadier
+      MYSQL_DATABASE: foreman
+      MYSQL_USER: foreman
+      MYSQL_PASSWORD: foreman
     ports:
       - 3306:3306
-
-#  postgres:
-#    build:
-#      context: ./.docker/postgres
-#    restart: always
-#    volumes:
-#      - ./.docker/postgres/conf/postgresql.conf:/etc/postgresql.conf
-#      - ./.docker/postgres/data/customers.sql:/docker-entrypoint-initdb.d/init.sql
-#    environment:
-#      POSTGRES_PASSWORD: 123456789
-#      POSTGRES_USER: brigadier
-#      DB_NAME: brigadier
-#
-#    ports:
-#      - 5432:5432
-#    command: postgres -c config_file=/etc/postgresql.conf
+  postgres:
+    image: postgres
+    volumes:
+      - pgsql-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_PASSWORD: foreman
+      POSTGRES_USER: foreman
+      POSTGRES_DB: foreman
+    restart: always
+    ports:
+      - 5432:5432
 
 volumes:
-  db-data: ~
+  mysql-data: ~
+  pgsql-data: ~

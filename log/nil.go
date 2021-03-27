@@ -1,5 +1,6 @@
 package log
 
+//NewNilLogger is used mostly in testing, prints nothing
 func NewNilLogger() Logger {
 	return &nilLogger{}
 }

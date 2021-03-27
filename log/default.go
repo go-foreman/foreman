@@ -6,6 +6,7 @@ import (
 	"os"
 )
 
+//DefaultLogger returns an implementation of logger for MessageBus, used by default if other isn't specified
 func DefaultLogger() Logger {
 	return &defaultLogger{log.New(os.Stdout, "[messagebus] ", log.Ldate|log.Ltime|log.Lmicroseconds|log.Lshortfile)}
 }
