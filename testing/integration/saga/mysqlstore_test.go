@@ -1,54 +1,42 @@
 package saga
 
 import (
-	"database/sql"
+	"github.com/go-foreman/foreman/runtime/scheme"
+	"github.com/go-foreman/foreman/saga"
+	intSuite "github.com/go-foreman/foreman/testing/integration/saga/suite"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-
-	driverSql "github.com/go-sql-driver/mysql"
+	"testing"
 )
 
-// MysqlSuite struct for MySQL Suite
-type MysqlSuite struct {
-	suite.Suite
-	DSN                     string
-	DBConn                  *sql.DB
-	DBName                  string
+type mysqlStoreTest struct {
+	intSuite.MysqlSuite
 }
 
-// SetupSuite setup at the beginning of test
-func (s *MysqlSuite) SetupSuite() {
-	DisableLogging()
-
-	var err error
-
-	s.DBConn, err = sql.Open("mysql", s.DSN)
-	for {
-		err := s.DBConn.Ping()
-		if err == nil {
-			break
-		}
-	}
-	_, err = s.DBConn.Exec("set global sql_mode='STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION';")
-	require.NoError(s.T(), err)
-	_, err = s.DBConn.Exec("set session sql_mode='STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION';")
-	require.NoError(s.T(), err)
-
-	require.NoError(s.T(), err)
-
+func TestMysqlStore(t *testing.T) {
+	//MysqlSuite.Rn()
 }
 
-// TearDownSuite teardown at the end of test
-func (s *MysqlSuite) TearDownSuite() {
-	s.DBConn.Close()
+
+func TestMysqlSuite(t *testing.T) {
+	mysqlStoreTest := &mysqlStoreTest{}
+	suite.Run(t, mysqlStoreTest)
 }
 
-func DisableLogging() {
-	nopLogger := NopLogger{}
-	driverSql.SetLogger(nopLogger)
-}
+func (m *mysqlStoreTest) TestInit() {
+	t := m.T()
+	dbConnection := m.Connection()
+	schemeRegistry := scheme.NewKnownTypesRegistry()
+	mysqlStore, err := saga.NewMysqlSagaStore(dbConnection, schemeRegistry)
+	require.NoError(t, err)
+	require.NotNil(t, mysqlStore)
 
-type NopLogger struct {
+	t.Run("initialized store tables", func(t *testing.T) {
+		res, err := dbConnection.Query("SELECT * from saga")
+		require.NoError(t, err)
+		require.NotNil(t, res)
+		res, err = dbConnection.Query("SELECT * from saga_history")
+		require.NoError(t, err)
+		require.NotNil(t, res)
+	})
 }
-
-func (l NopLogger) Print(v ...interface{}) {}

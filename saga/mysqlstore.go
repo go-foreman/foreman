@@ -14,7 +14,7 @@ type mysqlStore struct {
 	db            *sql.DB
 }
 
-func NewSqlSagaStore(db *sql.DB, registry scheme.KnownTypesRegistry) (Store, error) {
+func NewMysqlSagaStore(db *sql.DB, registry scheme.KnownTypesRegistry) (Store, error) {
 	err := initMysqlTables(db)
 	if err != nil {
 		return nil, errors.WithStack(err)

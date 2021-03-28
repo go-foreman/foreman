@@ -4,13 +4,17 @@ INTEGRATION_TEST_PATH?=./testing
 
 # set of env variables that you need for testing
 ENV_LOCAL_TEST=\
-  POSTGRES_PASSWORD=mysecretpassword \
-  POSTGRES_DB=myawesomeproject \
+  POSTGRES_PASSWORD=foreman \
+  POSTGRES_DB=foreman \
   POSTGRES_HOST=postgres \
-  POSTGRES_USER=postgres
+  POSTGRES_USER=foreman \
+  MYSQL_ADDRESS=127.0.0.1:3306\
+  MYSQL_DB=foreman \
+  MYSQL_USER=foreman \
+  MYSQL_PASSWORD=foreman
 
 
-docker-start:\
+docker-start:
 	@docker-compose up -d
 	@echo "---Docker compose started"
 
