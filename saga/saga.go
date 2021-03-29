@@ -46,7 +46,7 @@ type Status interface {
 }
 
 func NewSagaInstance(id, parentId string, saga Saga) Instance {
-	return &sagaInstance{id: id, parentID: parentId, saga: saga, status: sagaStatusCreated, startedAt: time.Now(), updatedAt: time.Now()}
+	return &sagaInstance{id: id, parentID: parentId, saga: saga, status: sagaStatusCreated, startedAt: time.Now().Round(time.Second).UTC(), updatedAt: time.Now().Round(time.Second).UTC(), historyEvents: make([]HistoryEvent, 0)}
 }
 
 type sagaInstance struct {
@@ -124,7 +124,7 @@ func (s *sagaInstance) AttachEvent(event HistoryEvent) {
 }
 
 func StatusFromStr(str string) (Status, error) {
-	statuses := []status{sagaStatusInProgress, sagaStatusFailed, sagaStatusInProgress, sagaStatusCompensating, sagaStatusCompleted}
+	statuses := []status{sagaStatusInProgress, sagaStatusFailed, sagaStatusInProgress, sagaStatusCompensating, sagaStatusCompleted, sagaStatusCreated}
 	for _, s := range statuses {
 		if string(s) == str {
 			return s, nil

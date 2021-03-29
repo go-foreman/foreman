@@ -215,7 +215,7 @@ func (s mysqlStore) GetById(ctx context.Context, sagaId string) (Instance, error
 	return sagaInstance, nil
 }
 
-func (s mysqlStore) GetByFilter(ctx context.Context, filters []FilterOption) ([]Instance, error) {
+func (s mysqlStore) GetByFilter(ctx context.Context, filters... FilterOption) ([]Instance, error) {
 	if len(filters) == 0 {
 		return nil, errors.Errorf("No filters found, you have to specify at least one so result won't be whole store")
 	}
@@ -333,12 +333,22 @@ func (s mysqlStore) GetByFilter(ctx context.Context, filters []FilterOption) ([]
 }
 
 func (s mysqlStore) Delete(ctx context.Context, sagaId string) error {
-	_, err := s.db.ExecContext(ctx, fmt.Sprintf("DELETE FROM %v WHERE id=?;", sagaTableName), sagaId)
+	res, err := s.db.ExecContext(ctx, fmt.Sprintf("DELETE FROM %v WHERE id=?;", sagaTableName), sagaId)
 	if err != nil {
-		return errors.WithStack(err)
+		return errors.Wrapf(err, "executing delete query for saga %s", sagaId)
 	}
 
-	return nil
+	rows, err := res.RowsAffected()
+
+	if err != nil {
+		return errors.Wrapf(err, "getting response of  delete query for saga %s", sagaId)
+	}
+
+	if rows > 0 {
+		return nil
+	}
+
+	return errors.Errorf("no saga instance %s found", sagaId)
 }
 
 func (s mysqlStore) queryEvents(sagaId string) ([]HistoryEvent, error) {

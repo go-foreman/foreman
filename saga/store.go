@@ -16,7 +16,7 @@ type FilterOption func(opts *filterOptions)
 type Store interface {
 	Create(ctx context.Context, saga Instance) error
 	GetById(ctx context.Context, sagaId string) (Instance, error)
-	GetByFilter(ctx context.Context, filters []FilterOption) ([]Instance, error)
+	GetByFilter(ctx context.Context, filters... FilterOption) ([]Instance, error)
 	Update(ctx context.Context, saga Instance) error
 	Delete(ctx context.Context, sagaId string) error
 }
