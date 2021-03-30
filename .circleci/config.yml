@@ -48,7 +48,5 @@ jobs:
           name: Run tests
           command: |
             make test
-            testsuite-stop
-            testsuite-clean
       - store_test_results:
           path: /tmp/test-reports
