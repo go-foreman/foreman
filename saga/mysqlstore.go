@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/go-foreman/foreman/pubsub/message"
 	"github.com/go-foreman/foreman/runtime/scheme"
 	"github.com/pkg/errors"
 )
@@ -34,16 +35,6 @@ func (s mysqlStore) Create(ctx context.Context, sagaInstance Instance) error {
 
 	sagaName := scheme.WithStruct(sagaInstance.Saga())()
 
-	data := &sagaModel{
-		ID:        sagaInstance.ID(),
-		ParentID:  sagaInstance.ParentID(),
-		Name:      sagaName,
-		Payload:   payload,
-		Status:    sagaInstance.Status().String(),
-		StartedAt: sagaInstance.StartedAt(),
-		UpdatedAt: sagaInstance.UpdatedAt(),
-	}
-
 	tx, err := s.db.Begin()
 
 	if err != nil {
@@ -51,13 +42,14 @@ func (s mysqlStore) Create(ctx context.Context, sagaInstance Instance) error {
 	}
 
 	_, err = tx.ExecContext(ctx, fmt.Sprintf("INSERT INTO %v VALUES (?, ?, ?, ?, ?, ?, ?);", sagaTableName),
-		data.ID,
-		data.ParentID,
-		data.Name,
-		data.Payload,
-		data.Status,
-		data.StartedAt,
-		data.UpdatedAt)
+		sagaInstance.ID(),
+		sagaInstance.ParentID(),
+		sagaName,
+		payload,
+		sagaInstance.Status().String(),
+		sagaInstance.StartedAt(),
+		sagaInstance.UpdatedAt(),
+	)
 	if err != nil {
 		if rErr := tx.Rollback(); rErr != nil {
 			return errors.Wrapf(rErr, "error rollback when %s", err)
@@ -81,16 +73,6 @@ func (s mysqlStore) Update(ctx context.Context, sagaInstance Instance) error {
 
 	sagaName := scheme.WithStruct(sagaInstance.Saga())()
 
-	sagaData := &sagaModel{
-		ID:        sagaInstance.ID(),
-		ParentID:  sagaInstance.ParentID(),
-		Name:      sagaName,
-		Payload:   payload,
-		Status:    sagaInstance.Status().String(),
-		StartedAt: sagaInstance.StartedAt(),
-		UpdatedAt: sagaInstance.UpdatedAt(),
-	}
-
 	tx, err := s.db.Begin()
 
 	if err != nil {
@@ -98,13 +80,13 @@ func (s mysqlStore) Update(ctx context.Context, sagaInstance Instance) error {
 	}
 
 	_, err = tx.ExecContext(ctx, fmt.Sprintf("UPDATE %v SET parent_id=?, name=?, payload=?, status=?, started_at=?, updated_at=? WHERE id=?;", sagaTableName),
-		sagaData.ParentID,
-		sagaData.Name,
-		sagaData.Payload,
-		sagaData.Status,
-		sagaData.StartedAt,
-		sagaData.UpdatedAt,
-		sagaData.ID)
+		sagaInstance.ParentID(),
+		sagaName,
+		payload,
+		sagaInstance.Status().String(),
+		sagaInstance.StartedAt(),
+		sagaInstance.UpdatedAt(),
+		sagaInstance.ID())
 
 	if err != nil {
 		if rErr := tx.Rollback(); rErr != nil {
@@ -113,7 +95,7 @@ func (s mysqlStore) Update(ctx context.Context, sagaInstance Instance) error {
 		return errors.WithStack(err)
 	}
 
-	rows, err := tx.QueryContext(ctx, fmt.Sprintf("SELECT id FROM %v WHERE saga_id=?;", sagaHistoryTableName), sagaData.ID)
+	rows, err := tx.QueryContext(ctx, fmt.Sprintf("SELECT id FROM %v WHERE saga_id=?;", sagaHistoryTableName), sagaInstance.ID())
 
 	if err != nil {
 		if rErr := tx.Rollback(); rErr != nil {
@@ -155,7 +137,7 @@ func (s mysqlStore) Update(ctx context.Context, sagaInstance Instance) error {
 
 			_, err = tx.Exec(fmt.Sprintf("INSERT INTO %v VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);", sagaHistoryTableName),
 				m.ID,
-				sagaData.ID,
+				sagaInstance.ID(),
 				m.Name,
 				m.Type,
 				m.SagaStatus,
@@ -180,7 +162,7 @@ func (s mysqlStore) Update(ctx context.Context, sagaInstance Instance) error {
 }
 
 func (s mysqlStore) GetById(ctx context.Context, sagaId string) (Instance, error) {
-	sagaData := sagaModel{}
+	sagaData := sagaSqlModel{}
 	err := s.db.QueryRowContext(ctx, fmt.Sprintf("SELECT * FROM %v WHERE id=?;", sagaTableName), sagaId).
 		Scan(
 			&sagaData.ID,
@@ -274,8 +256,8 @@ func (s mysqlStore) GetByFilter(ctx context.Context, filters... FilterOption) ([
 	sagas := make(map[string]*sagaInstance)
 
 	for rows.Next() {
-		sagaData := sagaModel{}
-		ev := historyEventModel{}
+		sagaData := sagaSqlModel{}
+		ev := historyEventSqlModel{}
 
 		if err := rows.Scan(
 			&sagaData.ID,
@@ -296,7 +278,7 @@ func (s mysqlStore) GetByFilter(ctx context.Context, filters... FilterOption) ([
 			return nil, errors.WithStack(err)
 		}
 
-		sagaInstance, exists := sagas[sagaData.ID]
+		sagaInstance, exists := sagas[sagaData.ID.String]
 
 		if !exists {
 			instance, err := s.instanceFromModel(sagaData)
@@ -304,17 +286,19 @@ func (s mysqlStore) GetByFilter(ctx context.Context, filters... FilterOption) ([
 			if err != nil {
 				return nil, errors.WithStack(err)
 			}
-			sagas[sagaData.ID] = instance
+			sagas[sagaData.ID.String] = instance
 			sagaInstance = instance
 		}
 
-		historyEvent, err := s.eventFromModel(ev)
+		if ev.ID.String != "" {
+			historyEvent, err := s.eventFromModel(ev)
 
-		if err != nil {
-			return nil, errors.WithStack(err)
+			if err != nil {
+				return nil, errors.WithStack(err)
+			}
+
+			sagaInstance.historyEvents = append(sagaInstance.historyEvents, *historyEvent)
 		}
-
-		sagaInstance.historyEvents = append(sagaInstance.historyEvents, *historyEvent)
 	}
 
 	if rows.Err() != nil {
@@ -361,7 +345,7 @@ func (s mysqlStore) queryEvents(sagaId string) ([]HistoryEvent, error) {
 	messages := make([]HistoryEvent, 0)
 
 	for rows.Next() {
-		ev := historyEventModel{}
+		ev := historyEventSqlModel{}
 
 		if err := rows.Scan(
 			&ev.ID,
@@ -391,41 +375,72 @@ func (s mysqlStore) queryEvents(sagaId string) ([]HistoryEvent, error) {
 	return messages, nil
 }
 
-func (s mysqlStore) eventFromModel(ev historyEventModel) (*HistoryEvent, error) {
-	res := &HistoryEvent{}
+func (s mysqlStore) eventFromModel(ev historyEventSqlModel) (*HistoryEvent, error) {
+	eventPayload, err := s.typesRegistry.LoadType(scheme.WithKey(ev.Name.String))
 
-	if err := json.Unmarshal(ev.Payload, &res.Payload); err != nil {
-		return nil, errors.WithStack(err)
+	if err != nil {
+		return nil, errors.Wrapf(err, "loading type %s for event %s", ev.Name.String, ev.ID.String)
 	}
 
-	res.Metadata = ev.Metadata
-	res.CreatedAt = ev.CreatedAt
-	res.OriginSource = ev.OriginSource
-	res.SagaStatus = ev.SagaStatus
-	res.Description = ev.Description
+	evReflectType := s.typesRegistry.GetType(scheme.WithKey(ev.Name.String))
+
+	if err := json.Unmarshal(ev.Payload, eventPayload); err != nil {
+		return nil, errors.Errorf("error deserializing payload into event of type %s ", evReflectType.Kind().String())
+	}
+
+	res := &HistoryEvent{
+		Payload: eventPayload,
+	}
+
+	messageType, err := message.ParseMessageType(ev.Type.String)
+
+	if err != nil {
+		return nil, errors.Wrapf(err, "parsing message type %s", ev.Type.String)
+	}
+
+	res.Metadata = message.Metadata{
+		ID:      ev.ID.String,
+		Name:    ev.Name.String,
+		Type:    messageType,
+		//todo headers are ignored for now
+		//Headers: nil,
+	}
+	res.CreatedAt = ev.CreatedAt.Time
+	res.OriginSource = ev.OriginSource.String
+	res.SagaStatus = ev.SagaStatus.String
+	res.Description = ev.Description.String
 
 	return res, nil
 }
 
-func (s mysqlStore) instanceFromModel(sagaData sagaModel) (*sagaInstance, error) {
-	status, err := StatusFromStr(sagaData.Status)
+func (s mysqlStore) instanceFromModel(sagaData sagaSqlModel) (*sagaInstance, error) {
+	status, err := StatusFromStr(sagaData.Status.String)
 	if err != nil {
 		return nil, errors.Wrapf(err, "parsing status of %s", sagaData.ID)
 	}
+
 	sagaInstance := &sagaInstance{
-		id:        sagaData.ID,
-		startedAt: sagaData.StartedAt,
-		updatedAt: sagaData.UpdatedAt,
+		id:        sagaData.ID.String,
 		status:    status,
-		parentID:  sagaData.ParentID,
+		parentID:  sagaData.ParentID.String,
+		historyEvents: make([]HistoryEvent, 0),
 	}
 
-	saga, err := s.typesRegistry.LoadType(scheme.WithKey(sagaData.Name))
-	sagaType := s.typesRegistry.GetType(scheme.WithKey(sagaData.Name))
+	if sagaData.StartedAt.Valid {
+		sagaInstance.startedAt = &sagaData.StartedAt.Time
+	}
+
+	if sagaData.UpdatedAt.Valid {
+		sagaInstance.updatedAt = &sagaData.UpdatedAt.Time
+	}
+
+	saga, err := s.typesRegistry.LoadType(scheme.WithKey(sagaData.Name.String))
 
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, errors.Wrapf(err, "loading type %s for saga %s", sagaData.Name.String, sagaInstance.id)
 	}
+
+	sagaType := s.typesRegistry.GetType(scheme.WithKey(sagaData.Name.String))
 
 	if err := json.Unmarshal(sagaData.Payload, saga); err != nil {
 		return nil, errors.Errorf("error deserializing payload into saga of type %s ", sagaType.Kind().String())
@@ -495,4 +510,25 @@ func initMysqlTables(db *sql.DB) error {
 	}
 
 	return nil
+}
+
+type sagaSqlModel struct {
+	ID        sql.NullString
+	ParentID  sql.NullString
+	Name      sql.NullString
+	Payload   []byte
+	Status    sql.NullString
+	StartedAt sql.NullTime
+	UpdatedAt sql.NullTime
+}
+
+type historyEventSqlModel struct {
+	ID      sql.NullString
+	Name    sql.NullString
+	Type    sql.NullString
+	CreatedAt    sql.NullTime
+	Payload      []byte
+	OriginSource sql.NullString
+	SagaStatus   sql.NullString
+	Description  sql.NullString
 }

@@ -2,8 +2,6 @@ package saga
 
 import (
 	"context"
-	"github.com/go-foreman/foreman/pubsub/message"
-	"time"
 )
 
 const (
@@ -19,25 +17,6 @@ type Store interface {
 	GetByFilter(ctx context.Context, filters... FilterOption) ([]Instance, error)
 	Update(ctx context.Context, saga Instance) error
 	Delete(ctx context.Context, sagaId string) error
-}
-
-type sagaModel struct {
-	ID        string
-	ParentID  string
-	Name      string
-	Payload   []byte
-	Status    string
-	StartedAt time.Time
-	UpdatedAt time.Time
-}
-
-type historyEventModel struct {
-	message.Metadata
-	CreatedAt    time.Time
-	Payload      []byte
-	OriginSource string
-	SagaStatus   string
-	Description  string
 }
 
 func WithSagaId(sagaId string) FilterOption {

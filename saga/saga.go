@@ -19,7 +19,6 @@ const (
 type Instance interface {
 	ID() string
 	Saga() Saga
-
 	Status() Status
 
 	Start(sagaCtx SagaContext) error
@@ -31,8 +30,8 @@ type Instance interface {
 	HistoryEvents() []HistoryEvent
 	AttachEvent(event HistoryEvent)
 
-	StartedAt() time.Time
-	UpdatedAt() time.Time
+	StartedAt() *time.Time
+	UpdatedAt() *time.Time
 	ParentID() string
 }
 
@@ -46,7 +45,13 @@ type Status interface {
 }
 
 func NewSagaInstance(id, parentId string, saga Saga) Instance {
-	return &sagaInstance{id: id, parentID: parentId, saga: saga, status: sagaStatusCreated, startedAt: time.Now().Round(time.Second).UTC(), updatedAt: time.Now().Round(time.Second).UTC(), historyEvents: make([]HistoryEvent, 0)}
+	return &sagaInstance{
+		id: id,
+		parentID: parentId,
+		saga: saga,
+		status: sagaStatusCreated,
+		historyEvents: make([]HistoryEvent, 0),
+	}
 }
 
 type sagaInstance struct {
@@ -54,8 +59,8 @@ type sagaInstance struct {
 	parentID      string
 	saga          Saga
 	historyEvents []HistoryEvent
-	startedAt     time.Time
-	updatedAt     time.Time
+	startedAt     *time.Time
+	updatedAt     *time.Time
 	status        Status
 }
 
@@ -77,6 +82,8 @@ func (s sagaInstance) Status() Status {
 
 func (s *sagaInstance) Start(sagaCtx SagaContext) error {
 	s.status = sagaStatusInProgress
+	current := time.Now().Round(time.Second).UTC()
+	s.startedAt = &current
 	s.update()
 	return s.saga.Start(sagaCtx)
 }
@@ -107,16 +114,23 @@ func (s sagaInstance) HistoryEvents() []HistoryEvent {
 	return s.historyEvents
 }
 
-func (s sagaInstance) StartedAt() time.Time {
-	return s.startedAt
+func (s sagaInstance) StartedAt() *time.Time {
+	if s.startedAt != nil {
+		return s.startedAt
+	}
+	return nil
 }
 
-func (s sagaInstance) UpdatedAt() time.Time {
+func (s sagaInstance) UpdatedAt() *time.Time {
+	if s.updatedAt != nil {
+		return s.updatedAt
+	}
 	return s.updatedAt
 }
 
 func (s *sagaInstance) update() {
-	s.updatedAt = time.Now()
+	currentTime := time.Now()
+	s.updatedAt = &currentTime
 }
 
 func (s *sagaInstance) AttachEvent(event HistoryEvent) {
@@ -131,7 +145,7 @@ func StatusFromStr(str string) (Status, error) {
 		}
 	}
 
-	return nil, errors.Errorf("Unknown status string")
+	return nil, errors.Errorf("unknown status string")
 }
 
 type status string

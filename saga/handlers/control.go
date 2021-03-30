@@ -71,7 +71,7 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 			return errors.WithStack(err)
 		}
 
-		if !sagaInstance.Failed() || sagaInstance.Completed() || sagaInstance.Recovering() || sagaInstance.Compensating() {
+		if !sagaInstance.Status().Failed() || sagaInstance.Status().Completed() || sagaInstance.Status().Recovering() || sagaInstance.Status().Compensating() {
 			h.logger.Logf(log.InfoLevel, "Saga `%s` has status %s, you can't start recovering the process", sagaInstance.Status(), sagaInstance.ID())
 			return nil
 		}
@@ -99,7 +99,7 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 			return errors.WithStack(err)
 		}
 
-		if !sagaInstance.Failed() || sagaInstance.Compensating() {
+		if !sagaInstance.Status().Failed() || sagaInstance.Status().Compensating() {
 			h.logger.Logf(log.InfoLevel, "Saga `%s` has status `%s`, you can't compensate the process", sagaInstance.ID(), sagaInstance.Status())
 			return nil
 		}

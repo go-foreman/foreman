@@ -26,19 +26,19 @@ type dispatcher struct {
 	listeners map[string][]execution.Executor
 }
 
-func (d dispatcher) Match(message *message.Message) []execution.Executor {
-	if message.Type == "command" {
-		if handlers, ok := d.handlers[message.Name]; ok {
+func (d dispatcher) Match(msg *message.Message) []execution.Executor {
+	if msg.Type == message.CommandType {
+		if handlers, ok := d.handlers[msg.Name]; ok {
 			return handlers
 		}
-	} else if message.Type == "event" {
+	} else if msg.Type == message.EventType {
 
 		var listeners []execution.Executor
 
 		if catchAllListeners, ok := d.listeners[MatchesAllKeys]; ok {
 			listeners = append(listeners, catchAllListeners...)
 		}
-		if eventListeners, ok := d.listeners[message.Name]; ok {
+		if eventListeners, ok := d.listeners[msg.Name]; ok {
 			listeners = append(listeners, eventListeners...)
 		}
 
