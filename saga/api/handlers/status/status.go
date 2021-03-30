@@ -52,7 +52,7 @@ func (s statusService) GetStatus(ctx context.Context, sagaId string) (*StatusRes
 		events[i] = SagaEvent{ev}
 	}
 
-	return &StatusResponse{SagaId: sagaId, Status: sagaInstance.Status(), Payload: sagaInstance.Saga(), Events: events}, nil
+	return &StatusResponse{SagaId: sagaId, Status: sagaInstance.Status().String(), Payload: sagaInstance.Saga(), Events: events}, nil
 }
 
 func (s statusService) GetFilteredBy(ctx context.Context, sagaId, status, sagaType string) ([]*StatusResponse, error) {
@@ -75,7 +75,7 @@ func (s statusService) GetFilteredBy(ctx context.Context, sagaId, status, sagaTy
 		return nil, sagaApiErrors.NewResponseError(http.StatusBadRequest, errors.New("No filters specified"))
 	}
 
-	sagas, err := s.sagaStore.GetByFilter(ctx, opts)
+	sagas, err := s.sagaStore.GetByFilter(ctx, opts...)
 
 	if err != nil {
 		return nil, errors.WithStack(err)
@@ -92,7 +92,7 @@ func (s statusService) GetFilteredBy(ctx context.Context, sagaId, status, sagaTy
 
 		resp[i] = &StatusResponse{
 			SagaId:  instance.ID(),
-			Status:  instance.Status(),
+			Status:  instance.Status().String(),
 			Payload: instance.Saga(),
 			Events:  events,
 		}

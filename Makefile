@@ -1,6 +1,6 @@
 #! /usr/bin/make
 
-INTEGRATION_TEST_PATH?=./testing
+INTEGRATION_TEST_PATH?=./.../testing
 
 # set of env variables that you need for testing
 ENV_LOCAL_TEST=\
@@ -40,10 +40,13 @@ testsuite-clean: docker-clean
 
 # this command will trigger integration test
 # INTEGRATION_TEST_SUITE_PATH is used for run specific test in Golang, if it's not specified
-# it will run all tests under ./it directory
-test-integration:
-	$(ENV_LOCAL_TEST) \
-  	go test -tags=integration $(INTEGRATION_TEST_PATH) -count=1 -run=$(INTEGRATION_TEST_SUITE_PATH)
+# it will run all tests under ./testing directory
+#test-integration:
+#	$(ENV_LOCAL_TEST) \
+#  	go test -tags=integration $(INTEGRATION_TEST_PATH) -count=1
+
+test:
+	go test ./...
 
 lint:
 	@if gofmt -l . | egrep -v ^vendor/ | grep .go; then \

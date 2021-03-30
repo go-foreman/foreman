@@ -416,7 +416,7 @@ func (s mysqlStore) eventFromModel(ev historyEventSqlModel) (*HistoryEvent, erro
 func (s mysqlStore) instanceFromModel(sagaData sagaSqlModel) (*sagaInstance, error) {
 	status, err := StatusFromStr(sagaData.Status.String)
 	if err != nil {
-		return nil, errors.Wrapf(err, "parsing status of %s", sagaData.ID)
+		return nil, errors.Wrapf(err, "parsing status of %s", sagaData.ID.String)
 	}
 
 	sagaInstance := &sagaInstance{

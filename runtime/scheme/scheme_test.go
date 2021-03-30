@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-const someTypeTypePkgPath = "github.com/go-foreman/foreman/pkg/runtime/scheme.sometesttype"
+const someTypeTypePkgPath = "github.com/go-foreman/foreman/runtime/scheme.sometesttype"
 
 type SomeTestType struct {
 	A int
