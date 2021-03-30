@@ -31,8 +31,6 @@ jobs:
             make testsuite-start
             sleep 20
             make test
-#            mkdir -p /tmp/test-reports
-#            gotestsum ./... --junitfile /tmp/test-reports/unit-tests.xml
             testsuite-stop
             testsuite-clean
       - store_test_results:
