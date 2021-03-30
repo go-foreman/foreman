@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	delay = 3 // reconnect after delay seconds
+	delay          = 3 // reconnect after delay seconds
 	reconnectCount = 10
 )
 
@@ -26,7 +26,7 @@ func (c *Connection) Channel() (*Channel, error) {
 
 	channel := &Channel{
 		Channel: ch,
-		logger: c.logger,
+		logger:  c.logger,
 	}
 
 	go func() {
@@ -128,7 +128,7 @@ func Dial(url string, logger log.Logger) (*Connection, error) {
 
 	connection := &Connection{
 		Connection: conn,
-		logger: logger,
+		logger:     logger,
 	}
 
 	var reconnectedCount uint
