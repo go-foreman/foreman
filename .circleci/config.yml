@@ -5,6 +5,15 @@ jobs:
     working_directory: ~/repo
     docker:
       - image: circleci/golang:1.15.8
+      - image: circleci/mysql:8.0.4
+        auth:
+          username: mydockerhub-user
+          password: $DOCKERHUB_PASSWORD  # context / project UI env-var reference
+        environment:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: foreman
+          MYSQL_USER: foreman
+          MYSQL_PASSWORD: foreman
     steps:
       - setup_remote_docker
       - checkout
@@ -25,11 +34,19 @@ jobs:
           paths:
             - "/go/pkg/mod"
       - run:
+          # Our primary container isn't MYSQL so run a sleep command until it's ready.
+          name: Waiting for MySQL to be ready
+          command: |
+            for i in `seq 1 10`;
+            do
+              nc -z 127.0.0.1 3306 && echo Success && exit 0
+              echo -n .
+              sleep 1
+            done
+            echo Failed waiting for MySQL && exit 1
+      - run:
           name: Run tests
           command: |
-            docker ps
-            make testsuite-start
-            sleep 20
             make test
             testsuite-stop
             testsuite-clean
