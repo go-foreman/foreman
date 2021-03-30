@@ -44,6 +44,9 @@ testsuite-clean: docker-clean
 #test-integration:
 #	$(ENV_LOCAL_TEST) \
 #  	go test -tags=integration $(INTEGRATION_TEST_PATH) -count=1
+# or -----
+#            mkdir -p /tmp/test-reports
+#            gotestsum ./... --junitfile /tmp/test-reports/unit-tests.xml
 
 test:
 	go test ./...
