@@ -6,6 +6,7 @@ import (
 	driverSql "github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+	"os"
 )
 
 // MysqlSuite struct for MySQL Suite
@@ -19,9 +20,13 @@ type MysqlSuite struct {
 func (s *MysqlSuite) SetupSuite() {
 	DisableLogging()
 
-	var err error
-	//connectionStr := fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8&parseTime=True", os.Getenv("MYSQL_USER"), os.Getenv("MYSQL_PASSWORD"), os.Getenv("MYSQL_ADDRESS"), os.Getenv("MYSQL_DB"))
 	connectionStr := fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8&parseTime=True", "foreman", "foreman", "127.0.0.1:3306", "foreman")
+
+	if v := os.Getenv("MYSQL_CONNECTION"); v != "" {
+		connectionStr = v
+	}
+
+	var err error
 	s.dbConn, err = sql.Open("mysql", connectionStr)
 	require.NoError(s.T(), err)
 	err = s.dbConn.Ping()
