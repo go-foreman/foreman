@@ -1,4 +1,4 @@
-[![go-foreman](https://circleci.com/gh/go-foreman/foreman.svg?style=shield)](<LINK>)
+[![go-foreman](https://circleci.com/gh/go-foreman/foreman.svg?style=shield)](https://app.circleci.com/pipelines/github/go-foreman)
 
 <h1 id="introduction">Introduction</h1>
 <p>Foreman is an another implmenetation of publish/subscribe messaging for golang. Highly configurable, allows user to write own modules, define own strategy etc.</p>
