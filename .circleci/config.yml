@@ -43,8 +43,8 @@ jobs:
             echo Failed waiting for MySQL && exit 1
       - run:
           name: Run tests
-          environment: foreman:foreman@tcp(127.0.0.1:3306)/foreman?charset=utf8&parseTime=True
-            MYSQL_CONNECTION:
+          environment:
+            MYSQL_CONNECTION: foreman:foreman@tcp(127.0.0.1:3306)/foreman?charset=utf8&parseTime=True
           command: |
             make test
       - store_test_results:
