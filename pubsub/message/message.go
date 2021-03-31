@@ -3,13 +3,19 @@ package message
 import (
 	"github.com/go-foreman/foreman/runtime/scheme"
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
 	"time"
+)
+
+const (
+	EventType MessageType = "event"
+	CommandType MessageType = "command"
 )
 
 type Metadata struct {
 	ID      string  `json:"id"`
 	Name    string  `json:"name"`
-	Type    string  `json:"type"`
+	Type    MessageType  `json:"type"`
 	Headers Headers `json:"headers"`
 }
 
@@ -62,16 +68,32 @@ func (m Headers) RegisterReturn() {
 	m["returnsCount"] = returnsCount
 }
 
+type MessageType string
+
+func ParseMessageType(msgType string) (MessageType, error) {
+	var t MessageType
+	switch msgType {
+	case "event":
+		t = EventType
+	case "command":
+		t = CommandType
+	default:
+		return "", errors.Errorf("unknown messageType")
+	}
+
+	return t, nil
+}
+
 func NewEventMessage(payload interface{}, options ...MsgOption) *Message {
-	return NewMessage(scheme.WithStruct(payload), "event", payload, options...)
+	return NewMessage(scheme.WithStruct(payload), EventType, payload, options...)
 }
 
 func NewCommandMessage(payload interface{}, options ...MsgOption) *Message {
-	return NewMessage(scheme.WithStruct(payload), "command", payload, options...)
+	return NewMessage(scheme.WithStruct(payload), CommandType, payload, options...)
 }
 
 //NewMessage accepts only structs as payload. If you want to pass scalar data type - wrap it in a struct.
-func NewMessage(keyChoice scheme.KeyChoice, msgType string, payload interface{}, passedOptions ...MsgOption) *Message {
+func NewMessage(keyChoice scheme.KeyChoice, msgType MessageType, payload interface{}, passedOptions ...MsgOption) *Message {
 	opts := &opts{}
 
 	if len(passedOptions) > 0 {

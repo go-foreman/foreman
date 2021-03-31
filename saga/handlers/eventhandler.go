@@ -31,7 +31,7 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 	msg := execCtx.Message()
 	ctx := execCtx.Context()
 
-	if msg.Type != "event" {
+	if msg.Type != message.EventType {
 		return errors.Errorf("Received message %s is not an event type", msg.ID)
 	}
 
@@ -62,7 +62,7 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 		return errors.Errorf("Saga %s not found", sagaId)
 	}
 
-	if sagaInstance.Completed() {
+	if sagaInstance.Status().Completed() {
 		return busErrs.WithStatusErr(busErrs.NoRetry, errors.Errorf("Saga %s already completed", sagaId))
 	}
 
@@ -89,14 +89,14 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 		e.logger.Logf(log.WarnLevel, "No handler defined for event %s from message %s", msg.Name, msg.ID)
 	}
 
-	sagaInstance.AttachEvent(sagaPkg.HistoryEvent{Metadata: msg.Metadata, Payload: msg.Payload, CreatedAt: time.Now(), OriginSource: msg.OriginSource, SagaStatus: sagaInstance.Status(), Description: msg.Description})
+	sagaInstance.AttachEvent(sagaPkg.HistoryEvent{Metadata: msg.Metadata, Payload: msg.Payload, CreatedAt: time.Now(), OriginSource: msg.OriginSource, SagaStatus: sagaInstance.Status().String(), Description: msg.Description})
 
 	if err := e.sagaStore.Update(ctx, sagaInstance); err != nil {
 		return errors.Wrapf(err, "error saving saga's %s state to db", sagaInstance.ID())
 	}
 
 	//sending an event about saga completion to parent if it exists and to all regular handlers.
-	if sagaInstance.Completed() {
+	if sagaInstance.Status().Completed() {
 		var msg = &message.Message{}
 		//if parent exists - we should forward this event to parent saga
 		if sagaInstance.ParentID() != "" {

@@ -14,7 +14,7 @@ type MysqlMutex struct {
 	connections map[string]*sql.Conn
 }
 
-func NewSqlMutex(db *sql.DB) Mutex {
+func NewMysqlSqlMutex(db *sql.DB) Mutex {
 	return &MysqlMutex{db: db, connections: make(map[string]*sql.Conn)}
 }
 
@@ -57,17 +57,17 @@ func (m *MysqlMutex) Release(ctx context.Context, sagaId string) error {
 	}
 	defer conn.Close()
 
-	delete(m.connections, sagaId)
-	m.mapLock.Unlock()
-
 	r := sql.NullInt64{}
 	if err := conn.QueryRowContext(ctx, "SELECT RELEASE_LOCK(?);", sagaId).Scan(&r); err != nil {
 		return WithMutexErr(errors.Errorf("error releasing lock for saga %s. %s", sagaId, err))
 	}
 
-	if r.Int64 == 1 {
-		return nil
+	if r.Int64 != 1 {
+		return WithMutexErr(errors.Errorf("lock was not established by this thread for saga %s", sagaId))
 	}
 
-	return WithMutexErr(errors.Errorf("lock was not established by this thread for saga %s", sagaId))
+	delete(m.connections, sagaId)
+	m.mapLock.Unlock()
+
+	return nil
 }

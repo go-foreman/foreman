@@ -21,8 +21,10 @@ const (
 	TraceLevel
 )
 
+// Level is a type of logs levels
 type Level uint32
 
+// Logger interface allows to fit any logger pkg for usage in MessageBus
 type Logger interface {
 	Log(level Level, v ...interface{})
 	Logf(level Level, template string, args ...interface{})

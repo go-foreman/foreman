@@ -3,48 +3,55 @@ package saga
 import (
 	"github.com/go-foreman/foreman/pubsub/message"
 	"github.com/go-foreman/foreman/runtime/scheme"
+	"github.com/pkg/errors"
 	"time"
 )
 
 const (
-	sagaStatusInProgress   = "in_progress"
-	sagaStatusFailed       = "failed"
-	sagaStatusCompleted    = "completed"
-	sagaStatusCreated      = "created"
-	sagaStatusCompensating = "compensating"
-	sagaStatusRecovering   = "recovering"
+	sagaStatusInProgress   status = "in_progress"
+	sagaStatusFailed       status = "failed"
+	sagaStatusCompleted    status = "completed"
+	sagaStatusCreated      status = "created"
+	sagaStatusCompensating status = "compensating"
+	sagaStatusRecovering   status = "recovering"
 )
 
 type Instance interface {
 	ID() string
 	Saga() Saga
-	Status() string
+	Status() Status
 
 	Start(sagaCtx SagaContext) error
-	InProgress() bool
-
 	Compensate(sagaCtx SagaContext) error
-	Compensating() bool
-
 	Recover(sagaCtx SagaContext) error
-	Recovering() bool
-
-	Completed() bool
 	Complete()
-
-	Failed() bool
 	Fail()
 
 	HistoryEvents() []HistoryEvent
 	AttachEvent(event HistoryEvent)
 
-	StartedAt() time.Time
-	UpdatedAt() time.Time
+	StartedAt() *time.Time
+	UpdatedAt() *time.Time
 	ParentID() string
 }
 
+type Status interface {
+	InProgress() bool
+	Failed() bool
+	Recovering() bool
+	Compensating() bool
+	Completed() bool
+	String() string
+}
+
 func NewSagaInstance(id, parentId string, saga Saga) Instance {
-	return &sagaInstance{id: id, parentID: parentId, saga: saga, status: sagaStatusCreated, startedAt: time.Now(), updatedAt: time.Now()}
+	return &sagaInstance{
+		id: id,
+		parentID: parentId,
+		saga: saga,
+		status: sagaStatusCreated,
+		historyEvents: make([]HistoryEvent, 0),
+	}
 }
 
 type sagaInstance struct {
@@ -52,9 +59,9 @@ type sagaInstance struct {
 	parentID      string
 	saga          Saga
 	historyEvents []HistoryEvent
-	startedAt     time.Time
-	updatedAt     time.Time
-	status        string
+	startedAt     *time.Time
+	updatedAt     *time.Time
+	status        Status
 }
 
 func (s sagaInstance) ParentID() string {
@@ -69,18 +76,16 @@ func (s sagaInstance) Saga() Saga {
 	return s.saga
 }
 
-func (s sagaInstance) Status() string {
+func (s sagaInstance) Status() Status {
 	return s.status
 }
 
 func (s *sagaInstance) Start(sagaCtx SagaContext) error {
 	s.status = sagaStatusInProgress
+	current := time.Now().Round(time.Second).UTC()
+	s.startedAt = &current
 	s.update()
 	return s.saga.Start(sagaCtx)
-}
-
-func (s sagaInstance) InProgress() bool {
-	return s.status == sagaStatusInProgress
 }
 
 func (s *sagaInstance) Compensate(sagaCtx SagaContext) error {
@@ -89,18 +94,10 @@ func (s *sagaInstance) Compensate(sagaCtx SagaContext) error {
 	return s.saga.Compensate(sagaCtx)
 }
 
-func (s sagaInstance) Compensating() bool {
-	return s.status == sagaStatusCompensating
-}
-
 func (s *sagaInstance) Recover(sagaCtx SagaContext) error {
 	s.status = sagaStatusRecovering
 	s.update()
 	return s.saga.Recover(sagaCtx)
-}
-
-func (s sagaInstance) Recovering() bool {
-	return s.status == sagaStatusRecovering
 }
 
 func (s *sagaInstance) Complete() {
@@ -108,37 +105,73 @@ func (s *sagaInstance) Complete() {
 	s.update()
 }
 
-func (s sagaInstance) Completed() bool {
-	return s.status == sagaStatusCompleted
-}
-
 func (s *sagaInstance) Fail() {
 	s.status = sagaStatusFailed
 	s.update()
-}
-
-func (s sagaInstance) Failed() bool {
-	return s.status == sagaStatusFailed
 }
 
 func (s sagaInstance) HistoryEvents() []HistoryEvent {
 	return s.historyEvents
 }
 
-func (s sagaInstance) StartedAt() time.Time {
-	return s.startedAt
+func (s sagaInstance) StartedAt() *time.Time {
+	if s.startedAt != nil {
+		return s.startedAt
+	}
+	return nil
 }
 
-func (s sagaInstance) UpdatedAt() time.Time {
+func (s sagaInstance) UpdatedAt() *time.Time {
+	if s.updatedAt != nil {
+		return s.updatedAt
+	}
 	return s.updatedAt
 }
 
 func (s *sagaInstance) update() {
-	s.updatedAt = time.Now()
+	currentTime := time.Now()
+	s.updatedAt = &currentTime
 }
 
 func (s *sagaInstance) AttachEvent(event HistoryEvent) {
 	s.historyEvents = append(s.historyEvents, event)
+}
+
+func StatusFromStr(str string) (Status, error) {
+	statuses := []status{sagaStatusInProgress, sagaStatusFailed, sagaStatusInProgress, sagaStatusCompensating, sagaStatusCompleted, sagaStatusCreated}
+	for _, s := range statuses {
+		if string(s) == str {
+			return s, nil
+		}
+	}
+
+	return nil, errors.Errorf("unknown status string")
+}
+
+type status string
+
+func (s status) InProgress() bool {
+	return s == sagaStatusInProgress
+}
+
+func (s status) Failed() bool {
+	return s == sagaStatusFailed
+}
+
+func (s status) Recovering() bool {
+	return s == sagaStatusInProgress
+}
+
+func (s status) Compensating() bool {
+	return s == sagaStatusCompensating
+}
+
+func (s status) Completed() bool {
+	return s == sagaStatusCompleted
+}
+
+func (s status) String() string {
+	return string(s)
 }
 
 type HistoryEvent struct {
