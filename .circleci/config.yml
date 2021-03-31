@@ -43,8 +43,9 @@ jobs:
             echo Failed waiting for MySQL && exit 1
       - run:
           name: Run tests
+          environment: foreman:foreman@tcp(127.0.0.1:3306)/foreman?charset=utf8&parseTime=True
+            MYSQL_CONNECTION:
           command: |
-            export MYSQL_CONNECTION=foreman:foreman@tcp(127.0.0.1:3306)/foreman?charset=utf8&parseTime=True
             make test
       - store_test_results:
           path: /tmp/test-reports
