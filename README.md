@@ -1,5 +1,5 @@
 ---
-
+[![go-foreman](https://circleci.com/gh/go-foreman/foreman.svg?style=shield)](<LINK>)
 
 ---
 
