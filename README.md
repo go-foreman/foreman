@@ -1,5 +1,3 @@
----
----
 [![go-foreman](https://circleci.com/gh/go-foreman/foreman.svg?style=shield)](<LINK>)
 
 <h1 id="introduction">Introduction</h1>
