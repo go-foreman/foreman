@@ -1,6 +1,7 @@
 package scheme
 
 import (
+	"fmt"
 	"github.com/pkg/errors"
 	"reflect"
 )
@@ -8,52 +9,77 @@ import (
 var KnownTypesRegistryInstance = NewKnownTypesRegistry()
 
 type KnownTypesRegistry interface {
-	RegisterTypeWithKey(keyChoice KeyChoice, someType interface{})
-	RegisterTypes(someType ...interface{})
-	GetType(keyChoice KeyChoice) reflect.Type
-	LoadType(keyChoice KeyChoice) (interface{}, error)
+	AddKnownTypes(gv Group, types ...Object)
+	AddKnownTypeWithName(gk GroupKind, obj Object)
+	NewObject(gv GroupKind) (Object, error)
+	ObjectKind(object Object) (*GroupKind, error)
 }
 
 func NewKnownTypesRegistry() KnownTypesRegistry {
-	return &reflectSagaRegistry{types: make(map[string]reflect.Type)}
+	return &knownTypesRegistry{gvkToType: map[GroupKind]reflect.Type{}, typeToGVK: map[reflect.Type]GroupKind{}}
 }
 
-type reflectSagaRegistry struct {
-	types map[string]reflect.Type
+type knownTypesRegistry struct {
+	// versionMap allows one to figure out the go type of an object with
+	// the given version and name.
+	gvkToType map[GroupKind]reflect.Type
+	// typeToGroupVersion allows one to find metadata for a given go object.
+	// The reflect.Type we index by should *not* be a pointer.
+	typeToGVK map[reflect.Type]GroupKind
 }
 
-func (r *reflectSagaRegistry) RegisterTypeWithKey(keyChoice KeyChoice, someStruct interface{}) {
-	structType := reflect.TypeOf(someStruct)
-
-	if structType.Kind() != reflect.Ptr {
-		structType = reflect.PtrTo(structType)
-	}
-
-	r.types[keyChoice()] = structType
-}
-
-func (r *reflectSagaRegistry) RegisterTypes(someStructs ...interface{}) {
-	if len(someStructs) > 0 {
-		for _, v := range someStructs {
-			r.RegisterTypeWithKey(WithStruct(v), v)
+func (r *knownTypesRegistry) AddKnownTypes(g Group, types ...Object) {
+	for _, obj := range types {
+		t := reflect.TypeOf(obj)
+		if t.Kind() != reflect.Ptr {
+			panic("All types must be pointers to structs.")
 		}
+		t = t.Elem()
+		r.AddKnownTypeWithName(GroupKind{
+			Group:   g,
+			Kind:    t.Name(),
+		}, obj)
 	}
 }
 
-func (r reflectSagaRegistry) GetType(keyChoice KeyChoice) reflect.Type {
-	if sagaType, wasRegistered := r.types[keyChoice()]; wasRegistered {
-		return sagaType
+func (r *knownTypesRegistry) AddKnownTypeWithName(gk GroupKind, obj Object) {
+	structType := reflect.TypeOf(obj)
+
+	if len(gk.Group) == 0 {
+		panic(fmt.Sprintf("group is required on all types: %s %v", gk, structType))
+	}
+	if structType.Kind() != reflect.Ptr {
+		panic("All types must be pointers to structs.")
+	}
+	structType = structType.Elem()
+	if structType.Kind() != reflect.Struct {
+		panic("All types must be pointers to structs.")
 	}
 
-	return nil
+	if oldT, found := r.gvkToType[gk]; found && oldT != structType {
+		panic(fmt.Sprintf("Double registration of different types for %v: old=%v.%v, new=%v.%v", gk, oldT.PkgPath(), oldT.Name(), structType.PkgPath(), structType.Name()))
+	}
+
+	r.gvkToType[gk] = structType
+	r.typeToGVK[structType] = gk
 }
 
-func (r reflectSagaRegistry) LoadType(keyChoice KeyChoice) (interface{}, error) {
-	structType := r.GetType(keyChoice)
+func (r *knownTypesRegistry) NewObject(gk GroupKind) (Object, error) {
+	t, exists := r.gvkToType[gk]
 
-	if structType == nil {
-		return nil, errors.Errorf("Type with key %s is not registered in KnownTypes", keyChoice())
+	if !exists {
+		return nil, errors.Errorf("type %s is not registered in KnownTypes", gk.String())
 	}
 
-	return reflect.New(structType.Elem()).Interface(), nil
+	return reflect.New(t).Interface().(Object), nil
+}
+
+func (r *knownTypesRegistry) ObjectKind(obj Object) (*GroupKind, error) {
+	structType := reflect.TypeOf(obj)
+	gk, ok := r.typeToGVK[structType]
+	if !ok {
+		return nil, errors.Errorf("no kind is registered in schema for the type %s", structType.Name())
+	}
+
+	return &gk, nil
 }
