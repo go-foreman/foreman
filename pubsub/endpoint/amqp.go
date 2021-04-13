@@ -24,13 +24,13 @@ func (a AmqpEndpoint) Name() string {
 	return a.name
 }
 
-func (a AmqpEndpoint) Send(ctx context.Context, message *message.Message, headers map[string]interface{}, opts ...DeliveryOption) error {
+func (a AmqpEndpoint) Send(ctx context.Context, message *message.OutcomingMessage, opts ...DeliveryOption) error {
 	deliveryOpts := &deliveryOptions{}
 
 	if opts != nil {
 		for _, opt := range opts {
 			if err := opt(deliveryOpts); err != nil {
-				return errors.Wrapf(err, "error compiling delivery options for message %s", message.ID)
+				return errors.Wrapf(err, "error compiling delivery options for message %s", message.Payload().GetUID())
 			}
 		}
 	}
@@ -38,17 +38,17 @@ func (a AmqpEndpoint) Send(ctx context.Context, message *message.Message, header
 	dataToSend, err := json.Marshal(message)
 
 	if err != nil {
-		return errors.Wrapf(err, "error serializing message %s to json ", message.ID)
+		return errors.Wrapf(err, "error serializing message %s to json ", message.Payload().GetUID())
 	}
 
-	toSend := pkg.NewOutboundPkg(dataToSend, "application/json", a.destination, headers)
+	toSend := pkg.NewOutboundPkg(dataToSend, "application/json", a.destination, message.Headers())
 
 	if deliveryOpts.delay != nil {
 	waiter:
 		for {
 			select {
 			case <-ctx.Done():
-				return errors.Errorf("Failed to send message %s. Was waiting for the delay and parent ctx closed.", message.ID)
+				return errors.Errorf("Failed to send message %s. Was waiting for the delay and parent ctx closed.", message.Payload().GetUID())
 			case <-time.After(*deliveryOpts.delay):
 				break waiter //break for statement
 			}

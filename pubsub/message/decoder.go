@@ -1,19 +1,17 @@
 package message
 
 import (
-	"encoding/json"
-	"github.com/go-foreman/foreman/pubsub/transport/pkg"
 	"github.com/go-foreman/foreman/runtime/scheme"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
 
 type Decoder interface {
-	Decode(inPkg pkg.IncomingPkg) (*Message, error)
+	Decode(b []byte) (Object, error)
 }
 
 func NewJsonDecoder(knownTypes scheme.KnownTypesRegistry) Decoder {
-	return &JsonEncoder{knownTypes: knownTypes}
+	return &JsonDecoder{knownTypes: knownTypes}
 }
 
 type DecoderErr struct {
@@ -24,42 +22,35 @@ func WithDecoderErr(err error) error {
 	return DecoderErr{err}
 }
 
-type JsonEncoder struct {
+type JsonDecoder struct {
 	knownTypes scheme.KnownTypesRegistry
 }
 
-func (j JsonEncoder) Decode(inPkg pkg.IncomingPkg) (*Message, error) {
-	var decoded Message
+func (j JsonDecoder) Decode(b []byte) (Object, error) {
+	unstructured := &Unstructured{}
 
-	err := json.Unmarshal(inPkg.Payload(), &decoded)
-
-	if err != nil {
+	if err := unstructured.UnmarshalJSON(b); err != nil {
 		return nil, WithDecoderErr(err)
 	}
 
-	//message.Payload now is map[string]interface{} and we are going to fill this data into needed type from KnownTypesRegistry
-	//then in any handler user will be able to do myType, ok := msg.Payload.(*MyType)
+	gk := unstructured.GroupKind()
 
-	payload, err := j.knownTypes.LoadType(scheme.WithKey(decoded.Name))
-
-	if err != nil {
-		return nil, WithDecoderErr(errors.Wrapf(err, "error decoding pkg payload into message"))
+	if gk.Empty() {
+		return nil, WithDecoderErr(errors.Errorf("error decoding received message, GroupKind is empty. %v", unstructured))
 	}
 
-	//kek, err := json.Marshal(decoded.Payload)
-	//
-	//if err != nil {
-	//	return nil, WithDecoderErr(err)
-	//}
-	//
-	//if err := json.Unmarshal(kek, &payload); err != nil {
-	//	return nil, WithDecoderErr(errors.Wrapf(err, "Error decoding data from message payload interface{} to an original type %s", decoded.Name))
-	//}
+	obj, err := j.knownTypes.NewObject(gk)
+
+	if err != nil {
+		return nil, WithDecoderErr(errors.Wrapf(err, "creating instance of object for %s", gk.String()))
+	}
+
+	//message.Payload now is map[string]interface{} and we are going to fill this data into needed type from KnownTypesRegistry
 
 	decoderConf := mapstructure.DecoderConfig{
 		Squash:  true,
 		TagName: "json",
-		Result:  &payload,
+		Result:  obj,
 	}
 
 	decoder, err := mapstructure.NewDecoder(&decoderConf)
@@ -68,14 +59,15 @@ func (j JsonEncoder) Decode(inPkg pkg.IncomingPkg) (*Message, error) {
 		return nil, WithDecoderErr(errors.WithStack(err))
 	}
 
-	if err := decoder.Decode(decoded.Payload); err != nil {
-		return nil, WithDecoderErr(errors.Errorf("Error decoding data from message payload interface{} to an original type %s", decoded.Name))
+	if err := decoder.Decode(unstructured.Object); err != nil {
+		return nil, WithDecoderErr(errors.Errorf("error decoding Unstructured %v to an original type %s", unstructured, gk.String()))
 	}
 
-	decoded.Payload = payload
-	decoded.OriginSource = inPkg.Origin()
-	decoded.Headers = inPkg.Headers()
-	decoded.ReceivedAt = inPkg.ReceivedAt()
+	resObj, ok := obj.(Object)
 
-	return &decoded, nil
+	if !ok {
+		return nil, WithDecoderErr(errors.Errorf("error converting obj %s into Object, it does not implement interface", gk.String()))
+	}
+
+	return resObj, nil
 }

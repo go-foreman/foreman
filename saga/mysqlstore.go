@@ -24,7 +24,7 @@ func NewMysqlSagaStore(db *sql.DB, registry scheme.KnownTypesRegistry) (Store, e
 	return &mysqlStore{db: db, typesRegistry: registry}, nil
 }
 
-//History events are not persisted at this step
+//History events, last failed event are not persisted at this step, there is not way for them to be at creation step.
 func (s mysqlStore) Create(ctx context.Context, sagaInstance Instance) error {
 
 	payload, err := json.Marshal(sagaInstance.Saga())
@@ -41,7 +41,7 @@ func (s mysqlStore) Create(ctx context.Context, sagaInstance Instance) error {
 		return errors.WithStack(err)
 	}
 
-	_, err = tx.ExecContext(ctx, fmt.Sprintf("INSERT INTO %v VALUES (?, ?, ?, ?, ?, ?, ?);", sagaTableName),
+	_, err = tx.ExecContext(ctx, fmt.Sprintf("INSERT INTO %v (id, parent_id, name, payload, status, started_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?);", sagaTableName),
 		sagaInstance.ID(),
 		sagaInstance.ParentID(),
 		sagaName,
@@ -68,10 +68,16 @@ func (s mysqlStore) Update(ctx context.Context, sagaInstance Instance) error {
 	payload, err := json.Marshal(sagaInstance.Saga())
 
 	if err != nil {
-		return errors.WithStack(err)
+		return errors.Wrapf(err, "marshaling saga instance %s on update", sagaInstance.ID())
 	}
 
 	sagaName := scheme.WithStruct(sagaInstance.Saga())()
+
+	lastFailedEv, err := json.Marshal(sagaInstance.Status().FailedOnEvent())
+
+	if err != nil {
+		return errors.Wrapf(err, "marshaling last failed event of saga instance %s on update", sagaInstance.ID())
+	}
 
 	tx, err := s.db.Begin()
 
@@ -79,11 +85,12 @@ func (s mysqlStore) Update(ctx context.Context, sagaInstance Instance) error {
 		return errors.WithStack(err)
 	}
 
-	_, err = tx.ExecContext(ctx, fmt.Sprintf("UPDATE %v SET parent_id=?, name=?, payload=?, status=?, started_at=?, updated_at=? WHERE id=?;", sagaTableName),
+	_, err = tx.ExecContext(ctx, fmt.Sprintf("UPDATE %v SET parent_id=?, name=?, payload=?, status=?, last_failed_ev=? started_at=?, updated_at=? WHERE id=?;", sagaTableName),
 		sagaInstance.ParentID(),
 		sagaName,
 		payload,
 		sagaInstance.Status().String(),
+		lastFailedEv,
 		sagaInstance.StartedAt(),
 		sagaInstance.UpdatedAt(),
 		sagaInstance.ID())
@@ -163,13 +170,14 @@ func (s mysqlStore) Update(ctx context.Context, sagaInstance Instance) error {
 
 func (s mysqlStore) GetById(ctx context.Context, sagaId string) (Instance, error) {
 	sagaData := sagaSqlModel{}
-	err := s.db.QueryRowContext(ctx, fmt.Sprintf("SELECT * FROM %v WHERE id=?;", sagaTableName), sagaId).
+	err := s.db.QueryRowContext(ctx, fmt.Sprintf("SELECT s.id, s.parent_id, s.name, s.payload, s.status, s.last_failed_ev, s.started_at, s.updated_at FROM %v WHERE id=?;", sagaTableName), sagaId).
 		Scan(
 			&sagaData.ID,
 			&sagaData.ParentID,
 			&sagaData.Name,
 			&sagaData.Payload,
 			&sagaData.Status,
+			&sagaData.LastFailedMsg,
 			&sagaData.StartedAt,
 			&sagaData.UpdatedAt)
 
@@ -209,7 +217,7 @@ func (s mysqlStore) GetByFilter(ctx context.Context, filters... FilterOption) ([
 	}
 
 	//todo use https://github.com/Masterminds/squirrel ? +1 dependency, is it really needed?
-	query := fmt.Sprintf(`SELECT s.id, s.parent_id, s.name, s.payload, s.status, s.started_at, s.updated_at, sh.id, sh.name, sh.type, sh.status, sh.payload, description, sh.origin_source, sh.created_at FROM %s s LEFT JOIN %s sh ON s.id = sh.saga_id WHERE`, sagaTableName, sagaHistoryTableName)
+	query := fmt.Sprintf(`SELECT s.id, s.parent_id, s.name, s.payload, s.status, s.last_failed_msg, s.started_at, s.updated_at, sh.id, sh.name, sh.type, sh.status, sh.payload, sh.description, sh.origin_source, sh.created_at FROM %s s LEFT JOIN %s sh ON s.id = sh.saga_id WHERE`, sagaTableName, sagaHistoryTableName)
 
 	var (
 		args       []interface{}
@@ -265,6 +273,7 @@ func (s mysqlStore) GetByFilter(ctx context.Context, filters... FilterOption) ([
 			&sagaData.Name,
 			&sagaData.Payload,
 			&sagaData.Status,
+			&sagaData.LastFailedMsg,
 			&sagaData.StartedAt,
 			&sagaData.UpdatedAt,
 			&ev.ID,
@@ -376,7 +385,7 @@ func (s mysqlStore) queryEvents(sagaId string) ([]HistoryEvent, error) {
 }
 
 func (s mysqlStore) eventFromModel(ev historyEventSqlModel) (*HistoryEvent, error) {
-	eventPayload, err := s.typesRegistry.LoadType(scheme.WithKey(ev.Name.String))
+	eventPayload, err := s.typesRegistry.NewObject(scheme.WithKey(ev.Name.String))
 
 	if err != nil {
 		return nil, errors.Wrapf(err, "loading type %s for event %s", ev.Name.String, ev.ID.String)
@@ -414,14 +423,16 @@ func (s mysqlStore) eventFromModel(ev historyEventSqlModel) (*HistoryEvent, erro
 }
 
 func (s mysqlStore) instanceFromModel(sagaData sagaSqlModel) (*sagaInstance, error) {
-	status, err := StatusFromStr(sagaData.Status.String)
+	status, err := statusFromStr(sagaData.Status.String)
 	if err != nil {
 		return nil, errors.Wrapf(err, "parsing status of %s", sagaData.ID.String)
 	}
 
 	sagaInstance := &sagaInstance{
 		id:        sagaData.ID.String,
-		status:    status,
+		instanceStatus:    instanceStatus{
+			status:        status,
+		},
 		parentID:  sagaData.ParentID.String,
 		historyEvents: make([]HistoryEvent, 0),
 	}
@@ -434,7 +445,7 @@ func (s mysqlStore) instanceFromModel(sagaData sagaSqlModel) (*sagaInstance, err
 		sagaInstance.updatedAt = &sagaData.UpdatedAt.Time
 	}
 
-	saga, err := s.typesRegistry.LoadType(scheme.WithKey(sagaData.Name.String))
+	saga, err := s.typesRegistry.NewObject(scheme.WithKey(sagaData.Name.String))
 
 	if err != nil {
 		return nil, errors.Wrapf(err, "loading type %s for saga %s", sagaData.Name.String, sagaInstance.id)
@@ -471,6 +482,8 @@ func initMysqlTables(db *sql.DB) error {
 		name varchar(255) null,
 		payload text null,
 		status varchar(255) null,
+		last_failed_ev text null,
+		payload text null,
 		started_at timestamp null,
 		updated_at timestamp null
 	);`, sagaTableName))
@@ -518,6 +531,7 @@ type sagaSqlModel struct {
 	Name      sql.NullString
 	Payload   []byte
 	Status    sql.NullString
+	LastFailedMsg []byte
 	StartedAt sql.NullTime
 	UpdatedAt sql.NullTime
 }

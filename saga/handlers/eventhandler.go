@@ -83,13 +83,19 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 				execCtx.LogMessage(log.ErrorLevel, fmt.Sprintf("error sending delivery for saga %s. Delivery: (%v). %s", sagaCtx.SagaInstance().ID(), delivery, err))
 				return errors.Wrapf(err, "error sending delivery for saga %s. Delivery: (%v)", sagaCtx.SagaInstance().ID(), delivery)
 			}
+			//remember sent commands/events
 			sagaCtx.SagaInstance().AttachEvent(sagaPkg.HistoryEvent{Metadata: delivery.Message.Metadata, Payload: delivery.Message.Payload, CreatedAt: time.Now()})
 		}
 	} else {
 		e.logger.Logf(log.WarnLevel, "No handler defined for event %s from message %s", msg.Name, msg.ID)
 	}
 
+	//write received event into history
 	sagaInstance.AttachEvent(sagaPkg.HistoryEvent{Metadata: msg.Metadata, Payload: msg.Payload, CreatedAt: time.Now(), OriginSource: msg.OriginSource, SagaStatus: sagaInstance.Status().String(), Description: msg.Description})
+
+	if sagaInstance.Status().Failed() {
+
+	}
 
 	if err := e.sagaStore.Update(ctx, sagaInstance); err != nil {
 		return errors.Wrapf(err, "error saving saga's %s state to db", sagaInstance.ID())

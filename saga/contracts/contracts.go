@@ -1,6 +1,9 @@
 package contracts
 
-import "github.com/go-foreman/foreman/runtime/scheme"
+import (
+	"github.com/go-foreman/foreman/runtime/scheme"
+	"github.com/go-foreman/foreman/saga"
+)
 
 func init() {
 	contractsList := []interface{}{
@@ -17,7 +20,7 @@ type StartSagaCommand struct {
 	SagaId   string      `json:"saga_id" mapstructure:"saga_id"`
 	ParentId string      `json:"parent_id" mapstructure:"parent_id"`
 	SagaName string      `json:"saga_name" mapstructure:"saga_name"`
-	Saga     interface{} `json:"saga"`
+	Saga     saga.Saga   `json:"saga"`
 }
 
 type RecoverSagaCommand struct {

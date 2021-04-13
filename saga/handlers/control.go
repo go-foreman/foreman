@@ -140,7 +140,7 @@ func (h SagaControlHandler) createSaga(sagaId, parentId, sagaName string, sagaDe
 		return nil, errors.Errorf("Saga payload is nil")
 	}
 
-	sagaToCreate, err := h.typesRegistry.LoadType(scheme.WithKey(sagaName))
+	sagaToCreate, err := h.typesRegistry.NewObject(scheme.WithKey(sagaName))
 
 	if err != nil {
 		return nil, errors.WithStack(err)

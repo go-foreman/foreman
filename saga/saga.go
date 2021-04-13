@@ -3,7 +3,6 @@ package saga
 import (
 	"github.com/go-foreman/foreman/pubsub/message"
 	"github.com/go-foreman/foreman/runtime/scheme"
-	"github.com/pkg/errors"
 	"time"
 )
 
@@ -38,6 +37,7 @@ type Instance interface {
 type Status interface {
 	InProgress() bool
 	Failed() bool
+	FailedOnEvent() interface{}
 	Recovering() bool
 	Compensating() bool
 	Completed() bool
@@ -49,19 +49,21 @@ func NewSagaInstance(id, parentId string, saga Saga) Instance {
 		id: id,
 		parentID: parentId,
 		saga: saga,
-		status: sagaStatusCreated,
+		instanceStatus: instanceStatus{
+			status:        sagaStatusCreated,
+		},
 		historyEvents: make([]HistoryEvent, 0),
 	}
 }
 
 type sagaInstance struct {
-	id            string
-	parentID      string
-	saga          Saga
-	historyEvents []HistoryEvent
-	startedAt     *time.Time
-	updatedAt     *time.Time
-	status        Status
+	id             string
+	parentID       string
+	saga           Saga
+	historyEvents  []HistoryEvent
+	startedAt      *time.Time
+	updatedAt      *time.Time
+	instanceStatus instanceStatus
 }
 
 func (s sagaInstance) ParentID() string {
@@ -77,11 +79,11 @@ func (s sagaInstance) Saga() Saga {
 }
 
 func (s sagaInstance) Status() Status {
-	return s.status
+	return s.instanceStatus
 }
 
 func (s *sagaInstance) Start(sagaCtx SagaContext) error {
-	s.status = sagaStatusInProgress
+	s.instanceStatus.status = sagaStatusInProgress
 	current := time.Now().Round(time.Second).UTC()
 	s.startedAt = &current
 	s.update()
@@ -89,24 +91,24 @@ func (s *sagaInstance) Start(sagaCtx SagaContext) error {
 }
 
 func (s *sagaInstance) Compensate(sagaCtx SagaContext) error {
-	s.status = sagaStatusCompensating
+	s.instanceStatus.status = sagaStatusCompensating
 	s.update()
 	return s.saga.Compensate(sagaCtx)
 }
 
 func (s *sagaInstance) Recover(sagaCtx SagaContext) error {
-	s.status = sagaStatusRecovering
+	s.instanceStatus.status = sagaStatusRecovering
 	s.update()
 	return s.saga.Recover(sagaCtx)
 }
 
 func (s *sagaInstance) Complete() {
-	s.status = sagaStatusCompleted
+	s.instanceStatus.status = sagaStatusCompleted
 	s.update()
 }
 
 func (s *sagaInstance) Fail() {
-	s.status = sagaStatusFailed
+	s.instanceStatus.status = sagaStatusFailed
 	s.update()
 }
 
@@ -137,17 +139,6 @@ func (s *sagaInstance) AttachEvent(event HistoryEvent) {
 	s.historyEvents = append(s.historyEvents, event)
 }
 
-func StatusFromStr(str string) (Status, error) {
-	statuses := []status{sagaStatusInProgress, sagaStatusFailed, sagaStatusInProgress, sagaStatusCompensating, sagaStatusCompleted, sagaStatusCreated}
-	for _, s := range statuses {
-		if string(s) == str {
-			return s, nil
-		}
-	}
-
-	return nil, errors.Errorf("unknown status string")
-}
-
 type status string
 
 func (s status) InProgress() bool {
@@ -174,6 +165,15 @@ func (s status) String() string {
 	return string(s)
 }
 
+type instanceStatus struct {
+	status
+	lastFailedEv interface{}
+}
+
+func (i instanceStatus) FailedOnEvent() interface{} {
+	return i.lastFailedEv
+}
+
 type HistoryEvent struct {
 	message.Metadata
 	CreatedAt    time.Time   `json:"created_at"`
@@ -184,7 +184,6 @@ type HistoryEvent struct {
 }
 
 type Saga interface {
-	//you should register all the handlers here
 	Init()
 	Start(execCtx SagaContext) error
 	Compensate(execCtx SagaContext) error

@@ -2,6 +2,7 @@ package saga
 
 import (
 	"context"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -41,4 +42,15 @@ type filterOptions struct {
 	sagaId   string
 	status   string
 	sagaType string
+}
+
+func statusFromStr(str string) (status, error) {
+	statuses := []status{sagaStatusInProgress, sagaStatusFailed, sagaStatusInProgress, sagaStatusCompensating, sagaStatusCompleted, sagaStatusCreated}
+	for _, s := range statuses {
+		if string(s) == str {
+			return s, nil
+		}
+	}
+
+	return "", errors.Errorf("unknown status string")
 }
