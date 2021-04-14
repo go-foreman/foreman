@@ -1,58 +1,75 @@
 package dispatcher
 
 import (
+	"fmt"
 	"github.com/go-foreman/foreman/pubsub/message"
 	"github.com/go-foreman/foreman/pubsub/message/execution"
-	"github.com/go-foreman/foreman/runtime/scheme"
 	"reflect"
 )
 
-const MatchesAllKeys = "*"
-
 type Dispatcher interface {
-	Match(message *message.Message) []execution.Executor
-	RegisterCmdHandlerWithKey(cmdKeyChoice scheme.KeyChoice, executor execution.Executor) Dispatcher
-	RegisterCmdHandler(cmd interface{}, executor execution.Executor) Dispatcher
-	RegisterEventListenerWithKey(eventKeyChoice scheme.KeyChoice, executor execution.Executor) Dispatcher
-	RegisterEventListener(event interface{}, executor execution.Executor) Dispatcher
+	Match(obj message.Object) []execution.Executor
+	SubscribeForCmd(obj message.Object, executor execution.Executor) Dispatcher
+	SubscribeForEvent(obj message.Object, executor execution.Executor) Dispatcher
+	SubscribeForAllEvents(executor execution.Executor) Dispatcher
 }
 
 func NewDispatcher() Dispatcher {
-	return &dispatcher{handlers: make(map[string][]execution.Executor), listeners: make(map[string][]execution.Executor)}
+	return &dispatcher{
+		handlers: make(map[reflect.Type][]execution.Executor),
+		listeners: make(map[reflect.Type][]execution.Executor),
+	}
 }
 
 type dispatcher struct {
-	handlers  map[string][]execution.Executor
-	listeners map[string][]execution.Executor
+	handlers  map[reflect.Type][]execution.Executor
+	listeners map[reflect.Type][]execution.Executor
+	allEvsListeners []execution.Executor
 }
 
-func (d dispatcher) Match(msg *message.Message) []execution.Executor {
-	if msg.Type == message.CommandType {
-		if handlers, ok := d.handlers[msg.Name]; ok {
-			return handlers
-		}
-	} else if msg.Type == message.EventType {
+func (d dispatcher) Match(obj message.Object) []execution.Executor {
+	structType := getStructType(obj)
+	handlers, exists := d.handlers[structType]
 
-		var listeners []execution.Executor
-
-		if catchAllListeners, ok := d.listeners[MatchesAllKeys]; ok {
-			listeners = append(listeners, catchAllListeners...)
-		}
-		if eventListeners, ok := d.listeners[msg.Name]; ok {
-			listeners = append(listeners, eventListeners...)
-		}
-
-		return listeners
+	if exists && len(handlers) > 0 {
+		return handlers
 	}
 
-	return nil
+	listenersMap := make(map[uintptr]execution.Executor)
+
+	for _, ev := range d.allEvsListeners {
+		listenersMap[reflect.ValueOf(ev).Pointer()] = ev
+	}
+
+	eventListeners, exists := d.listeners[structType]
+
+	if exists && len(eventListeners) > 0 {
+		for _, ev := range eventListeners {
+			listenersMap[reflect.ValueOf(ev).Pointer()] = ev
+		}
+	}
+
+	allEvListeners := make([]execution.Executor, len(listenersMap))
+
+	counter := 0
+	for _, ev := range listenersMap {
+		allEvListeners[counter] = ev
+		counter++
+	}
+
+	return allEvListeners
 }
 
-func (d *dispatcher) RegisterCmdHandlerWithKey(keyChoice scheme.KeyChoice, executor execution.Executor) Dispatcher {
-	key := keyChoice()
+func (d *dispatcher) SubscribeForCmd(obj message.Object, executor execution.Executor) Dispatcher {
+	structType := getStructType(obj)
+
+	if _, subscribedForAnEvent := d.listeners[structType]; subscribedForAnEvent {
+		panic(fmt.Sprintf("obj %s already subscribed for an event listener", structType.String()))
+	}
+
 	executorPtr := reflect.ValueOf(executor).Pointer()
 
-	for _, handler := range d.handlers[key] {
+	for _, handler := range d.handlers[structType] {
 		handlerPtr := reflect.ValueOf(handler).Pointer()
 
 		//check if this handler was already registered. because it's a function - need to take value and then ptr of it.
@@ -61,14 +78,20 @@ func (d *dispatcher) RegisterCmdHandlerWithKey(keyChoice scheme.KeyChoice, execu
 		}
 	}
 
-	d.handlers[key] = append(d.handlers[key], executor)
+	d.handlers[structType] = append(d.handlers[structType], executor)
 	return d
 }
 
-func (d *dispatcher) RegisterEventListenerWithKey(keyChoice scheme.KeyChoice, executor execution.Executor) Dispatcher {
-	key := keyChoice()
+func (d *dispatcher) SubscribeForEvent(obj message.Object, executor execution.Executor) Dispatcher {
+	structType := getStructType(obj)
+
+	if _, subscribedForACmd := d.handlers[structType]; subscribedForACmd {
+		panic(fmt.Sprintf("obj %s already subscribed for a cmd handler", structType.String()))
+	}
+
 	executorPtr := reflect.ValueOf(executor).Pointer()
-	for _, listener := range d.listeners[key] {
+
+	for _, listener := range d.listeners[structType] {
 		listenerPtr := reflect.ValueOf(listener).Pointer()
 
 		//check if this listener was already registered
@@ -77,14 +100,36 @@ func (d *dispatcher) RegisterEventListenerWithKey(keyChoice scheme.KeyChoice, ex
 		}
 	}
 
-	d.listeners[key] = append(d.listeners[key], executor)
+	d.listeners[structType] = append(d.listeners[structType], executor)
 	return d
 }
 
-func (d *dispatcher) RegisterCmdHandler(cmd interface{}, executor execution.Executor) Dispatcher {
-	return d.RegisterCmdHandlerWithKey(scheme.WithStruct(cmd), executor)
+func (d *dispatcher) SubscribeForAllEvents(executor execution.Executor) Dispatcher {
+	executorPtr := reflect.ValueOf(executor).Pointer()
+	for _, listener := range d.allEvsListeners {
+		listenerPtr := reflect.ValueOf(listener).Pointer()
+
+		//check if this listener was already registered
+		if executorPtr == listenerPtr {
+			return d
+		}
+	}
+
+	d.allEvsListeners = append(d.allEvsListeners, executor)
+	return d
 }
 
-func (d *dispatcher) RegisterEventListener(event interface{}, executor execution.Executor) Dispatcher {
-	return d.RegisterEventListenerWithKey(scheme.WithStruct(event), executor)
+func getStructType(obj message.Object) reflect.Type {
+	structType := reflect.TypeOf(obj)
+
+	if structType.Kind() != reflect.Ptr {
+		structType = reflect.PtrTo(structType)
+	}
+
+	structType = structType.Elem()
+	if structType.Kind() != reflect.Struct {
+		panic("all types must be pointers to structs")
+	}
+
+	return structType
 }

@@ -12,6 +12,6 @@ type TypeMeta struct {
 	Group string `json:"group,omitempty"`
 }
 
-func (obj *TypeMeta) GroupKind() GroupKind {
+func (obj TypeMeta) GroupKind() GroupKind {
 	return GroupKind{Group: Group(obj.Group), Kind: obj.Kind}
 }

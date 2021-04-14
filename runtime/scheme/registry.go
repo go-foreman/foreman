@@ -48,12 +48,14 @@ func (r *knownTypesRegistry) AddKnownTypeWithName(gk GroupKind, obj Object) {
 	if len(gk.Group) == 0 {
 		panic(fmt.Sprintf("group is required on all types: %s %v", gk, structType))
 	}
+
 	if structType.Kind() != reflect.Ptr {
-		panic("All types must be pointers to structs.")
+		structType = reflect.PtrTo(structType)
 	}
+
 	structType = structType.Elem()
 	if structType.Kind() != reflect.Struct {
-		panic("All types must be pointers to structs.")
+		panic("All types must be pointers to structs")
 	}
 
 	if oldT, found := r.gvkToType[gk]; found && oldT != structType {

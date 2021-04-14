@@ -28,7 +28,7 @@ func NewMessageProcessor(decoder message.Decoder, msgExecCtxFactory execution.Me
 }
 
 func (p *processor) Process(ctx context.Context, inPkg pkg.IncomingPkg) error {
-	msg, err := p.decoder.Decode(inPkg)
+	msg, err := p.decoder.Decode(inPkg.Payload())
 	if err != nil {
 		p.logger.Logf(log.ErrorLevel, "Failed to decode IncomingPkg into Message. %s", err)
 		return errors.WithStack(err)

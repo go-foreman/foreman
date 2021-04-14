@@ -22,38 +22,71 @@ type SomeAnotherTestType struct {
 
 func TestKnownTypesRegistry_AddKnownTypeWithName(t *testing.T) {
 	knownRegistry := NewKnownTypesRegistry()
-	knownRegistry.AddKnownTypeWithName(GroupKind{
-		Group:   group,
-		Kind:    "CustomKind",
-	}, &SomeTestType{})
 
-	someTestTypeInstance, err := knownRegistry.NewObject(GroupKind{
-		Group:   group,
-		Kind:    "CustomKind",
-	})
-	require.NoError(t, err)
-	assert.NotNil(t, someTestTypeInstance)
-	assert.IsType(t, &SomeTestType{}, someTestTypeInstance)
-
-	expected := "group is required on all types: CustomKind *scheme.SomeTestType"
-	require.PanicsWithValue(t, expected, func() {
-		knownRegistry.AddKnownTypeWithName(GroupKind{
-			Group:   "",
-			Kind:    "CustomKind",
-		}, &SomeTestType{})
-	})
-
-	expected = "Double registration of different types for test.CustomKind: old=github.com/go-foreman/foreman/runtime/scheme.SomeTestType, new=github.com/go-foreman/foreman/runtime/scheme.SomeAnotherTestType"
-	require.PanicsWithValue(t, expected, func() {
+	t.Run("add known type by pointer", func(t *testing.T) {
 		knownRegistry.AddKnownTypeWithName(GroupKind{
 			Group:   group,
 			Kind:    "CustomKind",
-		}, &SomeAnotherTestType{})
+		}, &SomeTestType{})
+
+		someTestTypeInstance, err := knownRegistry.NewObject(GroupKind{
+			Group:   group,
+			Kind:    "CustomKind",
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, someTestTypeInstance)
+		assert.IsType(t, &SomeTestType{}, someTestTypeInstance)
+	})
+
+	t.Run("add known type by value", func(t *testing.T) {
+		knownRegistry.AddKnownTypeWithName(GroupKind{
+			Group: group,
+			Kind: "SomeKind",
+		}, SomeTestType{})
+
+		someKindInstance, err := knownRegistry.NewObject(GroupKind{
+			Group:   group,
+			Kind:    "CustomKind",
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, someKindInstance)
+		assert.IsType(t, &SomeTestType{}, someKindInstance)
+	})
+
+	t.Run("group is empty", func(t *testing.T) {
+		expected := "group is required on all types: CustomKind *scheme.SomeTestType"
+		require.PanicsWithValue(t, expected, func() {
+			knownRegistry.AddKnownTypeWithName(GroupKind{
+				Group:   "",
+				Kind:    "CustomKind",
+			}, &SomeTestType{})
+		})
+	})
+
+	t.Run("double registration", func(t *testing.T) {
+		expected := "Double registration of different types for test.CustomKind: old=github.com/go-foreman/foreman/runtime/scheme.SomeTestType, new=github.com/go-foreman/foreman/runtime/scheme.SomeAnotherTestType"
+		require.PanicsWithValue(t, expected, func() {
+			knownRegistry.AddKnownTypeWithName(GroupKind{
+				Group:   group,
+				Kind:    "CustomKind",
+			}, &SomeAnotherTestType{})
+		})
+	})
+
+	t.Run("object is not struct type", func(t *testing.T) {
+		wrongType := notStructType("xxx")
+		assert.PanicsWithValue(t, "All types must be pointers to structs", func() {
+			knownRegistry.AddKnownTypeWithName(GroupKind{
+				Group:   group,
+				Kind:    "WrongKind",
+			}, &wrongType)
+		})
 	})
 }
 
 func TestKnownTypesRegistry_AddKnownTypes(t *testing.T) {
 	knownRegistry := NewKnownTypesRegistry()
+
 	t.Run("no types passed", func(t *testing.T) {
 		//no error, nothing is registered
 		knownRegistry.AddKnownTypes(group)
@@ -88,3 +121,10 @@ func TestKnownTypesRegistry_AddKnownTypes(t *testing.T) {
 		assert.EqualError(t, err, "type test.XXXSomeTestType is not registered in KnownTypes")
 	})
 }
+
+type notStructType string
+
+func (n notStructType) GroupKind() GroupKind {
+	panic("implement me")
+}
+
