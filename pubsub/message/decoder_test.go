@@ -77,4 +77,10 @@ func TestJsonDecoder(t *testing.T) {
 		require.Nil(t, decodedObj)
 		assert.Equal(t, "creating instance of object for test.: type test. is not registered in KnownTypes", err.Error())
 	})
+
+	t.Run("decode nil payload", func(t *testing.T) {
+		decodedObj, err := decoder.Unmarshal(nil)
+		require.EqualError(t, err, "unexpected end of JSON input")
+		require.Nil(t, decodedObj)
+	})
 }

@@ -3,13 +3,10 @@ package saga
 import (
 	"context"
 	"fmt"
-	"time"
-
 	"github.com/go-foreman/foreman/log"
 	"github.com/go-foreman/foreman/pubsub/endpoint"
 	"github.com/go-foreman/foreman/pubsub/message"
 	"github.com/go-foreman/foreman/pubsub/message/execution"
-	"github.com/pkg/errors"
 )
 
 //SagaContext is sealed interface due to deliver method, that takes all dispatched deliveries and start sending out them
@@ -21,10 +18,9 @@ type SagaContext interface {
 	Valid() bool
 	Dispatch(payload message.Object, options ...endpoint.DeliveryOption)
 	Deliveries() []*Delivery
-	Return(options ...endpoint.DeliveryOption)
+	Return(options ...endpoint.DeliveryOption) error
 	LogMessage(level log.Level, msg string)
 	SagaInstance() Instance
-	deliver() error
 }
 
 func NewSagaCtx(execCtx execution.MessageExecutionCtx, sagaInstance Instance) SagaContext {
@@ -49,16 +45,13 @@ func (s sagaCtx) Valid() bool {
 	return s.execCtx.Valid()
 }
 
-func (s sagaCtx) Return(options ...endpoint.DeliveryOption) {
-	s.execCtx.Return()
-	outcomingMsg := message.FromReceivedMsg(s.Message())
-	outcomingMsg.Headers()[SagaIdKey] = s.sagaInstance.ID()
-	s.execCtx.Return()
-	s.Dispatch(outcomingMsg.Payload(), options...)
+func (s sagaCtx) Return(options ...endpoint.DeliveryOption) error {
+	s.LogMessage(log.InfoLevel, fmt.Sprintf("returning saga event %s", s.Message().UID()))
+	return s.execCtx.Return(options...)
 }
 
 func (s sagaCtx) LogMessage(lvl log.Level, msg string) {
-	s.execCtx.LogMessage(lvl, fmt.Sprintf("SagaId: %s :%s", s.sagaInstance.ID(), msg))
+	s.execCtx.LogMessage(lvl, fmt.Sprintf("SagaId: %s :%s", s.sagaInstance.UID(), msg))
 }
 
 func (s sagaCtx) SagaInstance() Instance {

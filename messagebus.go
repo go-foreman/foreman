@@ -197,3 +197,7 @@ func (b *MessageBus) Subscriber() subscriber.Subscriber {
 func (b *MessageBus) Logger() log.Logger {
 	return b.logger
 }
+
+func (b *MessageBus) Marshaller() message.Marshaller {
+	return b.marshaller
+}

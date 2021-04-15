@@ -20,6 +20,11 @@ type SomeAnotherTestType struct {
 	B int
 }
 
+type WithEmbeddedStruct struct {
+	SomeTestType
+	Kek int
+}
+
 func TestKnownTypesRegistry_AddKnownTypeWithName(t *testing.T) {
 	knownRegistry := NewKnownTypesRegistry()
 
@@ -42,7 +47,7 @@ func TestKnownTypesRegistry_AddKnownTypeWithName(t *testing.T) {
 		knownRegistry.AddKnownTypeWithName(GroupKind{
 			Group: group,
 			Kind: "SomeKind",
-		}, SomeTestType{})
+		}, &SomeTestType{})
 
 		someKindInstance, err := knownRegistry.NewObject(GroupKind{
 			Group:   group,
@@ -81,6 +86,22 @@ func TestKnownTypesRegistry_AddKnownTypeWithName(t *testing.T) {
 				Kind:    "WrongKind",
 			}, &wrongType)
 		})
+	})
+
+	t.Run("schema returns no kind for not registered object with embedded schema.obj", func(t *testing.T) {
+		knownRegistry.AddKnownTypes(group, &SomeTestType{})
+		embeddedInstance, err := knownRegistry.ObjectKind(&WithEmbeddedStruct{})
+		assert.Error(t, err)
+		assert.EqualError(t, err, "no kind is registered in schema for the type WithEmbeddedStruct")
+		assert.Nil(t, embeddedInstance)
+	})
+
+	t.Run("schema returns kind for registered object with embedded schema.obj", func(t *testing.T) {
+		knownRegistry.AddKnownTypes(group, &WithEmbeddedStruct{})
+		embeddedInstance, err := knownRegistry.ObjectKind(&WithEmbeddedStruct{})
+		require.NoError(t, err)
+		require.NotNil(t, embeddedInstance)
+		assert.EqualValues(t, &GroupKind{Group: group, Kind: "WithEmbeddedStruct"}, embeddedInstance)
 	})
 }
 

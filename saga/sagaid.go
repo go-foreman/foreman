@@ -8,7 +8,7 @@ import (
 const SagaIdKey = "sagaId"
 
 type IdExtractor interface {
-	ExtractSagaId(msg *message.Message) (string, error)
+	ExtractSagaId(headers message.Headers) (string, error)
 }
 
 func NewSagaIdExtractor() IdExtractor {
@@ -18,16 +18,16 @@ func NewSagaIdExtractor() IdExtractor {
 type idHeaderExtractor struct {
 }
 
-func (i idHeaderExtractor) ExtractSagaId(msg *message.Message) (string, error) {
-	if val, ok := msg.Headers[SagaIdKey]; ok {
+func (i idHeaderExtractor) ExtractSagaId(headers message.Headers) (string, error) {
+	if val, ok := headers[SagaIdKey]; ok {
 		sagaId, converted := val.(string)
 
 		if !converted {
-			return "", errors.Errorf("Saga id was found, but has wrong type, should be string")
+			return "", errors.Errorf("Saga uid was found, but has wrong type, should be string")
 		}
 
 		return sagaId, nil
 	}
 
-	return "", errors.Errorf("Saga id was not found in message's %s headers of type %s", msg.ID, msg.Type)
+	return "", errors.New("saga uid was not found in headers")
 }

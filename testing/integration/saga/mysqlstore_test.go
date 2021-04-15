@@ -16,6 +16,10 @@ import (
 	"time"
 )
 
+const(
+	testGroup scheme.Group = "testgroup"
+)
+
 type mysqlStoreTest struct {
 	intSuite.MysqlSuite
 }
@@ -35,9 +39,11 @@ func (m *mysqlStoreTest) TestMysqlStore() {
 	ctx := context.Background()
 	dbConnection := m.Connection()
 	schemeRegistry := scheme.NewKnownTypesRegistry()
-	schemeRegistry.RegisterTypes(&WorkflowSaga{})
-	schemeRegistry.RegisterTypes(&FilterSaga{})
-	mysqlStore, err := saga.NewMysqlSagaStore(dbConnection, schemeRegistry)
+	schemeRegistry.AddKnownTypes(testGroup, &WorkflowSaga{})
+	schemeRegistry.AddKnownTypes(testGroup, &FilterSaga{})
+	marshaller := message.NewJsonMarshaller(schemeRegistry)
+	mysqlStore, err := saga.NewMysqlSagaStore(dbConnection, marshaller)
+
 	require.NoError(t, err)
 	require.NotNil(t, mysqlStore)
 
@@ -54,17 +60,18 @@ func (m *mysqlStoreTest) TestMysqlStore() {
 		workflowSaga := &WorkflowSaga{Field: "field", Value: "value"}
 		sagaInstance := saga.NewSagaInstance(uuid.New().String(), "", workflowSaga)
 		require.NoError(t, mysqlStore.Create(ctx, sagaInstance))
-		fetchedSagaInstance, err := mysqlStore.GetById(ctx, sagaInstance.ID())
+		fetchedSagaInstance, err := mysqlStore.GetById(ctx, sagaInstance.UID())
 		assert.NoError(t, err)
 		require.NotNil(t, fetchedSagaInstance)
 		assert.EqualValues(t, sagaInstance, fetchedSagaInstance)
+		require.NoError(t, mysqlStore.Delete(ctx, sagaInstance.UID()))
 	})
 
 	t.Run("delete saga instance", func(t *testing.T) {
 		workflowSaga := &WorkflowSaga{Field: "field", Value: "value"}
 		sagaInstance := saga.NewSagaInstance(uuid.New().String(), "", workflowSaga)
 		require.NoError(t, mysqlStore.Create(ctx, sagaInstance))
-		assert.NoError(t, mysqlStore.Delete(ctx, sagaInstance.ID()))
+		assert.NoError(t, mysqlStore.Delete(ctx, sagaInstance.UID()))
 		err = mysqlStore.Delete(ctx, "xxx")
 		assert.Error(t, err)
 		assert.EqualError(t, err, fmt.Sprintf("no saga instance %s found", "xxx"))
@@ -76,41 +83,81 @@ func (m *mysqlStoreTest) TestMysqlStore() {
 		sagaInstance := saga.NewSagaInstance(uuid.New().String(), "", workflowSaga)
 		require.NoError(t, mysqlStore.Create(ctx, sagaInstance))
 
-		foundSagaInstance, err := mysqlStore.GetById(ctx, sagaInstance.ID())
+		foundSagaInstance, err := mysqlStore.GetById(ctx, sagaInstance.UID())
 		assert.NoError(t, err)
 		require.NotNil(t, foundSagaInstance)
 		assert.EqualValues(t, sagaInstance, foundSagaInstance)
 
+		require.NoError(t, mysqlStore.Delete(ctx, sagaInstance.UID()))
+
 		unregisteredSaga := &UnregisteredSaga{WorkflowSaga: *workflowSaga}
 		unregisteredSagaInstance := saga.NewSagaInstance(uuid.New().String(), "", unregisteredSaga)
-		require.NoError(t, mysqlStore.Create(ctx, unregisteredSagaInstance))
-		fetchedUnregisteredSaga, err := mysqlStore.GetById(ctx, unregisteredSagaInstance.ID())
-		assert.Nil(t, fetchedUnregisteredSaga)
+		err = mysqlStore.Create(ctx, unregisteredSagaInstance)
 		require.Error(t, err)
-		assert.True(t, strings.Contains(err.Error(), fmt.Sprintf("loading type %s for saga %s", scheme.GetStructTypeKey(UnregisteredSaga{}), unregisteredSagaInstance.ID())))
+		assert.True(t, strings.Contains(err.Error(), "no kind is registered in schema for the type UnregisteredSaga"))
+		fetchedUnregisteredSaga, err := mysqlStore.GetById(ctx, unregisteredSagaInstance.UID())
+		assert.Nil(t, fetchedUnregisteredSaga)
+		assert.NoError(t, err)
+	})
 
-		//need to delete this unregistered saga because we won't be able to fetch it by id or using filters in the next tests
-		err = mysqlStore.Delete(ctx, unregisteredSagaInstance.ID())
-		require.NoError(t, err)
+	t.Run("update saga instance", func(t *testing.T) {
+		workflowSaga := &WorkflowSaga{Field: "field", Value: "value"}
+		sagaInstance := saga.NewSagaInstance(uuid.New().String(), "", workflowSaga)
+		require.NoError(t, mysqlStore.Create(ctx, sagaInstance))
+		fetchedSagaInstance, err := mysqlStore.GetById(ctx, sagaInstance.UID())
+		assert.NoError(t, err)
+		require.NotNil(t, fetchedSagaInstance)
+		assert.EqualValues(t, sagaInstance, fetchedSagaInstance)
+		assert.Len(t, fetchedSagaInstance.HistoryEvents(), 0)
+
+		someEv := &SomeEvent{Field: "field"}
+		historyEvent := saga.HistoryEvent{
+			UID: uuid.New().String(),
+			CreatedAt:    time.Now().Round(time.Second).UTC(),
+			Payload:      someEv,
+			OriginSource: "originSource",
+			SagaStatus:   "created",
+		}
+		fetchedSagaInstance.AttachEvent(historyEvent)
+
+		err = mysqlStore.Update(ctx, fetchedSagaInstance)
+		require.Error(t, err)
+		//we get this error because SomeEvent is not registered in schema, let's register it
+		require.True(t, strings.Contains(err.Error(), "no kind is registered in schema for the type SomeEvent"))
+
+		schemeRegistry.AddKnownTypes(testGroup, &SomeEvent{})
+
+		require.NoError(t, mysqlStore.Update(ctx, fetchedSagaInstance))
+
+		fetchedSagaInstance, err = mysqlStore.GetById(ctx, sagaInstance.UID())
+		assert.NoError(t, err)
+		require.NotNil(t, fetchedSagaInstance)
+		require.Len(t, fetchedSagaInstance.HistoryEvents(), 1)
+		assert.EqualValues(t, historyEvent, fetchedSagaInstance.HistoryEvents()[0])
+
+		require.NoError(t, mysqlStore.Delete(ctx, sagaInstance.UID()))
 	})
 
 	t.Run("find saga instance by filter", func(t *testing.T) {
-		anotherSaga := &FilterSaga{WorkflowSaga{
+		anotherSaga := &FilterSaga{WorkFlow: WorkflowSaga{
 			Field: "field",
 			Value: "value",
 		}}
-		anotherSagaID := uuid.New().String()
-		anotherSagaInstance := saga.NewSagaInstance(anotherSagaID, "", anotherSaga)
+		anotherSagaInstance := saga.NewSagaInstance(uuid.New().String(), "xxx", anotherSaga)
 		require.NoError(t, mysqlStore.Create(ctx, anotherSagaInstance))
 		require.NotNil(t, anotherSagaInstance)
+		assert.EqualValues(t, anotherSaga, anotherSagaInstance.Saga())
 
-		fetchedSagaInstances, err := mysqlStore.GetByFilter(ctx, saga.WithSagaId(anotherSagaID))
+		fetchedSagaInstances, err := mysqlStore.GetByFilter(ctx, saga.WithSagaId(anotherSagaInstance.UID()))
 		assert.NoError(t, err)
 		require.NotNil(t, fetchedSagaInstances)
 		assert.Len(t, fetchedSagaInstances, 1)
 		assert.EqualValues(t, anotherSagaInstance, fetchedSagaInstances[0])
 
-		fetchedSagaInstances, err = mysqlStore.GetByFilter(ctx, saga.WithSagaType(scheme.GetStructTypeKey(FilterSaga{})))
+		gk, err := schemeRegistry.ObjectKind(anotherSaga)
+		require.NoError(t, err)
+
+		fetchedSagaInstances, err = mysqlStore.GetByFilter(ctx, saga.WithSagaName(gk.String()))
 		assert.NoError(t, err)
 		require.NotNil(t, fetchedSagaInstances)
 		assert.Len(t, fetchedSagaInstances, 1)
@@ -119,9 +166,9 @@ func (m *mysqlStoreTest) TestMysqlStore() {
 		fetchedSagaInstances, err = mysqlStore.GetByFilter(ctx, saga.WithStatus("created"))
 		assert.NoError(t, err)
 		require.NotNil(t, fetchedSagaInstances)
-		assert.Len(t, fetchedSagaInstances, 3)
+		assert.Len(t, fetchedSagaInstances, 1)
 
-		noSagas, err := mysqlStore.GetByFilter(ctx, saga.WithSagaType("xxxx"))
+		noSagas, err := mysqlStore.GetByFilter(ctx, saga.WithSagaName("xxx"))
 		assert.NoError(t, err)
 		require.NotNil(t, noSagas)
 		assert.Len(t, noSagas, 0)
@@ -136,49 +183,10 @@ func (m *mysqlStoreTest) TestMysqlStore() {
 		require.NotNil(t, noSagas)
 		assert.Len(t, noSagas, 0)
 	})
-
-	t.Run("update saga instance", func(t *testing.T) {
-		workflowSaga := &WorkflowSaga{Field: "field", Value: "value"}
-		sagaInstance := saga.NewSagaInstance(uuid.New().String(), "", workflowSaga)
-		require.NoError(t, mysqlStore.Create(ctx, sagaInstance))
-		fetchedSagaInstance, err := mysqlStore.GetById(ctx, sagaInstance.ID())
-		assert.NoError(t, err)
-		require.NotNil(t, fetchedSagaInstance)
-		assert.EqualValues(t, sagaInstance, fetchedSagaInstance)
-		assert.Len(t, fetchedSagaInstance.HistoryEvents(), 0)
-
-		someEv := &SomeEvent{Field: "field"}
-		historyEvent := saga.HistoryEvent{
-			Metadata:     message.Metadata{
-				ID: uuid.New().String(),
-				Type: message.EventType,
-				Name: scheme.GetStructTypeKey(&SomeEvent{}),
-			},
-			CreatedAt:    time.Now().Round(time.Second).UTC(),
-			Payload:      someEv,
-			OriginSource: "originSource",
-			SagaStatus:   "created",
-			Description:  "something happened",
-		}
-		fetchedSagaInstance.AttachEvent(historyEvent)
-
-		err = mysqlStore.Update(ctx, fetchedSagaInstance)
-		require.NoError(t, err)
-		fetchedSagaInstance, err = mysqlStore.GetById(ctx, sagaInstance.ID())
-		//we get this error because SomeEvent is not registered in schema, let's register it
-		assert.NotNil(t, err)
-		assert.True(t, strings.Contains(err.Error(), fmt.Sprintf("loading type %s for event %s", scheme.GetStructTypeKey(&SomeEvent{}), historyEvent.ID)) )
-		schemeRegistry.RegisterTypes(&SomeEvent{})
-
-		fetchedSagaInstance, err = mysqlStore.GetById(ctx, sagaInstance.ID())
-		assert.NoError(t, err)
-		require.NotNil(t, fetchedSagaInstance)
-		require.Len(t, fetchedSagaInstance.HistoryEvents(), 1)
-		assert.EqualValues(t, historyEvent, fetchedSagaInstance.HistoryEvents()[0])
-	})
 }
 
 type WorkflowSaga struct {
+	saga.BaseSaga
 	Field string `json:"field"`
 	Value string `json:"value"`
 }
@@ -199,11 +207,8 @@ func (w WorkflowSaga) Recover(execCtx saga.SagaContext) error {
 	panic("implement me")
 }
 
-func (w WorkflowSaga) EventHandlers() map[string]saga.Executor {
-	panic("implement me")
-}
-
 type FilterSaga struct {
+	saga.BaseSaga
 	WorkFlow WorkflowSaga `json:"work_flow"`
 }
 
@@ -223,14 +228,12 @@ func (a FilterSaga) Recover(execCtx saga.SagaContext) error {
 	panic("implement me")
 }
 
-func (a FilterSaga) EventHandlers() map[string]saga.Executor {
-	panic("implement me")
-}
-
 type UnregisteredSaga struct {
+	message.ObjectMeta
 	WorkflowSaga
 }
 
 type SomeEvent struct {
+	message.ObjectMeta
 	Field string `json:"field"`
 }

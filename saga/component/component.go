@@ -4,18 +4,20 @@ import (
 	"github.com/go-foreman/foreman"
 	"github.com/go-foreman/foreman/log"
 	"github.com/go-foreman/foreman/pubsub/endpoint"
+	"github.com/go-foreman/foreman/pubsub/message"
 	"github.com/go-foreman/foreman/runtime/scheme"
 	"github.com/go-foreman/foreman/saga"
 	"github.com/go-foreman/foreman/saga/api/handlers/status"
 	"github.com/go-foreman/foreman/saga/contracts"
 	"github.com/go-foreman/foreman/saga/handlers"
 	"github.com/go-foreman/foreman/saga/mutex"
+	"github.com/pkg/errors"
 	"net/http"
 )
 
 type Component struct {
 	sagas            []saga.Saga
-	contracts        []interface{}
+	contracts        []message.Object
 	sagaStoreFactory StoreFactory
 	sagaMutex        mutex.Mutex
 	schema           scheme.KnownTypesRegistry
@@ -45,7 +47,7 @@ func (c Component) Init(mBus *brigadier.MessageBus) error {
 		opts.idExtractor = saga.NewSagaIdExtractor()
 	}
 
-	store, err := c.sagaStoreFactory(mBus.SchemeRegistry())
+	store, err := c.sagaStoreFactory(mBus.Marshaller())
 
 	if err != nil {
 		return err
@@ -58,16 +60,21 @@ func (c Component) Init(mBus *brigadier.MessageBus) error {
 	eventHandler := handlers.NewEventsHandler(store, c.sagaMutex, c.schema, opts.idExtractor, mBus.Logger())
 	sagaControlHandler := handlers.NewSagaControlHandler(store, c.sagaMutex, mBus.SchemeRegistry(), mBus.Logger())
 
-	mBus.Dispatcher().RegisterCmdHandler(&contracts.StartSagaCommand{}, sagaControlHandler.Handle)
-	mBus.Dispatcher().RegisterCmdHandler(&contracts.RecoverSagaCommand{}, sagaControlHandler.Handle)
-	mBus.Dispatcher().RegisterCmdHandler(&contracts.CompensateSagaCommand{}, sagaControlHandler.Handle)
+	mBus.Dispatcher().SubscribeForCmd(&contracts.StartSagaCommand{}, sagaControlHandler.Handle)
+	mBus.Dispatcher().SubscribeForCmd(&contracts.RecoverSagaCommand{}, sagaControlHandler.Handle)
+	mBus.Dispatcher().SubscribeForCmd(&contracts.CompensateSagaCommand{}, sagaControlHandler.Handle)
 
 	for _, s := range c.sagas {
 		s.Init()
-		mBus.SchemeRegistry().RegisterTypes(s)
 
-		for eventKey := range s.EventHandlers() {
-			mBus.Dispatcher().RegisterEventListenerWithKey(scheme.WithKey(eventKey), eventHandler.Handle)
+		for evGK := range s.EventHandlers() {
+			//event obj must be registered in schema before
+			evObj, err := mBus.SchemeRegistry().NewObject(evGK)
+			if err != nil {
+				return errors.Errorf("error creating an event object from scheme GK %s", evGK.String())
+			}
+
+			mBus.Dispatcher().SubscribeForEvent(evObj, eventHandler.Handle)
 		}
 	}
 
@@ -89,7 +96,7 @@ func (c *Component) RegisterSagas(sagas ...saga.Saga) {
 	c.sagas = append(c.sagas, sagas...)
 }
 
-func (c *Component) RegisterContracts(contracts ...interface{}) {
+func (c *Component) RegisterContracts(contracts ...message.Object) {
 	c.contracts = append(c.contracts, contracts...)
 }
 
@@ -115,4 +122,4 @@ func initApiServer(mux *http.ServeMux, store saga.Store, logger log.Logger) {
 	mux.HandleFunc("/sagas/", statusHandler.GetStatus)
 }
 
-type StoreFactory func(scheme scheme.KnownTypesRegistry) (saga.Store, error)
+type StoreFactory func(msgMarshaller message.Marshaller) (saga.Store, error)

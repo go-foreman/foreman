@@ -23,7 +23,6 @@ type StartSagaCommand struct {
 	message.ObjectMeta
 	SagaId   string      `json:"saga_id" mapstructure:"saga_id"`
 	ParentId string      `json:"parent_id" mapstructure:"parent_id"`
-	SagaName string      `json:"saga_name" mapstructure:"saga_name"`
 	Saga     saga.Saga   `json:"saga"`
 }
 

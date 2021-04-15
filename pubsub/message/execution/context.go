@@ -7,7 +7,6 @@ import (
 	"github.com/go-foreman/foreman/pubsub/message"
 	"github.com/go-foreman/foreman/pubsub/transport/pkg"
 	"github.com/pkg/errors"
-	"time"
 )
 
 type MessageExecutionCtx interface {
@@ -15,7 +14,7 @@ type MessageExecutionCtx interface {
 	Context() context.Context
 	Valid() bool
 	Send(message *message.OutcomingMessage, options ...endpoint.DeliveryOption) error
-	Return(delay time.Duration) error
+	Return(options ...endpoint.DeliveryOption) error
 	LogMessage(level log.Level, msg string)
 }
 
@@ -54,22 +53,15 @@ func (m messageExecutionCtx) Send(msg *message.OutcomingMessage, options ...endp
 	return nil
 }
 
-func (m messageExecutionCtx) Return(delay time.Duration) error {
-	for {
-		select {
-		case <-m.ctx.Done():
-			m.logger.Logf(log.InfoLevel, "Context is closed, exiting without returning msg: %s, delay is too long", m.message.UID())
-			return nil
-		case <-time.After(delay):
-
-			outComingMsg := message.FromReceivedMsg(m.message)
-			m.message.Headers().RegisterReturn()
-			if err := m.Send(outComingMsg); err != nil {
-				m.logger.Logf(log.ErrorLevel, "error when returning a message %s", outComingMsg.UID())
-				return errors.Wrapf(err, "error when returning a message %s", outComingMsg.UID())
-			}
-		}
+func (m messageExecutionCtx) Return(options ...endpoint.DeliveryOption) error {
+	outComingMsg := message.FromReceivedMsg(m.message)
+	m.message.Headers().RegisterReturn()
+	if err := m.Send(outComingMsg, options...); err != nil {
+		m.logger.Logf(log.ErrorLevel, "error when returning a message %s", outComingMsg.UID())
+		return errors.Wrapf(err, "error when returning a message %s", outComingMsg.UID())
 	}
+
+	return nil
 }
 
 func (m messageExecutionCtx) Message() *message.ReceivedMessage {

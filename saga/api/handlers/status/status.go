@@ -55,7 +55,7 @@ func (s statusService) GetStatus(ctx context.Context, sagaId string) (*StatusRes
 	return &StatusResponse{SagaId: sagaId, Status: sagaInstance.Status().String(), Payload: sagaInstance.Saga(), Events: events}, nil
 }
 
-func (s statusService) GetFilteredBy(ctx context.Context, sagaId, status, sagaType string) ([]*StatusResponse, error) {
+func (s statusService) GetFilteredBy(ctx context.Context, sagaId, status, sagaName string) ([]*StatusResponse, error) {
 
 	var opts []saga.FilterOption
 
@@ -67,8 +67,8 @@ func (s statusService) GetFilteredBy(ctx context.Context, sagaId, status, sagaTy
 		opts = append(opts, saga.WithStatus(status))
 	}
 
-	if sagaType != "" {
-		opts = append(opts, saga.WithSagaType(sagaType))
+	if sagaName != "" {
+		opts = append(opts, saga.WithSagaName(sagaName))
 	}
 
 	if len(opts) == 0 {
@@ -91,7 +91,7 @@ func (s statusService) GetFilteredBy(ctx context.Context, sagaId, status, sagaTy
 		}
 
 		resp[i] = &StatusResponse{
-			SagaId:  instance.ID(),
+			SagaId:  instance.UID(),
 			Status:  instance.Status().String(),
 			Payload: instance.Saga(),
 			Events:  events,

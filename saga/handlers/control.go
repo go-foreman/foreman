@@ -37,7 +37,7 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 	ctx := execCtx.Context()
 	msg := execCtx.Message()
 
-	switch cmd := msg.Payload.(type) {
+	switch cmd := msg.Payload().(type) {
 	case *contracts.StartSagaCommand:
 		sagaInstance, err = h.createSaga(cmd.SagaId, cmd.ParentId, cmd.SagaName, cmd.Saga)
 		if err != nil {
@@ -51,7 +51,7 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 		sagaCtx = sagaPkg.NewSagaCtx(execCtx, sagaInstance)
 
 		if err := sagaInstance.Start(sagaCtx); err != nil {
-			return errors.Wrapf(err, "error starting saga `%s`", sagaInstance.ID())
+			return errors.Wrapf(err, "error starting saga `%s`", sagaInstance.UID())
 		}
 
 	case *contracts.RecoverSagaCommand:
@@ -72,14 +72,14 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 		}
 
 		if !sagaInstance.Status().Failed() || sagaInstance.Status().Completed() || sagaInstance.Status().Recovering() || sagaInstance.Status().Compensating() {
-			h.logger.Logf(log.InfoLevel, "Saga `%s` has status %s, you can't start recovering the process", sagaInstance.Status(), sagaInstance.ID())
+			h.logger.Logf(log.InfoLevel, "Saga `%s` has status %s, you can't start recovering the process", sagaInstance.Status(), sagaInstance.UID())
 			return nil
 		}
 
 		sagaCtx = sagaPkg.NewSagaCtx(execCtx, sagaInstance)
 
 		if err := sagaInstance.Recover(sagaCtx); err != nil {
-			return errors.Wrapf(err, "error recovering saga `%s`", sagaInstance.ID())
+			return errors.Wrapf(err, "error recovering saga `%s`", sagaInstance.UID())
 		}
 
 	case *contracts.CompensateSagaCommand:
@@ -100,26 +100,27 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 		}
 
 		if !sagaInstance.Status().Failed() || sagaInstance.Status().Compensating() {
-			h.logger.Logf(log.InfoLevel, "Saga `%s` has status `%s`, you can't compensate the process", sagaInstance.ID(), sagaInstance.Status())
+			h.logger.Logf(log.InfoLevel, "Saga `%s` has status `%s`, you can't compensate the process", sagaInstance.UID(), sagaInstance.Status())
 			return nil
 		}
 
 		sagaCtx = sagaPkg.NewSagaCtx(execCtx, sagaInstance)
 
 		if err := sagaInstance.Compensate(sagaCtx); err != nil {
-			return errors.Wrapf(err, "error compensating saga `%s`", sagaInstance.ID())
+			return errors.Wrapf(err, "error compensating saga `%s`", sagaInstance.UID())
 		}
 
 	default:
-		return errors.Errorf("Unknown command type `%s` for SagaControlHandler. Supported: StartSagaCommand, RecoverSagaCommand, CompensateSagaCommand", msg.Type)
+		return errors.Errorf("unknown command type `%s` for SagaControlHandler. Supported: StartSagaCommand, RecoverSagaCommand, CompensateSagaCommand", msg.Payload().GroupKind().String())
 	}
 
 	for _, delivery := range sagaCtx.Deliveries() {
-		if err := execCtx.Send(delivery.Message, delivery.Options...); err != nil {
-			execCtx.LogMessage(log.ErrorLevel, fmt.Sprintf("error sending delivery for saga %s. Delivery: (%v). %s", sagaCtx.SagaInstance().ID(), delivery, err))
-			return errors.Wrapf(err, "error sending delivery for saga %s. Delivery: (%v)", sagaCtx.SagaInstance().ID(), delivery)
+		outcomingMessage := message.NewOutcomingMessage(delivery.Payload, message.WithHeaders(msg.Headers()))
+		if err := execCtx.Send(outcomingMessage, delivery.Options...); err != nil {
+			execCtx.LogMessage(log.ErrorLevel, fmt.Sprintf("error sending delivery for saga %s. Delivery: (%v). %s", sagaCtx.SagaInstance().UID(), delivery, err))
+			return errors.Wrapf(err, "error sending delivery for saga %s. Delivery: (%v)", sagaCtx.SagaInstance().UID(), delivery)
 		}
-		sagaCtx.SagaInstance().AttachEvent(sagaPkg.HistoryEvent{Metadata: delivery.Message.Metadata, Payload: delivery.Message.Payload, CreatedAt: time.Now()})
+		sagaCtx.SagaInstance().AttachEvent(sagaPkg.HistoryEvent{UID: msg.UID(), Payload: delivery.Payload, CreatedAt: time.Now(), SagaStatus: sagaInstance.Status().String()})
 	}
 
 	return h.store.Update(ctx, sagaInstance)

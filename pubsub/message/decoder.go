@@ -71,6 +71,8 @@ func (j jsonDecoder) Unmarshal(b []byte) (Object, error) {
 		return nil, WithDecoderErr(errors.Errorf("error converting obj %s into Object, it does not implement interface", gk.String()))
 	}
 
+	//resObj.SetGroupKind(&gk)
+
 	return resObj, nil
 }
 

@@ -52,14 +52,6 @@ func TestDispatcher_SubscribeForCmd(t *testing.T) {
 		assertThisValueExists(t, handler.handle, handlers)
 	})
 
-	t.Run("subscribe for cmd by passing struct value", func(t *testing.T) {
-		dispatcher := NewDispatcher()
-		dispatcher.SubscribeForCmd(&sendConfirmationCmd{}, handler.handle)
-		handlers := dispatcher.Match(&sendConfirmationCmd{})
-		require.Len(t, handlers, 1)
-		assertThisValueExists(t, handler.handle, handlers)
-	})
-
 	t.Run("multiple handlers for cmd", func(t *testing.T) {
 		dispatcher := NewDispatcher()
 		dispatcher.SubscribeForCmd(&sendConfirmationCmd{}, handler.handle)
@@ -104,25 +96,11 @@ func TestDispatcher_SubscribeForEvent(t *testing.T) {
 		assertThisValueExists(t, handler.handle, listeners)
 	})
 
-	t.Run("subscribe for en event by passing struct value", func(t *testing.T) {
-		dispatcher := NewDispatcher()
-		dispatcher.SubscribeForEvent(accountRegisteredEvent{}, handler.handle)
-		listeners := dispatcher.Match(accountRegisteredEvent{})
-		require.Len(t, listeners, 1)
-		assertThisValueExists(t, handler.handle, listeners)
-
-		t.Run("verify that it matches struct passed by value which was registered by pointer", func(t *testing.T) {
-			listeners = dispatcher.Match(&accountRegisteredEvent{})
-			require.Len(t, listeners, 1)
-			assertThisValueExists(t, handler.handle, listeners)
-		})
-	})
-
 	t.Run("multiple listeners for an event", func(t *testing.T) {
 		dispatcher := NewDispatcher()
 		dispatcher.SubscribeForEvent(&accountRegisteredEvent{}, handler.handle)
 		dispatcher.SubscribeForEvent(&accountRegisteredEvent{}, handler.anotherHandler)
-		listeners := dispatcher.Match(accountRegisteredEvent{})
+		listeners := dispatcher.Match(&accountRegisteredEvent{})
 		require.Len(t, listeners, 2)
 		assertThisValueExists(t, handler.handle, listeners)
 		assertThisValueExists(t, handler.anotherHandler, listeners)

@@ -32,16 +32,16 @@ func WithStatus(status string) FilterOption {
 	}
 }
 
-func WithSagaType(sagaType string) FilterOption {
+func WithSagaName(sagaName string) FilterOption {
 	return func(opts *filterOptions) {
-		opts.sagaType = sagaType
+		opts.sagaName = sagaName
 	}
 }
 
 type filterOptions struct {
 	sagaId   string
 	status   string
-	sagaType string
+	sagaName string
 }
 
 func statusFromStr(str string) (status, error) {

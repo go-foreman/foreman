@@ -16,7 +16,7 @@ const (
 )
 
 type Instance interface {
-	ID() string
+	UID() string
 	Saga() Saga
 	Status() Status
 
@@ -37,7 +37,7 @@ type Instance interface {
 type Status interface {
 	InProgress() bool
 	Failed() bool
-	FailedOnEvent() interface{}
+	FailedOnEvent() message.Object
 	Recovering() bool
 	Compensating() bool
 	Completed() bool
@@ -46,9 +46,9 @@ type Status interface {
 
 func NewSagaInstance(id, parentId string, saga Saga) Instance {
 	return &sagaInstance{
-		id: id,
+		uid:      id,
 		parentID: parentId,
-		saga: saga,
+		saga:     saga,
 		instanceStatus: instanceStatus{
 			status:        sagaStatusCreated,
 		},
@@ -57,7 +57,7 @@ func NewSagaInstance(id, parentId string, saga Saga) Instance {
 }
 
 type sagaInstance struct {
-	id             string
+	uid            string
 	parentID       string
 	saga           Saga
 	historyEvents  []HistoryEvent
@@ -70,8 +70,8 @@ func (s sagaInstance) ParentID() string {
 	return s.parentID
 }
 
-func (s sagaInstance) ID() string {
-	return s.id
+func (s sagaInstance) UID() string {
+	return s.uid
 }
 
 func (s sagaInstance) Saga() Saga {
@@ -167,23 +167,23 @@ func (s status) String() string {
 
 type instanceStatus struct {
 	status
-	lastFailedEv interface{}
+	lastFailedEv message.Object
 }
 
-func (i instanceStatus) FailedOnEvent() interface{} {
+func (i instanceStatus) FailedOnEvent() message.Object {
 	return i.lastFailedEv
 }
 
 type HistoryEvent struct {
 	UID          string      `json:"uid"`
 	CreatedAt    time.Time   `json:"created_at"`
-	Payload      interface{} `json:"payload"`
-	OriginSource string      `json:"origin_source"`
+	Payload      message.Object `json:"payload"`
+	OriginSource string      `json:"origin"`
 	SagaStatus   string      `json:"saga_status"` //saga status at the moment
-	Description  string      `json:"description"`
 }
 
 type Saga interface {
+	message.Object
 	Init()
 	Start(execCtx SagaContext) error
 	Compensate(execCtx SagaContext) error
@@ -192,6 +192,7 @@ type Saga interface {
 }
 
 type BaseSaga struct {
+	message.ObjectMeta
 	adjacencyMap map[scheme.GroupKind]Executor
 }
 

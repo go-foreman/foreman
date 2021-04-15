@@ -32,7 +32,7 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 	ctx := execCtx.Context()
 	msgGK := msg.Payload().GroupKind().String()
 
-	sagaId, err := e.idExtractor.ExtractSagaId(msg)
+	sagaId, err := e.idExtractor.ExtractSagaId(msg.Headers())
 
 	if err != nil {
 		return errors.Wrapf(err, "Error extracting saga id from message %s", msg.UID())
@@ -77,12 +77,12 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 
 		for _, delivery := range sagaCtx.Deliveries() {
 			headers := execCtx.Message().Headers()
-			headers[sagaPkg.SagaIdKey] = sagaInstance.ID()
+			headers[sagaPkg.SagaIdKey] = sagaInstance.UID()
 			outcomingMsg := message.NewOutcomingMessage(delivery.Payload, message.WithHeaders(headers))
 
 			if err := execCtx.Send(outcomingMsg, delivery.Options...); err != nil {
-				execCtx.LogMessage(log.ErrorLevel, fmt.Sprintf("error sending delivery for saga %s. Delivery: (%v). %s", sagaCtx.SagaInstance().ID(), delivery, err))
-				return errors.Wrapf(err, "sending delivery for saga %s. Delivery: (%v)", sagaCtx.SagaInstance().ID(), delivery)
+				execCtx.LogMessage(log.ErrorLevel, fmt.Sprintf("error sending delivery for saga %s. Delivery: (%v). %s", sagaCtx.SagaInstance().UID(), delivery, err))
+				return errors.Wrapf(err, "sending delivery for saga %s. Delivery: (%v)", sagaCtx.SagaInstance().UID(), delivery)
 			}
 			//remember sent commands/events
 			sagaCtx.SagaInstance().AttachEvent(sagaPkg.HistoryEvent{UID: outcomingMsg.UID(), Payload: delivery.Payload, CreatedAt: time.Now()})
@@ -92,14 +92,14 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 	}
 
 	//write received event into history
-	sagaInstance.AttachEvent(sagaPkg.HistoryEvent{UID: msg.UID(), Payload: msg.Payload, CreatedAt: time.Now(), OriginSource: msg.Origin(), SagaStatus: sagaInstance.Status().String()})
+	sagaInstance.AttachEvent(sagaPkg.HistoryEvent{UID: msg.UID(), Payload: msg.Payload(), CreatedAt: time.Now(), OriginSource: msg.Origin(), SagaStatus: sagaInstance.Status().String()})
 
 	if sagaInstance.Status().Failed() {
 
 	}
 
 	if err := e.sagaStore.Update(ctx, sagaInstance); err != nil {
-		return errors.Wrapf(err, "error saving saga's %s state to db", sagaInstance.ID())
+		return errors.Wrapf(err, "error saving saga's %s state to db", sagaInstance.UID())
 	}
 
 	//sending an event about saga completion to parent if it exists and to all regular handlers.
@@ -109,7 +109,7 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 			headers := execCtx.Message().Headers()
 			headers[sagaPkg.SagaIdKey] = sagaInstance.ParentID()
 
-			return execCtx.Send(message.NewOutcomingMessage(&contracts.SagaChildCompletedEvent{SagaId: sagaInstance.ID()}, message.WithHeaders(headers)))
+			return execCtx.Send(message.NewOutcomingMessage(&contracts.SagaChildCompletedEvent{SagaId: sagaInstance.UID()}, message.WithHeaders(headers)))
 		}
 	}
 

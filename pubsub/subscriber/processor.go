@@ -35,16 +35,28 @@ func (p *processor) Process(ctx context.Context, inPkg pkg.IncomingPkg) error {
 		return errors.WithStack(err)
 	}
 
-	receivedMsg := message.NewReceivedMessage(payload, inPkg.Headers(), time.Now(), inPkg.Origin())
+	uidVal, exists := inPkg.Headers()["uid"]
+
+	if !exists {
+		return errors.Errorf("error finding uid header in received message. %s", payload.GroupKind().String())
+	}
+
+	uid, ok := uidVal.(string)
+
+	if !ok {
+		return errors.Errorf("error converting uid header value to string %v. %s", uidVal, payload.GroupKind().String())
+	}
+
+	receivedMsg := message.NewReceivedMessage(uid, payload, inPkg.Headers(), time.Now(), inPkg.Origin())
 
 	if receivedMsg.Headers().ReturnsCount() >= 10 {
-		return errors.Errorf("Message %s was returned more that 10 times. Not acking. It will be removed once TTL expires.", payload.GetUID())
+		return errors.Errorf("message %s was returned more that 10 times. Not acking. It will be removed once TTL expires.", receivedMsg.UID())
 	}
 
 	executors := p.dispatcher.Match(payload)
 
 	if len(executors) == 0 {
-		errMsg := fmt.Sprintf("No executors defined for message %s %s", payload.GetUID(), payload.GroupKind())
+		errMsg := fmt.Sprintf("No executors defined for message %s %s", receivedMsg.UID(), payload.GroupKind())
 		p.logger.Log(log.ErrorLevel, errMsg)
 		return WithNoExecutorsDefinedErr(errors.New(errMsg))
 	}
@@ -53,7 +65,7 @@ func (p *processor) Process(ctx context.Context, inPkg pkg.IncomingPkg) error {
 
 	for _, exec := range executors {
 		if err := exec(execCtx); err != nil {
-			return errors.Wrapf(err, "error executing message %s %s", payload.GetUID(), payload.GroupKind())
+			return errors.Wrapf(err, "error executing message %s %s", receivedMsg.UID(), payload.GroupKind())
 		}
 	}
 
