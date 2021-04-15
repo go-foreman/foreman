@@ -14,7 +14,7 @@ type MessageExecutionCtx interface {
 	Message() *message.ReceivedMessage
 	Context() context.Context
 	Valid() bool
-	Send(message message.Object, options ...endpoint.DeliveryOption) error
+	Send(message *message.OutcomingMessage, options ...endpoint.DeliveryOption) error
 	Return(delay time.Duration) error
 	LogMessage(level log.Level, msg string)
 }
@@ -36,17 +36,17 @@ func (m messageExecutionCtx) Context() context.Context {
 	return m.ctx
 }
 
-func (m messageExecutionCtx) Send(payload message.Object, options ...endpoint.DeliveryOption) error {
-	endpoints := m.router.Route(payload)
+func (m messageExecutionCtx) Send(msg *message.OutcomingMessage, options ...endpoint.DeliveryOption) error {
+	endpoints := m.router.Route(msg.Payload())
 
 	if len(endpoints) == 0 {
-		m.logger.Logf(log.WarnLevel, "No endpoints defined for message %s", payload.GroupKind())
+		m.logger.Logf(log.WarnLevel, "no endpoints defined for message %s", msg.UID())
 		return nil
 	}
 
 	for _, endp := range endpoints {
-		if err := endp.Send(m.ctx, message.NewOutcomingMessage(payload), options...); err != nil {
-			m.logger.Logf(log.ErrorLevel, "Error sending message id %s", payload.GetUID())
+		if err := endp.Send(m.ctx, msg, options...); err != nil {
+			m.logger.Logf(log.ErrorLevel, "error sending message id %s", msg.UID())
 			return errors.WithStack(err)
 		}
 	}
@@ -58,14 +58,16 @@ func (m messageExecutionCtx) Return(delay time.Duration) error {
 	for {
 		select {
 		case <-m.ctx.Done():
-			m.logger.Logf(log.InfoLevel, "Context is closed, exiting without returning msg: %s, delay is too long", m.message.Payload().GetUID())
+			m.logger.Logf(log.InfoLevel, "Context is closed, exiting without returning msg: %s, delay is too long", m.message.UID())
 			return nil
 		case <-time.After(delay):
-			//m.message.Headers.RegisterReturn()
-			//if err := m.Send(m.message); err != nil {
-			//	m.logger.Logf(log.ErrorLevel, "error when returning a message %s", m.message.ID)
-			//	return errors.Wrapf(err, "error when returning a message %s", m.message.ID)
-			//}
+
+			outComingMsg := message.FromReceivedMsg(m.message)
+			m.message.Headers().RegisterReturn()
+			if err := m.Send(outComingMsg); err != nil {
+				m.logger.Logf(log.ErrorLevel, "error when returning a message %s", outComingMsg.UID())
+				return errors.Wrapf(err, "error when returning a message %s", outComingMsg.UID())
+			}
 		}
 	}
 }

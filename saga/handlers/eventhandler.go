@@ -30,15 +30,12 @@ func NewEventsHandler(sagaStore sagaPkg.Store, mutex sagaMutex.Mutex, sagaRegist
 func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 	msg := execCtx.Message()
 	ctx := execCtx.Context()
-
-	if msg.Type != message.EventType {
-		return errors.Errorf("Received message %s is not an event type", msg.ID)
-	}
+	msgGK := msg.Payload().GroupKind().String()
 
 	sagaId, err := e.idExtractor.ExtractSagaId(msg)
 
 	if err != nil {
-		return errors.Wrapf(err, "Error extracting saga id from message %s", msg.ID)
+		return errors.Wrapf(err, "Error extracting saga id from message %s", msg.UID())
 	}
 
 	//lock saga so nobody can process events for this saga in another consumer's replicas
@@ -71,27 +68,31 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 
 	sagaCtx := sagaPkg.NewSagaCtx(execCtx, sagaInstance)
 
-	if handler, exists := saga.EventHandlers()[msg.Name]; exists {
+	if handler, exists := saga.EventHandlers()[msg.Payload().GroupKind()]; exists {
 
 		if err := handler(sagaCtx); err != nil {
-			execCtx.LogMessage(log.ErrorLevel, fmt.Sprintf("error handling saga event %s from message %s: %s", msg.Name, msg.ID, err))
-			return errors.Wrapf(err, "error handling event %s from message %s", msg.Name, msg.ID)
+			execCtx.LogMessage(log.ErrorLevel, fmt.Sprintf("error handling saga event %s from message %s: %s", msgGK, msg.UID(), err))
+			return errors.Wrapf(err, "handling event %s from message %s", msgGK, msg.UID())
 		}
 
 		for _, delivery := range sagaCtx.Deliveries() {
-			if err := execCtx.Send(delivery.Message, delivery.Options...); err != nil {
+			headers := execCtx.Message().Headers()
+			headers[sagaPkg.SagaIdKey] = sagaInstance.ID()
+			outcomingMsg := message.NewOutcomingMessage(delivery.Payload, message.WithHeaders(headers))
+
+			if err := execCtx.Send(outcomingMsg, delivery.Options...); err != nil {
 				execCtx.LogMessage(log.ErrorLevel, fmt.Sprintf("error sending delivery for saga %s. Delivery: (%v). %s", sagaCtx.SagaInstance().ID(), delivery, err))
-				return errors.Wrapf(err, "error sending delivery for saga %s. Delivery: (%v)", sagaCtx.SagaInstance().ID(), delivery)
+				return errors.Wrapf(err, "sending delivery for saga %s. Delivery: (%v)", sagaCtx.SagaInstance().ID(), delivery)
 			}
 			//remember sent commands/events
-			sagaCtx.SagaInstance().AttachEvent(sagaPkg.HistoryEvent{Metadata: delivery.Message.Metadata, Payload: delivery.Message.Payload, CreatedAt: time.Now()})
+			sagaCtx.SagaInstance().AttachEvent(sagaPkg.HistoryEvent{UID: outcomingMsg.UID(), Payload: delivery.Payload, CreatedAt: time.Now()})
 		}
 	} else {
-		e.logger.Logf(log.WarnLevel, "No handler defined for event %s from message %s", msg.Name, msg.ID)
+		e.logger.Logf(log.WarnLevel, "no handler defined for event %s from message %s", msgGK, msg.UID())
 	}
 
 	//write received event into history
-	sagaInstance.AttachEvent(sagaPkg.HistoryEvent{Metadata: msg.Metadata, Payload: msg.Payload, CreatedAt: time.Now(), OriginSource: msg.OriginSource, SagaStatus: sagaInstance.Status().String(), Description: msg.Description})
+	sagaInstance.AttachEvent(sagaPkg.HistoryEvent{UID: msg.UID(), Payload: msg.Payload, CreatedAt: time.Now(), OriginSource: msg.Origin(), SagaStatus: sagaInstance.Status().String()})
 
 	if sagaInstance.Status().Failed() {
 
@@ -103,12 +104,12 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 
 	//sending an event about saga completion to parent if it exists and to all regular handlers.
 	if sagaInstance.Status().Completed() {
-		var msg = &message.Message{}
 		//if parent exists - we should forward this event to parent saga
 		if sagaInstance.ParentID() != "" {
-			msg = message.NewEventMessage(contracts.SagaChildCompletedEvent{SagaId: sagaInstance.ID()})
-			msg.Headers[sagaPkg.SagaIdKey] = sagaInstance.ParentID()
-			return execCtx.Send(msg)
+			headers := execCtx.Message().Headers()
+			headers[sagaPkg.SagaIdKey] = sagaInstance.ParentID()
+
+			return execCtx.Send(message.NewOutcomingMessage(&contracts.SagaChildCompletedEvent{SagaId: sagaInstance.ID()}, message.WithHeaders(headers)))
 		}
 	}
 

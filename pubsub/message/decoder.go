@@ -1,17 +1,19 @@
 package message
 
 import (
+	"encoding/json"
 	"github.com/go-foreman/foreman/runtime/scheme"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
 
-type Decoder interface {
-	Decode(b []byte) (Object, error)
+type Marshaller interface {
+	Unmarshal(b []byte) (Object, error)
+	Marshal(obj Object) ([]byte, error)
 }
 
-func NewJsonDecoder(knownTypes scheme.KnownTypesRegistry) Decoder {
-	return &JsonDecoder{knownTypes: knownTypes}
+func NewJsonMarshaller(knownTypes scheme.KnownTypesRegistry) Marshaller {
+	return &jsonDecoder{knownTypes: knownTypes}
 }
 
 type DecoderErr struct {
@@ -22,11 +24,11 @@ func WithDecoderErr(err error) error {
 	return DecoderErr{err}
 }
 
-type JsonDecoder struct {
+type jsonDecoder struct {
 	knownTypes scheme.KnownTypesRegistry
 }
 
-func (j JsonDecoder) Decode(b []byte) (Object, error) {
+func (j jsonDecoder) Unmarshal(b []byte) (Object, error) {
 	unstructured := &Unstructured{}
 
 	if err := unstructured.UnmarshalJSON(b); err != nil {
@@ -70,4 +72,24 @@ func (j JsonDecoder) Decode(b []byte) (Object, error) {
 	}
 
 	return resObj, nil
+}
+
+func (j jsonDecoder) Marshal(obj Object) ([]byte, error) {
+	encodingTo := obj
+
+	if gk := obj.GroupKind(); gk.Empty() {
+		gk, err := j.knownTypes.ObjectKind(obj)
+		if err != nil {
+			return nil, WithDecoderErr(errors.Wrapf(err, "encoding %v", obj))
+		}
+		encodingTo.SetGroupKind(gk)
+	}
+
+	encodedBytes, err := json.Marshal(encodingTo)
+
+	if err != nil {
+		return nil,  WithDecoderErr(errors.Wrapf(err, "encoding obj %v, GK: %s", obj, encodingTo.GroupKind().String()))
+	}
+
+	return encodedBytes, nil
 }

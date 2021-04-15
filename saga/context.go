@@ -16,10 +16,10 @@ import (
 //Still its' not decided if this interface users should be able to implement
 type SagaContext interface {
 	//execution.MessageExecutionCtx
-	Message() *message.Message
+	Message() *message.ReceivedMessage
 	Context() context.Context
 	Valid() bool
-	Dispatch(message *message.Message, options ...endpoint.DeliveryOption)
+	Dispatch(payload message.Object, options ...endpoint.DeliveryOption)
 	Deliveries() []*Delivery
 	Return(options ...endpoint.DeliveryOption)
 	LogMessage(level log.Level, msg string)
@@ -37,7 +37,7 @@ type sagaCtx struct {
 	deliveries   []*Delivery
 }
 
-func (s sagaCtx) Message() *message.Message {
+func (s sagaCtx) Message() *message.ReceivedMessage {
 	return s.execCtx.Message()
 }
 
@@ -50,7 +50,11 @@ func (s sagaCtx) Valid() bool {
 }
 
 func (s sagaCtx) Return(options ...endpoint.DeliveryOption) {
-	s.Dispatch(s.Message(), options...)
+	s.execCtx.Return()
+	outcomingMsg := message.FromReceivedMsg(s.Message())
+	outcomingMsg.Headers()[SagaIdKey] = s.sagaInstance.ID()
+	s.execCtx.Return()
+	s.Dispatch(outcomingMsg.Payload(), options...)
 }
 
 func (s sagaCtx) LogMessage(lvl log.Level, msg string) {
@@ -61,24 +65,11 @@ func (s sagaCtx) SagaInstance() Instance {
 	return s.sagaInstance
 }
 
-func (s *sagaCtx) Dispatch(toDeliver *message.Message, options ...endpoint.DeliveryOption) {
-	toDeliver.Headers[SagaIdKey] = s.sagaInstance.ID()
+func (s *sagaCtx) Dispatch(toDeliver message.Object, options ...endpoint.DeliveryOption) {
 	s.deliveries = append(s.deliveries, &Delivery{
-		Message: toDeliver,
+		Payload: toDeliver,
 		Options: options,
 	})
-}
-
-func (s sagaCtx) deliver() error {
-	for _, delivery := range s.Deliveries() {
-		if err := s.execCtx.Send(delivery.Message, delivery.Options...); err != nil {
-			s.execCtx.LogMessage(log.ErrorLevel, fmt.Sprintf("error sending delivery for saga %s. Delivery: (%v). %s", s.SagaInstance().ID(), delivery, err))
-			return errors.Wrapf(err, "error sending delivery for saga %s. Delivery: (%v)", s.SagaInstance().ID(), delivery)
-		}
-		s.SagaInstance().AttachEvent(HistoryEvent{Metadata: delivery.Message.Metadata, Payload: delivery.Message.Payload, CreatedAt: time.Now()})
-	}
-
-	return nil
 }
 
 func (s sagaCtx) Deliveries() []*Delivery {
@@ -86,6 +77,6 @@ func (s sagaCtx) Deliveries() []*Delivery {
 }
 
 type Delivery struct {
-	Message *message.Message
+	Payload message.Object
 	Options []endpoint.DeliveryOption
 }

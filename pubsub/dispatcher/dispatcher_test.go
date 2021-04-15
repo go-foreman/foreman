@@ -189,8 +189,8 @@ func (n notStructType) GroupKind() scheme.GroupKind {
 	panic("implement me")
 }
 
-func (n notStructType) GetUID() string {
-	panic("implement me")
+func (n notStructType) SetGroupKind(gk *scheme.GroupKind) {
+
 }
 
 func assertThisValueExists(t *testing.T, expected execution.Executor, executors []execution.Executor) {

@@ -6,24 +6,24 @@ import (
 	"time"
 )
 
-func NewMockTransport() *mockTransport {
-	return &mockTransport{
+func NewStubTransport() *stubTransport {
+	return &stubTransport{
 		topics:       map[string]chan pkg.IncomingPkg{},
 		queueBinding: map[string][]string{},
 	}
 }
 
-type mockTransport struct {
+type stubTransport struct {
 	topics       map[string]chan pkg.IncomingPkg
 	queueBinding map[string][]string
 }
 
-func (m *mockTransport) CreateTopic(ctx context.Context, topic Topic) error {
+func (m *stubTransport) CreateTopic(ctx context.Context, topic Topic) error {
 	m.topics[topic.Name()] = make(chan pkg.IncomingPkg)
 	return nil
 }
 
-func (m *mockTransport) CreateQueue(ctx context.Context, queue Queue, queueBind ...QueueBind) error {
+func (m *stubTransport) CreateQueue(ctx context.Context, queue Queue, queueBind ...QueueBind) error {
 	topics, exist := m.queueBinding[queue.Name()]
 	if !exist {
 		topics = make([]string, 0)
@@ -38,7 +38,7 @@ func (m *mockTransport) CreateQueue(ctx context.Context, queue Queue, queueBind 
 	return nil
 }
 
-func (m *mockTransport) Consume(ctx context.Context, queues []Queue, options ...ConsumeOpts) (<-chan pkg.IncomingPkg, error) {
+func (m *stubTransport) Consume(ctx context.Context, queues []Queue, options ...ConsumeOpts) (<-chan pkg.IncomingPkg, error) {
 	income := make(chan pkg.IncomingPkg)
 
 	for _, q := range queues {
@@ -64,7 +64,7 @@ func (m *mockTransport) Consume(ctx context.Context, queues []Queue, options ...
 	return income, nil
 }
 
-func (m *mockTransport) Send(ctx context.Context, outboundPkg pkg.OutboundPkg, options ...SendOpts) error {
+func (m *stubTransport) Send(ctx context.Context, outboundPkg pkg.OutboundPkg, options ...SendOpts) error {
 	ch := m.topics[outboundPkg.Destination().DestinationTopic]
 	inc := inPkg{
 		payload:     outboundPkg.Payload(),
@@ -79,11 +79,11 @@ func (m *mockTransport) Send(ctx context.Context, outboundPkg pkg.OutboundPkg, o
 	return nil
 }
 
-func (m *mockTransport) Connect(context.Context) error {
+func (m *stubTransport) Connect(context.Context) error {
 	return nil
 }
 
-func (m *mockTransport) Disconnect(context.Context) error {
+func (m *stubTransport) Disconnect(context.Context) error {
 	return nil
 }
 

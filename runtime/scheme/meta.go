@@ -5,13 +5,19 @@ package scheme
 // serializers to set the kind, version, and group the object is represented as
 type Object interface {
 	GroupKind() GroupKind
+	SetGroupKind(gk *GroupKind)
 }
 
 type TypeMeta struct {
-	Kind string `json:"kind,omitempty"`
-	Group string `json:"group,omitempty"`
+	Kind string  `json:"kind,omitempty" protobuf:"bytes,1,opt,name=kind"`
+	Group string `json:"group,omitempty" protobuf:"bytes,2,opt,name=group"`
 }
 
-func (obj TypeMeta) GroupKind() GroupKind {
-	return GroupKind{Group: Group(obj.Group), Kind: obj.Kind}
+func (t TypeMeta) GroupKind() GroupKind {
+	return GroupKind{Group: Group(t.Group), Kind: t.Kind}
+}
+
+func (t *TypeMeta) SetGroupKind(gk *GroupKind) {
+	t.Group = gk.Group.String()
+	t.Kind = gk.Kind
 }

@@ -2,7 +2,6 @@ package endpoint
 
 import (
 	"context"
-	"encoding/json"
 	"github.com/go-foreman/foreman/pubsub/message"
 	"github.com/go-foreman/foreman/pubsub/transport"
 	"github.com/go-foreman/foreman/pubsub/transport/pkg"
@@ -13,42 +12,43 @@ import (
 type AmqpEndpoint struct {
 	amqpTransport transport.Transport
 	destination   pkg.DeliveryDestination
+	msgMarshaller message.Marshaller
 	name          string
 }
 
-func NewAmqpEndpoint(name string, amqpTransport transport.Transport, destination pkg.DeliveryDestination) Endpoint {
-	return &AmqpEndpoint{name: name, amqpTransport: amqpTransport, destination: destination}
+func NewAmqpEndpoint(name string, amqpTransport transport.Transport, destination pkg.DeliveryDestination, msgMarshaller message.Marshaller) Endpoint {
+	return &AmqpEndpoint{name: name, amqpTransport: amqpTransport, destination: destination, msgMarshaller: msgMarshaller}
 }
 
 func (a AmqpEndpoint) Name() string {
 	return a.name
 }
 
-func (a AmqpEndpoint) Send(ctx context.Context, message *message.OutcomingMessage, opts ...DeliveryOption) error {
+func (a AmqpEndpoint) Send(ctx context.Context, msg *message.OutcomingMessage, opts ...DeliveryOption) error {
 	deliveryOpts := &deliveryOptions{}
 
 	if opts != nil {
 		for _, opt := range opts {
 			if err := opt(deliveryOpts); err != nil {
-				return errors.Wrapf(err, "error compiling delivery options for message %s", message.Payload().GetUID())
+				return errors.Wrapf(err, "error compiling delivery options for message %s", msg.UID())
 			}
 		}
 	}
 
-	dataToSend, err := json.Marshal(message)
+	dataToSend, err := a.msgMarshaller.Marshal(msg.Payload())
 
 	if err != nil {
-		return errors.Wrapf(err, "error serializing message %s to json ", message.Payload().GetUID())
+		return errors.Wrapf(err, "error serializing message %s to json ", msg.UID())
 	}
 
-	toSend := pkg.NewOutboundPkg(dataToSend, "application/json", a.destination, message.Headers())
+	toSend := pkg.NewOutboundPkg(dataToSend, "application/json", a.destination, msg.Headers())
 
 	if deliveryOpts.delay != nil {
 	waiter:
 		for {
 			select {
 			case <-ctx.Done():
-				return errors.Errorf("Failed to send message %s. Was waiting for the delay and parent ctx closed.", message.Payload().GetUID())
+				return errors.Errorf("Failed to send message %s. Was waiting for the delay and parent ctx closed.", msg.UID())
 			case <-time.After(*deliveryOpts.delay):
 				break waiter //break for statement
 			}

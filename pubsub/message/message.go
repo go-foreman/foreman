@@ -2,6 +2,7 @@ package message
 
 import (
 	"github.com/go-foreman/foreman/runtime/scheme"
+	"github.com/google/uuid"
 	"time"
 )
 
@@ -36,23 +37,32 @@ func (m Headers) RegisterReturn() {
 
 type Object interface {
 	scheme.Object
-	GetUID() string
 }
 
 type ObjectMeta struct {
 	scheme.TypeMeta
-	UID string `json:"uid"`
-}
-
-func (o ObjectMeta) GetUID() string {
-	return o.UID
 }
 
 type ReceivedMessage struct {
+	uid string
 	headers Headers
 	payload Object
 	receivedAt time.Time
 	origin string
+}
+
+func NewReceivedMessage(uid string, payload Object, headers Headers, receivedAt time.Time, origin string) *ReceivedMessage {
+	return &ReceivedMessage{
+		uid: uid,
+		headers:    headers,
+		payload:    payload,
+		receivedAt: receivedAt,
+		origin:     origin,
+	}
+}
+
+func (m ReceivedMessage) UID() string {
+	return m.uid
 }
 
 func (m ReceivedMessage) Headers() Headers {
@@ -72,16 +82,21 @@ func (m ReceivedMessage) Origin() string {
 }
 
 type OutcomingMessage struct {
+	obj Object
+	uid string
 	headers Headers
-	payload Object
 }
 
 func (m OutcomingMessage) Headers() Headers {
 	return m.headers
 }
 
+func (m OutcomingMessage) UID() string {
+	return m.uid
+}
+
 func (m OutcomingMessage) Payload() Object {
-	return m.payload
+	return m.obj
 }
 
 //NewOutcomingMessage accepts only structs as payload. If you want to pass scalar data type - wrap it in a struct.
@@ -96,13 +111,23 @@ func NewOutcomingMessage(payload Object, passedOptions ...MsgOption) *OutcomingM
 		}
 	}
 
-	msg := &OutcomingMessage{payload: payload}
+	msg := &OutcomingMessage{uid: uuid.New().String(), obj: payload}
 
 	if opts.headers != nil {
 		msg.headers = opts.headers
 	}
 
+	msg.headers["uid"] = msg.UID()
+
 	return msg
+}
+
+func FromReceivedMsg(received *ReceivedMessage) *OutcomingMessage {
+	return &OutcomingMessage{
+		headers: received.Headers(),
+		uid: received.UID(),
+		obj: received.Payload(),
+	}
 }
 
 type MsgOption func(attr *opts)

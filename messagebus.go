@@ -18,34 +18,39 @@ type Component interface {
 }
 
 // SubscriberOption allows to provide a few options for configuring Subscriber
-type SubscriberOption func(subscriberOpts *subscriberOpts, c *container)
+type SubscriberOption func(subscriberOpts *subscriberOpts, c *subscriberContainer)
 
 type subscriberOpts struct {
 	subscriber subscriber.Subscriber
 	transport  transport.Transport
 }
 
+type subscriberContainer struct {
+	msgMarshaller message.Marshaller
+	processor     subscriber.Processor
+}
+
 // WithSubscriber option allows to specify your own implementation of Subscriber for MessageBus
 func WithSubscriber(subscriber subscriber.Subscriber) SubscriberOption {
-	return func(subscriberOpts *subscriberOpts, c *container) {
+	return func(subscriberOpts *subscriberOpts, c *subscriberContainer) {
 		subscriberOpts.subscriber = subscriber
 	}
 }
 
 // DefaultWithTransport option allows to specify your own transport which will be used in the default subscriber
 func DefaultWithTransport(transport transport.Transport) SubscriberOption {
-	return func(subscriberOpts *subscriberOpts, c *container) {
+	return func(subscriberOpts *subscriberOpts, c *subscriberContainer) {
 		subscriberOpts.transport = transport
 	}
 }
 
 // SubscriberFactory is a function which gives you an access to default Processor and message.Decoder, these are needed when you implement own Subscriber
-type SubscriberFactory func(processor subscriber.Processor, decoder message.Decoder) subscriber.Subscriber
+type SubscriberFactory func(processor subscriber.Processor, marshaller message.Marshaller) subscriber.Subscriber
 
 // WithSubscriberFactory provides a way to construct your own Subscriber and pass it along to MessageBus
 func WithSubscriberFactory(factory SubscriberFactory) SubscriberOption {
-	return func(subscriberOpts *subscriberOpts, c *container) {
-		subscriberOpts.subscriber = factory(c.processor, c.messageDecoder)
+	return func(subscriberOpts *subscriberOpts, c *subscriberContainer) {
+		subscriberOpts.subscriber = factory(c.processor, c.msgMarshaller)
 	}
 }
 
@@ -57,7 +62,7 @@ type container struct {
 	messagesDispatcher        dispatcher.Dispatcher
 	router                    endpoint.Router
 	logger                    log.Logger
-	messageDecoder            message.Decoder
+	msgMarshaller             message.Marshaller
 	processor                 subscriber.Processor
 	scheme                    scheme.KnownTypesRegistry
 	components                []Component
@@ -84,13 +89,6 @@ func WithDispatcher(dispatcher dispatcher.Dispatcher) ConfigOption {
 	}
 }
 
-// WithMessageDecoder allows to provide another message.Decoder implementation
-func WithMessageDecoder(decoder message.Decoder) ConfigOption {
-	return func(c *container) {
-		c.messageDecoder = decoder
-	}
-}
-
 // WithSchemeRegistry allows to specify scheme scheme.KnownTypesRegistry
 func WithSchemeRegistry(scheme scheme.KnownTypesRegistry) ConfigOption {
 	return func(c *container) {
@@ -105,8 +103,15 @@ func WithMessageExecutionFactory(factory execution.MessageExecutionCtxFactory) C
 	}
 }
 
+func WithLogger(logger log.Logger) ConfigOption {
+	return func(c *container) {
+		c.logger = logger
+	}
+}
+
 // MessageBus is a main component, kind of a container which aggregates other components
 type MessageBus struct {
+	marshaller         message.Marshaller
 	messagesDispatcher dispatcher.Dispatcher
 	router             endpoint.Router
 	scheme             scheme.KnownTypesRegistry
@@ -115,60 +120,57 @@ type MessageBus struct {
 }
 
 // NewMessageBus constructs MessageBus, allows to specify logger, choose subscriber or use default with transport and other options which configure implementations of other important parts
-func NewMessageBus(logger log.Logger, subscriberOption SubscriberOption, configOpts ...ConfigOption) (*MessageBus, error) {
-	b := &MessageBus{logger: logger}
+func NewMessageBus(logger log.Logger, msgMarshaller message.Marshaller, scheme scheme.KnownTypesRegistry, subscriberOption SubscriberOption, configOpts ...ConfigOption) (*MessageBus, error) {
+	mBus := &MessageBus{logger: logger, marshaller: msgMarshaller, scheme: scheme}
 
-	opts := &container{}
+	container := &container{
+		msgMarshaller: msgMarshaller,
+	}
 	for _, config := range configOpts {
-		config(opts)
+		config(container)
 	}
 
-	if opts.scheme == nil {
-		opts.scheme = scheme.NewKnownTypesRegistry()
+	if container.messagesDispatcher == nil {
+		container.messagesDispatcher = dispatcher.NewDispatcher()
 	}
 
-	if opts.messagesDispatcher == nil {
-		opts.messagesDispatcher = dispatcher.NewDispatcher()
+	if container.router == nil {
+		container.router = endpoint.NewRouter()
 	}
 
-	if opts.router == nil {
-		opts.router = endpoint.NewRouter()
+	if container.messageExuctionCtxFactory == nil {
+		container.messageExuctionCtxFactory = execution.NewMessageExecutionCtxFactory(container.router, logger)
 	}
 
-	if opts.messageExuctionCtxFactory == nil {
-		opts.messageExuctionCtxFactory = execution.NewMessageExecutionCtxFactory(opts.router, logger)
+	if container.processor == nil {
+		container.processor = subscriber.NewMessageProcessor(msgMarshaller, container.messageExuctionCtxFactory, container.messagesDispatcher, logger)
 	}
 
-	if opts.messageDecoder == nil {
-		opts.messageDecoder = message.NewJsonDecoder(opts.scheme)
-	}
-
-	if opts.processor == nil {
-		opts.processor = subscriber.NewMessageProcessor(opts.messageDecoder, opts.messageExuctionCtxFactory, opts.messagesDispatcher, logger)
-	}
-
-	b.messagesDispatcher = opts.messagesDispatcher
-	b.router = opts.router
-	b.scheme = opts.scheme
+	mBus.messagesDispatcher = container.messagesDispatcher
+	mBus.router = container.router
+	mBus.scheme = container.scheme
 
 	subscriberOpt := &subscriberOpts{}
-	subscriberOption(subscriberOpt, opts)
+	subscriberOption(subscriberOpt, &subscriberContainer{
+		msgMarshaller: msgMarshaller,
+		processor:     container.processor,
+	})
 
 	if subscriberOpt.subscriber != nil {
-		b.subscriber = subscriberOpt.subscriber
+		mBus.subscriber = subscriberOpt.subscriber
 	} else if subscriberOpt.transport != nil {
-		b.subscriber = subscriber.NewSubscriber(subscriberOpt.transport, opts.processor, logger)
+		mBus.subscriber = subscriber.NewSubscriber(subscriberOpt.transport, container.processor, logger)
 	} else {
 		return nil, errors.New("subscriber is nil")
 	}
 
-	for _, component := range opts.components {
-		if err := component.Init(b); err != nil {
+	for _, component := range container.components {
+		if err := component.Init(mBus); err != nil {
 			return nil, err
 		}
 	}
 
-	return b, nil
+	return mBus, nil
 }
 
 // Dispatcher returns an instance of dispatcher.Dispatcher

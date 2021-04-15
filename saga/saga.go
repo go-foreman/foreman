@@ -175,7 +175,7 @@ func (i instanceStatus) FailedOnEvent() interface{} {
 }
 
 type HistoryEvent struct {
-	message.Metadata
+	UID          string      `json:"uid"`
 	CreatedAt    time.Time   `json:"created_at"`
 	Payload      interface{} `json:"payload"`
 	OriginSource string      `json:"origin_source"`
@@ -188,27 +188,25 @@ type Saga interface {
 	Start(execCtx SagaContext) error
 	Compensate(execCtx SagaContext) error
 	Recover(execCtx SagaContext) error
-	EventHandlers() map[string]Executor
+	EventHandlers() map[scheme.GroupKind]Executor
 }
 
 type BaseSaga struct {
-	adjacencyMap map[string]Executor
+	adjacencyMap map[scheme.GroupKind]Executor
 }
 
 type Executor func(execCtx SagaContext) error
 
-func (b *BaseSaga) AddEventHandler(event interface{}, handler Executor) *BaseSaga {
+func (b *BaseSaga) AddEventHandler(ev message.Object, handler Executor) *BaseSaga {
 	//lazy initialization
 	if b.adjacencyMap == nil {
-		b.adjacencyMap = make(map[string]Executor)
+		b.adjacencyMap = make(map[scheme.GroupKind]Executor)
 	}
 
-	eventKey := scheme.WithStruct(event)
-
-	b.adjacencyMap[eventKey()] = handler
+	b.adjacencyMap[ev.GroupKind()] = handler
 	return b
 }
 
-func (b BaseSaga) EventHandlers() map[string]Executor {
+func (b BaseSaga) EventHandlers() map[scheme.GroupKind]Executor {
 	return b.adjacencyMap
 }

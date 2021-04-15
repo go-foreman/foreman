@@ -13,6 +13,7 @@ type Endpoint interface {
 
 type deliveryOptions struct {
 	delay *time.Duration
+	headers message.Headers
 }
 
 func WithDelay(delay time.Duration) DeliveryOption {

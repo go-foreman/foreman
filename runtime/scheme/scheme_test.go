@@ -54,7 +54,7 @@ func TestKnownTypesRegistry_AddKnownTypeWithName(t *testing.T) {
 	})
 
 	t.Run("group is empty", func(t *testing.T) {
-		expected := "group is required on all types: CustomKind *scheme.SomeTestType"
+		expected := "group is required on all types: CustomKind scheme.SomeTestType"
 		require.PanicsWithValue(t, expected, func() {
 			knownRegistry.AddKnownTypeWithName(GroupKind{
 				Group:   "",
@@ -75,7 +75,7 @@ func TestKnownTypesRegistry_AddKnownTypeWithName(t *testing.T) {
 
 	t.Run("object is not struct type", func(t *testing.T) {
 		wrongType := notStructType("xxx")
-		assert.PanicsWithValue(t, "All types must be pointers to structs", func() {
+		assert.PanicsWithValue(t, "all types must be pointers to structs", func() {
 			knownRegistry.AddKnownTypeWithName(GroupKind{
 				Group:   group,
 				Kind:    "WrongKind",
@@ -126,5 +126,9 @@ type notStructType string
 
 func (n notStructType) GroupKind() GroupKind {
 	panic("implement me")
+}
+
+func (n notStructType) SetGroupKind(gk *GroupKind) {
+
 }
 

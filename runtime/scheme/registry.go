@@ -30,11 +30,7 @@ type knownTypesRegistry struct {
 
 func (r *knownTypesRegistry) AddKnownTypes(g Group, types ...Object) {
 	for _, obj := range types {
-		t := reflect.TypeOf(obj)
-		if t.Kind() != reflect.Ptr {
-			panic("All types must be pointers to structs.")
-		}
-		t = t.Elem()
+		t := getStructType(obj)
 		r.AddKnownTypeWithName(GroupKind{
 			Group:   g,
 			Kind:    t.Name(),
@@ -43,19 +39,10 @@ func (r *knownTypesRegistry) AddKnownTypes(g Group, types ...Object) {
 }
 
 func (r *knownTypesRegistry) AddKnownTypeWithName(gk GroupKind, obj Object) {
-	structType := reflect.TypeOf(obj)
+	structType := getStructType(obj)
 
 	if len(gk.Group) == 0 {
 		panic(fmt.Sprintf("group is required on all types: %s %v", gk, structType))
-	}
-
-	if structType.Kind() != reflect.Ptr {
-		structType = reflect.PtrTo(structType)
-	}
-
-	structType = structType.Elem()
-	if structType.Kind() != reflect.Struct {
-		panic("All types must be pointers to structs")
 	}
 
 	if oldT, found := r.gvkToType[gk]; found && oldT != structType {
@@ -64,6 +51,7 @@ func (r *knownTypesRegistry) AddKnownTypeWithName(gk GroupKind, obj Object) {
 
 	r.gvkToType[gk] = structType
 	r.typeToGVK[structType] = gk
+	obj.SetGroupKind(&gk)
 }
 
 func (r *knownTypesRegistry) NewObject(gk GroupKind) (Object, error) {
@@ -77,11 +65,26 @@ func (r *knownTypesRegistry) NewObject(gk GroupKind) (Object, error) {
 }
 
 func (r *knownTypesRegistry) ObjectKind(obj Object) (*GroupKind, error) {
-	structType := reflect.TypeOf(obj)
+	structType := getStructType(obj)
 	gk, ok := r.typeToGVK[structType]
 	if !ok {
 		return nil, errors.Errorf("no kind is registered in schema for the type %s", structType.Name())
 	}
 
 	return &gk, nil
+}
+
+func getStructType(obj Object) reflect.Type {
+	structType := reflect.TypeOf(obj)
+
+	if structType.Kind() != reflect.Ptr {
+		structType = reflect.PtrTo(structType)
+	}
+
+	structType = structType.Elem()
+	if structType.Kind() != reflect.Struct {
+		panic("all types must be pointers to structs")
+	}
+
+	return structType
 }
