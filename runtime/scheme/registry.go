@@ -93,23 +93,25 @@ func getStructType(obj Object) reflect.Type {
 		panic("all types must be pointers to structs")
 	}
 
-	if hasDeepEmbeddedGK(structType) {
-		panic("struct has embedded another struct on the first level which implement Object interface. need implement explicitly Object interface(embed TypeMeta struct)")
-	}
+	//if hasDeepEmbeddedGK(structType) {
+	//	panic("struct has embedded another struct on the first level which implement Object interface. need implement explicitly Object interface(embed TypeMeta struct)")
+	//}
 
 	return structType
 }
 
-var objectType = reflect.TypeOf((*Object)(nil)).Elem()
+//var objectType = reflect.TypeOf((*Object)(nil)).Elem()
 
-func hasDeepEmbeddedGK(structType reflect.Type) bool {
-	for i := 0; i < structType.NumField(); i++ {
-		if structType := structType.Field(i).Type; structType.Kind() == reflect.Struct {
-			if structType.Implements(objectType) {
-				return true
-			}
-		}
-	}
-
-	return false
-}
+//func hasDeepEmbeddedGK(structType reflect.Type) bool {
+//	for i := 0; i < structType.NumField(); i++ {
+//		if structType := structType.Field(i).Type; structType.Kind() == reflect.Struct {
+//			panic(structType.Name())
+//			_, ok := reflect.New(structType).Interface().(Object)
+//			if ok {
+//				return true
+//			}
+//		}
+//	}
+//
+//	return false
+//}

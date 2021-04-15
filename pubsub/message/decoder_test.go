@@ -17,6 +17,11 @@ type SomeTestType struct {
 	A int
 }
 
+type SomeTypeWithNestedType struct {
+	ObjectMeta
+	Nested Object
+}
+
 func TestJsonDecoder(t *testing.T) {
 	knownRegistry := scheme.NewKnownTypesRegistry()
 	decoder := NewJsonMarshaller(knownRegistry)
@@ -82,5 +87,9 @@ func TestJsonDecoder(t *testing.T) {
 		decodedObj, err := decoder.Unmarshal(nil)
 		require.EqualError(t, err, "unexpected end of JSON input")
 		require.Nil(t, decodedObj)
+	})
+
+	t.Run("encode and decode type with another nested object", func(t *testing.T) {
+		knownRegistry.AddKnownTypes(group, &SomeTypeWithNestedType{})
 	})
 }

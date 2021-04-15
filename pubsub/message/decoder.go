@@ -79,6 +79,7 @@ func (j jsonDecoder) Unmarshal(b []byte) (Object, error) {
 func (j jsonDecoder) Marshal(obj Object) ([]byte, error) {
 	encodingTo := obj
 
+	//todo what if obj has embedded obj with already filled GroupKind? this obj will be marshalled with wrong GK
 	if gk := obj.GroupKind(); gk.Empty() {
 		gk, err := j.knownTypes.ObjectKind(obj)
 		if err != nil {

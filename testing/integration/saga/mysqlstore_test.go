@@ -90,7 +90,7 @@ func (m *mysqlStoreTest) TestMysqlStore() {
 
 		require.NoError(t, mysqlStore.Delete(ctx, sagaInstance.UID()))
 
-		unregisteredSaga := &UnregisteredSaga{WorkflowSaga: *workflowSaga}
+		unregisteredSaga := &UnregisteredSaga{WorkflowSaga: WorkflowSaga{Field: "x", Value: "y"}}
 		unregisteredSagaInstance := saga.NewSagaInstance(uuid.New().String(), "", unregisteredSaga)
 		err = mysqlStore.Create(ctx, unregisteredSagaInstance)
 		require.Error(t, err)
@@ -229,7 +229,6 @@ func (a FilterSaga) Recover(execCtx saga.SagaContext) error {
 }
 
 type UnregisteredSaga struct {
-	message.ObjectMeta
 	WorkflowSaga
 }
 
