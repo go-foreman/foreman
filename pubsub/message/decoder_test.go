@@ -17,10 +17,17 @@ type SomeTestType struct {
 	A int
 }
 
-type SomeTypeWithNestedType struct {
-	ObjectMeta
-	Nested Object
-}
+//type SomeTypeWithNestedType struct {
+//	ObjectMeta
+//	Nested Object
+//	Value int
+//}
+//
+//type WrapperType struct {
+//	ObjectMeta
+//	Nested Object
+//	Value int
+//}
 
 func TestJsonDecoder(t *testing.T) {
 	knownRegistry := scheme.NewKnownTypesRegistry()
@@ -89,7 +96,27 @@ func TestJsonDecoder(t *testing.T) {
 		require.Nil(t, decodedObj)
 	})
 
-	t.Run("encode and decode type with another nested object", func(t *testing.T) {
-		knownRegistry.AddKnownTypes(group, &SomeTypeWithNestedType{})
-	})
+	//t.Run("encode and decode type with another nested object", func(t *testing.T) {
+	//	knownRegistry.AddKnownTypes(group, &SomeTestType{})
+	//	knownRegistry.AddKnownTypes(group, &SomeTypeWithNestedType{})
+	//	knownRegistry.AddKnownTypes(group, &WrapperType{})
+	//	instance := &WrapperType{
+	//		Nested: &SomeTypeWithNestedType{
+	//			Nested:     &SomeTestType{
+	//				A: 1,
+	//			},
+	//			Value: 2,
+	//		},
+	//		Value: 3,
+	//	}
+	//
+	//	marshaled, err := decoder.Marshal(instance)
+	//	require.NoError(t, err)
+	//	assert.NotEmpty(t, marshaled)
+	//
+	//	decodedObj, err := decoder.Unmarshal(marshaled)
+	//	require.NoError(t, err)
+	//	assert.EqualValues(t, instance, decodedObj)
+	//})
 }
+

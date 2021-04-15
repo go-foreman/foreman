@@ -71,8 +71,6 @@ func (j jsonDecoder) Unmarshal(b []byte) (Object, error) {
 		return nil, WithDecoderErr(errors.Errorf("error converting obj %s into Object, it does not implement interface", gk.String()))
 	}
 
-	//resObj.SetGroupKind(&gk)
-
 	return resObj, nil
 }
 
@@ -80,19 +78,44 @@ func (j jsonDecoder) Marshal(obj Object) ([]byte, error) {
 	encodingTo := obj
 
 	//todo what if obj has embedded obj with already filled GroupKind? this obj will be marshalled with wrong GK
-	if gk := obj.GroupKind(); gk.Empty() {
-		gk, err := j.knownTypes.ObjectKind(obj)
-		if err != nil {
-			return nil, WithDecoderErr(errors.Wrapf(err, "encoding %v", obj))
-		}
-		encodingTo.SetGroupKind(gk)
+	if err := j.setGroupKind(obj); err != nil {
+		return nil, errors.Wrapf(err, "setting GK recursively for %v", obj)
 	}
 
 	encodedBytes, err := json.Marshal(encodingTo)
 
 	if err != nil {
-		return nil,  WithDecoderErr(errors.Wrapf(err, "encoding obj %v, GK: %s", obj, encodingTo.GroupKind().String()))
+		return nil, WithDecoderErr(errors.Wrapf(err, "encoding obj %v, GK: %s", obj, encodingTo.GroupKind().String()))
 	}
 
 	return encodedBytes, nil
+}
+
+//var objectType = reflect.TypeOf((*Object)(nil)).Elem()
+
+func(j jsonDecoder) setGroupKind(obj Object) error {
+	if gk := obj.GroupKind(); gk.Empty() {
+		gk, err := j.knownTypes.ObjectKind(obj)
+		if err != nil {
+			return WithDecoderErr(errors.Wrapf(err, "encoding %v", obj))
+		}
+		obj.SetGroupKind(gk)
+	}
+
+	//structVal := reflect.ValueOf(obj)
+	//structType := structVal.Type().Elem()
+	//
+	//for i := 0; i < structType.NumField(); i++ {
+	//	if currentField := structType.Field(i).Type; currentField.Kind() == reflect.Interface {
+	//		if currentField.Implements(objectType) {
+	//			next, ok := structVal.Elem().Field(i).Interface().(Object)
+	//			if !ok {
+	//				return WithDecoderErr(errors.Errorf("converting %s to Object interface", structType.String()))
+	//			}
+	//			return j.setGroupKind(next)
+	//		}
+	//	}
+	//}
+
+	return nil
 }

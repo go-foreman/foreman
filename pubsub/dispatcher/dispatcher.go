@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/go-foreman/foreman/pubsub/message"
 	"github.com/go-foreman/foreman/pubsub/message/execution"
+	"github.com/go-foreman/foreman/runtime/scheme"
 	"reflect"
 )
 
@@ -28,7 +29,7 @@ type dispatcher struct {
 }
 
 func (d dispatcher) Match(obj message.Object) []execution.Executor {
-	structType := getStructType(obj)
+	structType := scheme.GetStructType(obj)
 	handlers, exists := d.handlers[structType]
 
 	if exists && len(handlers) > 0 {
@@ -61,7 +62,7 @@ func (d dispatcher) Match(obj message.Object) []execution.Executor {
 }
 
 func (d *dispatcher) SubscribeForCmd(obj message.Object, executor execution.Executor) Dispatcher {
-	structType := getStructType(obj)
+	structType := scheme.GetStructType(obj)
 
 	if _, subscribedForAnEvent := d.listeners[structType]; subscribedForAnEvent {
 		panic(fmt.Sprintf("obj %s already subscribed for an event listener", structType.String()))
@@ -83,7 +84,7 @@ func (d *dispatcher) SubscribeForCmd(obj message.Object, executor execution.Exec
 }
 
 func (d *dispatcher) SubscribeForEvent(obj message.Object, executor execution.Executor) Dispatcher {
-	structType := getStructType(obj)
+	structType := scheme.GetStructType(obj)
 
 	if _, subscribedForACmd := d.handlers[structType]; subscribedForACmd {
 		panic(fmt.Sprintf("obj %s already subscribed for a cmd handler", structType.String()))
@@ -117,19 +118,4 @@ func (d *dispatcher) SubscribeForAllEvents(executor execution.Executor) Dispatch
 
 	d.allEvsListeners = append(d.allEvsListeners, executor)
 	return d
-}
-
-func getStructType(obj message.Object) reflect.Type {
-	structType := reflect.TypeOf(obj)
-
-	if structType.Kind() != reflect.Ptr {
-		structType = reflect.PtrTo(structType)
-	}
-
-	structType = structType.Elem()
-	if structType.Kind() != reflect.Struct {
-		panic("all types must be pointers to structs")
-	}
-
-	return structType
 }

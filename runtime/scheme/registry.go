@@ -30,7 +30,7 @@ type knownTypesRegistry struct {
 
 func (r *knownTypesRegistry) AddKnownTypes(g Group, types ...Object) {
 	for _, obj := range types {
-		structType := getStructType(obj)
+		structType := GetStructType(obj)
 		r.addKnownTypeWithName(GroupKind{
 			Group:   g,
 			Kind:    structType.Name(),
@@ -39,7 +39,7 @@ func (r *knownTypesRegistry) AddKnownTypes(g Group, types ...Object) {
 }
 
 func (r *knownTypesRegistry) AddKnownTypeWithName(gk GroupKind, obj Object) {
-	structType := getStructType(obj)
+	structType := GetStructType(obj)
 	r.addKnownTypeWithName(gk, obj, structType)
 }
 
@@ -50,11 +50,14 @@ func (r *knownTypesRegistry) NewObject(gk GroupKind) (Object, error) {
 		return nil, errors.Errorf("type %s is not registered in KnownTypes", gk.String())
 	}
 
-	return reflect.New(t).Interface().(Object), nil
+	obj := reflect.New(t).Interface().(Object)
+	obj.SetGroupKind(&gk)
+
+	return obj, nil
 }
 
 func (r *knownTypesRegistry) ObjectKind(obj Object) (*GroupKind, error) {
-	structType := getStructType(obj)
+	structType := GetStructType(obj)
 	gk, ok := r.typeToGVK[structType]
 	if !ok {
 		return nil, errors.Errorf("no kind is registered in schema for the type %s", structType.Name())
@@ -81,7 +84,7 @@ func (r *knownTypesRegistry) addKnownTypeWithName(gk GroupKind, obj Object, stru
 	obj.SetGroupKind(&gk)
 }
 
-func getStructType(obj Object) reflect.Type {
+func GetStructType(obj Object) reflect.Type {
 	structType := reflect.TypeOf(obj)
 
 	if structType.Kind() != reflect.Ptr {

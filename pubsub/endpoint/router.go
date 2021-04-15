@@ -2,6 +2,7 @@ package endpoint
 
 import (
 	"github.com/go-foreman/foreman/pubsub/message"
+	"github.com/go-foreman/foreman/runtime/scheme"
 	"reflect"
 )
 
@@ -22,31 +23,16 @@ type router struct {
 
 func (r *router) RegisterEndpoint(endpoint Endpoint, objects... message.Object) {
 	for _, obj := range objects {
-		structType := getStructType(obj)
+		structType := scheme.GetStructType(obj)
 		r.routes[structType] = append(r.routes[structType], endpoint)
 	}
 }
 
 func (r router) Route(obj message.Object) []Endpoint {
-	structType := getStructType(obj)
+	structType := scheme.GetStructType(obj)
 	if routes, ok := r.routes[structType]; ok {
 		return routes
 	}
 
 	return []Endpoint{}
-}
-
-func getStructType(obj message.Object) reflect.Type {
-	structType := reflect.TypeOf(obj)
-
-	if structType.Kind() != reflect.Ptr {
-		structType = reflect.PtrTo(structType)
-	}
-
-	structType = structType.Elem()
-	if structType.Kind() != reflect.Struct {
-		panic("All types must be pointers to structs.")
-	}
-
-	return structType
 }
