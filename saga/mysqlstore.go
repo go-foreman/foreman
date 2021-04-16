@@ -425,7 +425,7 @@ func (s mysqlStore) instanceFromModel(sagaData sagaSqlModel) (*sagaInstance, err
 	if len(sagaData.LastFailedMsg) > 0 {
 		sagaInstance.instanceStatus.lastFailedEv, err = s.msgMarshaller.Unmarshal(sagaData.LastFailedMsg)
 		if err != nil {
-			return nil, errors.Wrapf(err, "unmarshaling last failed ev %s for saga %s", sagaData.LastFailedMsg, sagaData.ID)
+			return nil, errors.Wrapf(err, "unmarshaling last failed ev %v for saga %s", sagaData.LastFailedMsg, sagaData.ID.String)
 		}
 	}
 
