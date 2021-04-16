@@ -15,12 +15,12 @@ ENV_LOCAL_TEST=\
 
 
 docker-start:
-	@docker-compose up -d
+	@docker compose up -d
 	@echo "---Docker compose started"
 
 # shutting down docker components
 docker-stop:
-	@docker-compose down
+	@docker compose down
 	@echo "---Docker compose stopped"
 
 docker-clean:
