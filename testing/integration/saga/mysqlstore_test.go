@@ -113,7 +113,7 @@ func (m *mysqlStoreTest) TestMysqlStore() {
 		someEv := &SomeEvent{Field: "field"}
 
 		sagaInstance = fetchedSagaInstance
-		fetchedSagaInstance.AttachEvent(someEv, "originSource", uuid.New().String())
+		fetchedSagaInstance.AttachEvent(someEv, saga.WithOrigin("origin"), saga.WithTraceUID(uuid.New().String()))
 
 		err = mysqlStore.Update(ctx, fetchedSagaInstance)
 		require.Error(t, err)

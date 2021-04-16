@@ -144,14 +144,17 @@ func (s mysqlStore) Update(ctx context.Context, sagaInstance Instance) error {
 				return errors.WithStack(err)
 			}
 
-			_, err = tx.Exec(fmt.Sprintf("INSERT INTO %v (uid, saga_uid, name, status, payload, origin, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);", sagaHistoryTableName),
+			_, err = tx.Exec(fmt.Sprintf("INSERT INTO %v (uid, saga_uid, name, status, payload, origin, created_at, trace_uid) VALUES (?, ?, ?, ?, ?, ?, ?, ?);", sagaHistoryTableName),
 				ev.UID,
 				sagaInstance.UID(),
 				ev.Payload.GroupKind().String(),
 				ev.SagaStatus,
 				payload,
 				ev.OriginSource,
-				ev.CreatedAt)
+				ev.CreatedAt,
+				ev.TraceUID,
+			)
+
 			if err != nil {
 				if rErr := tx.Rollback(); rErr != nil {
 					return errors.Wrapf(rErr, "error rollback when %s", err)
