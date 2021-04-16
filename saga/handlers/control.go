@@ -45,7 +45,7 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 		}
 
 		if err := h.store.Create(ctx, sagaInstance); err != nil {
-			return errors.Wrapf(err, "error  saving created saga `%s` with id %s to store", cmd.Saga.GroupKind().String(), cmd.SagaId)
+			return errors.Wrapf(err, "error  saving created saga `%s` with id %s to store", cmd.Saga.GroupKind().String(), cmd.SagaUID)
 		}
 
 		sagaCtx = sagaPkg.NewSagaCtx(execCtx, sagaInstance)
@@ -55,17 +55,17 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 		}
 
 	case *contracts.RecoverSagaCommand:
-		if err := h.mutex.Lock(ctx, cmd.SagaId); err != nil {
+		if err := h.mutex.Lock(ctx, cmd.SagaUID); err != nil {
 			return errors.WithStack(err)
 		}
 
 		defer func() {
-			if err := h.mutex.Release(ctx, cmd.SagaId); err != nil {
+			if err := h.mutex.Release(ctx, cmd.SagaUID); err != nil {
 				h.logger.Log(log.ErrorLevel, err)
 			}
 		}()
 
-		sagaInstance, err = h.fetchSaga(ctx, cmd.SagaId)
+		sagaInstance, err = h.fetchSaga(ctx, cmd.SagaUID)
 
 		if err != nil {
 			return errors.WithStack(err)
@@ -83,17 +83,17 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 		}
 
 	case *contracts.CompensateSagaCommand:
-		if err := h.mutex.Lock(ctx, cmd.SagaId); err != nil {
+		if err := h.mutex.Lock(ctx, cmd.SagaUID); err != nil {
 			return errors.WithStack(err)
 		}
 
 		defer func() {
-			if err := h.mutex.Release(ctx, cmd.SagaId); err != nil {
+			if err := h.mutex.Release(ctx, cmd.SagaUID); err != nil {
 				h.logger.Log(log.ErrorLevel, err)
 			}
 		}()
 
-		sagaInstance, err = h.fetchSaga(ctx, cmd.SagaId)
+		sagaInstance, err = h.fetchSaga(ctx, cmd.SagaUID)
 
 		if err != nil {
 			return errors.WithStack(err)
@@ -132,7 +132,7 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 
 //saga is map[string]interface{} on this step
 func (h SagaControlHandler) createSaga(startCmd *contracts.StartSagaCommand) (sagaPkg.Instance, error) {
-	if startCmd.SagaId == "" {
+	if startCmd.SagaUID == "" {
 		return nil, errors.Errorf("sagaId is empty")
 	}
 
@@ -146,7 +146,7 @@ func (h SagaControlHandler) createSaga(startCmd *contracts.StartSagaCommand) (sa
 		return nil, errors.Errorf("error asserting that startCmd.Saga is Saga type")
 	}
 
-	return sagaPkg.NewSagaInstance(startCmd.SagaId, startCmd.ParentId, saga), nil
+	return sagaPkg.NewSagaInstance(startCmd.SagaUID, startCmd.ParentUID, saga), nil
 }
 
 func (h SagaControlHandler) fetchSaga(ctx context.Context, sagaId string) (sagaPkg.Instance, error) {

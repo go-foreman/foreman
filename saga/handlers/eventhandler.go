@@ -111,7 +111,7 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 		if sagaInstance.ParentID() != "" {
 			e.sagaUIDSvc.AddSagaId(execCtx.Message().Headers(), sagaInstance.ParentID())
 
-			return execCtx.Send(message.NewOutcomingMessage(&contracts.SagaChildCompletedEvent{SagaId: sagaInstance.UID()}, message.WithHeaders(execCtx.Message().Headers())))
+			return execCtx.Send(message.NewOutcomingMessage(&contracts.SagaChildCompletedEvent{SagaUID: sagaInstance.UID()}, message.WithHeaders(execCtx.Message().Headers())))
 		}
 	}
 

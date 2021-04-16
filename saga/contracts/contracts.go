@@ -12,27 +12,27 @@ const (
 // StartSagaCommand once received will create SagaInstance, save it to Store and Start()
 type StartSagaCommand struct {
 	message.ObjectMeta
-	SagaId   string      `json:"saga_id"`
-	ParentId string      `json:"parent_id"`
-	Saga     message.Object   `json:"saga"`
+	SagaUID   string         `json:"saga_uid"`
+	ParentUID string         `json:"parent_uid"`
+	Saga      message.Object `json:"saga"`
 }
 
 type RecoverSagaCommand struct {
 	message.ObjectMeta
-	SagaId string `json:"saga_id"`
+	SagaUID string `json:"saga_uid"`
 }
 
 type CompensateSagaCommand struct {
 	message.ObjectMeta
-	SagaId string `json:"saga_id"`
+	SagaUID string `json:"saga_uid"`
 }
 
 type SagaCompletedEvent struct {
 	message.ObjectMeta
-	SagaId string `json:"saga_id"`
+	SagaUID string `json:"saga_uid"`
 }
 
 type SagaChildCompletedEvent struct {
 	message.ObjectMeta
-	SagaId string `json:"saga_id"`
+	SagaUID string `json:"saga_uid"`
 }
