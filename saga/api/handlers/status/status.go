@@ -12,7 +12,7 @@ import (
 )
 
 type StatusResponse struct {
-	SagaId  string      `json:"saga_id"`
+	SagaUID string      `json:"saga_uid"`
 	Status  string      `json:"status"`
 	Payload interface{} `json:"payload"`
 	Events  []SagaEvent `json:"events"`
@@ -52,7 +52,7 @@ func (s statusService) GetStatus(ctx context.Context, sagaId string) (*StatusRes
 		events[i] = SagaEvent{ev}
 	}
 
-	return &StatusResponse{SagaId: sagaId, Status: sagaInstance.Status().String(), Payload: sagaInstance.Saga(), Events: events}, nil
+	return &StatusResponse{SagaUID: sagaId, Status: sagaInstance.Status().String(), Payload: sagaInstance.Saga(), Events: events}, nil
 }
 
 func (s statusService) GetFilteredBy(ctx context.Context, sagaId, status, sagaName string) ([]*StatusResponse, error) {
@@ -91,7 +91,7 @@ func (s statusService) GetFilteredBy(ctx context.Context, sagaId, status, sagaNa
 		}
 
 		resp[i] = &StatusResponse{
-			SagaId:  instance.UID(),
+			SagaUID: instance.UID(),
 			Status:  instance.Status().String(),
 			Payload: instance.Saga(),
 			Events:  events,
