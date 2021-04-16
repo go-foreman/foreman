@@ -86,11 +86,12 @@ func (s mysqlStore) Update(ctx context.Context, sagaInstance Instance) error {
 		return errors.WithStack(err)
 	}
 
-	_, err = tx.ExecContext(ctx, fmt.Sprintf("UPDATE %v SET parent_uid=?, name=?, payload=?, status=?, updated_at=?, last_failed_ev=? WHERE uid=?;", sagaTableName),
+	_, err = tx.ExecContext(ctx, fmt.Sprintf("UPDATE %v SET parent_uid=?, name=?, payload=?, status=?, started_at=?, updated_at=?, last_failed_ev=? WHERE uid=?;", sagaTableName),
 		sagaInstance.ParentID(),
 		sagaName,
 		payload,
 		sagaInstance.Status().String(),
+		sagaInstance.StartedAt(),
 		sagaInstance.UpdatedAt(),
 		lastFailedEv,
 		sagaInstance.UID(),
@@ -419,6 +420,13 @@ func (s mysqlStore) instanceFromModel(sagaData sagaSqlModel) (*sagaInstance, err
 
 	if sagaData.UpdatedAt.Valid {
 		sagaInstance.updatedAt = &sagaData.UpdatedAt.Time
+	}
+
+	if len(sagaData.LastFailedMsg) > 0 {
+		sagaInstance.instanceStatus.lastFailedEv, err = s.msgMarshaller.Unmarshal(sagaData.LastFailedMsg)
+		if err != nil {
+			return nil, errors.Wrapf(err, "unmarshaling last failed ev %s for saga %s", sagaData.LastFailedMsg, sagaData.ID)
+		}
 	}
 
 	saga, err := s.msgMarshaller.Unmarshal(sagaData.Payload)

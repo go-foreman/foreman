@@ -136,6 +136,22 @@ func (m *mysqlStoreTest) TestMysqlStore() {
 		require.Len(t, fetchedSagaInstance.HistoryEvents(), 1)
 		assert.EqualValues(t, historyEvent, fetchedSagaInstance.HistoryEvents()[0])
 
+		fetchedSagaInstance.Fail(&SomeEvent{
+			ObjectMeta: message.ObjectMeta{
+				TypeMeta: scheme.TypeMeta{
+					Kind:  "SomeEvent",
+					Group: testGroup.String(),
+				},
+			},
+			Field: "failed",
+		})
+
+		require.NoError(t, mysqlStore.Update(ctx, fetchedSagaInstance))
+		failedSagaInstance, err := mysqlStore.GetById(ctx, sagaInstance.UID())
+		assert.NoError(t, err)
+		require.NotNil(t, failedSagaInstance)
+		assert.EqualValues(t, fetchedSagaInstance, failedSagaInstance)
+
 		require.NoError(t, mysqlStore.Delete(ctx, sagaInstance.UID()))
 	})
 

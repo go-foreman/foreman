@@ -86,7 +86,7 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 				return errors.Wrapf(err, "sending delivery for saga %s. Delivery: (%v)", sagaCtx.SagaInstance().UID(), delivery)
 			}
 			//remember sent commands/events
-			sagaCtx.SagaInstance().AttachEvent(sagaPkg.HistoryEvent{UID: outcomingMsg.UID(), Payload: delivery.Payload, CreatedAt: time.Now()})
+			sagaCtx.SagaInstance().AttachEvent(sagaPkg.HistoryEvent{UID: outcomingMsg.UID(), Payload: delivery.Payload, CreatedAt: time.Now(), SagaStatus: sagaInstance.Status().String()})
 		}
 	} else {
 		e.logger.Logf(log.WarnLevel, "no handler defined for event %s from message %s", msgGK, msg.UID())
