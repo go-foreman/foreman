@@ -16,15 +16,15 @@ import (
 )
 
 type SagaEventsHandler struct {
-	sagaStore   sagaPkg.Store
-	idExtractor sagaPkg.SagaUIDService
-	scheme      scheme.KnownTypesRegistry
-	mutex       sagaMutex.Mutex
-	logger      log.Logger
+	sagaStore  sagaPkg.Store
+	sagaUIDSvc sagaPkg.SagaUIDService
+	scheme     scheme.KnownTypesRegistry
+	mutex      sagaMutex.Mutex
+	logger     log.Logger
 }
 
 func NewEventsHandler(sagaStore sagaPkg.Store, mutex sagaMutex.Mutex, scheme scheme.KnownTypesRegistry, extractor sagaPkg.SagaUIDService, logger log.Logger) *SagaEventsHandler {
-	return &SagaEventsHandler{sagaStore: sagaStore, idExtractor: extractor, scheme: scheme, mutex: mutex, logger: logger}
+	return &SagaEventsHandler{sagaStore: sagaStore, sagaUIDSvc: extractor, scheme: scheme, mutex: mutex, logger: logger}
 }
 
 func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
@@ -32,7 +32,7 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 	ctx := execCtx.Context()
 	msgGK := msg.Payload().GroupKind().String()
 
-	sagaId, err := e.idExtractor.ExtractSagaUID(msg.Headers())
+	sagaId, err := e.sagaUIDSvc.ExtractSagaUID(msg.Headers())
 
 	if err != nil {
 		return errors.Wrapf(err, "extracting saga id from message %s", msg.UID())
@@ -79,9 +79,8 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 		}
 
 		for _, delivery := range sagaCtx.Deliveries() {
-			headers := execCtx.Message().Headers()
-			headers[sagaPkg.SagaUIDKey] = sagaInstance.UID()
-			outcomingMsg := message.NewOutcomingMessage(delivery.Payload, message.WithHeaders(headers))
+			e.sagaUIDSvc.AddSagaId(execCtx.Message().Headers(), sagaInstance.UID())
+			outcomingMsg := message.NewOutcomingMessage(delivery.Payload, message.WithHeaders(execCtx.Message().Headers()))
 
 			if err := execCtx.Send(outcomingMsg, delivery.Options...); err != nil {
 				execCtx.LogMessage(log.ErrorLevel, fmt.Sprintf("error sending delivery for saga %s. Delivery: (%v). %s", sagaCtx.SagaInstance().UID(), delivery, err))
@@ -110,10 +109,9 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 	if sagaInstance.Status().Completed() {
 		//if parent exists - we should forward this event to parent saga
 		if sagaInstance.ParentID() != "" {
-			headers := execCtx.Message().Headers()
-			headers[sagaPkg.SagaUIDKey] = sagaInstance.ParentID()
+			e.sagaUIDSvc.AddSagaId(execCtx.Message().Headers(), sagaInstance.ParentID())
 
-			return execCtx.Send(message.NewOutcomingMessage(&contracts.SagaChildCompletedEvent{SagaId: sagaInstance.UID()}, message.WithHeaders(headers)))
+			return execCtx.Send(message.NewOutcomingMessage(&contracts.SagaChildCompletedEvent{SagaId: sagaInstance.UID()}, message.WithHeaders(execCtx.Message().Headers())))
 		}
 	}
 

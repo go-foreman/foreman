@@ -5,7 +5,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-const SagaUIDKey = "sagaUID"
+const sagaUIDKey = "sagaUID"
 
 type SagaUIDService interface {
 	ExtractSagaUID(headers message.Headers) (string, error)
@@ -20,7 +20,7 @@ type sagaUIDService struct {
 }
 
 func (i sagaUIDService) ExtractSagaUID(headers message.Headers) (string, error) {
-	if val, ok := headers[SagaUIDKey]; ok {
+	if val, ok := headers[sagaUIDKey]; ok {
 		sagaId, converted := val.(string)
 
 		if !converted {
@@ -30,9 +30,9 @@ func (i sagaUIDService) ExtractSagaUID(headers message.Headers) (string, error) 
 		return sagaId, nil
 	}
 
-	return "", errors.Errorf("saga uid was not found in headers by key %s", SagaUIDKey)
+	return "", errors.Errorf("saga uid was not found in headers by key %s", sagaUIDKey)
 }
 
 func (i sagaUIDService) AddSagaId(headers message.Headers, sagaUID string) {
-	headers[SagaUIDKey] = sagaUID
+	headers[sagaUIDKey] = sagaUID
 }
