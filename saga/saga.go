@@ -26,7 +26,7 @@ type Instance interface {
 	Compensate(sagaCtx SagaContext) error
 	Recover(sagaCtx SagaContext) error
 	Complete()
-	Fail()
+	Fail(ev message.Object)
 
 	HistoryEvents() []HistoryEvent
 	AttachEvent(event HistoryEvent)
@@ -109,8 +109,9 @@ func (s *sagaInstance) Complete() {
 	s.update()
 }
 
-func (s *sagaInstance) Fail() {
+func (s *sagaInstance) Fail(ev message.Object) {
 	s.instanceStatus.status = sagaStatusFailed
+	s.instanceStatus.lastFailedEv = ev
 	s.update()
 }
 
@@ -133,7 +134,7 @@ func (s sagaInstance) UpdatedAt() *time.Time {
 }
 
 func (s *sagaInstance) update() {
-	currentTime := time.Now()
+	currentTime := time.Now().Round(time.Second).UTC()
 	s.updatedAt = &currentTime
 }
 

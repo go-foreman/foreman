@@ -59,6 +59,7 @@ func (m *mysqlStoreTest) TestMysqlStore() {
 	t.Run("create saga instance", func(t *testing.T) {
 		workflowSaga := &WorkflowSaga{Field: "field", Value: "value"}
 		sagaInstance := saga.NewSagaInstance(uuid.New().String(), "", workflowSaga)
+		sagaInstance.Start(nil) //started_at, updated_at are populated
 		require.NoError(t, mysqlStore.Create(ctx, sagaInstance))
 		fetchedSagaInstance, err := mysqlStore.GetById(ctx, sagaInstance.UID())
 		assert.NoError(t, err)
@@ -196,15 +197,15 @@ func (w WorkflowSaga) Init() {
 }
 
 func (w WorkflowSaga) Start(execCtx saga.SagaContext) error {
-	panic("implement me")
+	return nil
 }
 
 func (w WorkflowSaga) Compensate(execCtx saga.SagaContext) error {
-	panic("implement me")
+	return nil
 }
 
 func (w WorkflowSaga) Recover(execCtx saga.SagaContext) error {
-	panic("implement me")
+	return nil
 }
 
 type FilterSaga struct {
