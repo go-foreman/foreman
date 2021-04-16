@@ -16,15 +16,15 @@ import (
 )
 
 type SagaEventsHandler struct {
-	sagaStore     sagaPkg.Store
-	idExtractor   sagaPkg.SagaUIDService
-	typesRegistry scheme.KnownTypesRegistry
-	mutex         sagaMutex.Mutex
-	logger        log.Logger
+	sagaStore   sagaPkg.Store
+	idExtractor sagaPkg.SagaUIDService
+	scheme      scheme.KnownTypesRegistry
+	mutex       sagaMutex.Mutex
+	logger      log.Logger
 }
 
-func NewEventsHandler(sagaStore sagaPkg.Store, mutex sagaMutex.Mutex, sagaRegistry scheme.KnownTypesRegistry, extractor sagaPkg.SagaUIDService, logger log.Logger) *SagaEventsHandler {
-	return &SagaEventsHandler{sagaStore: sagaStore, idExtractor: extractor, typesRegistry: sagaRegistry, mutex: mutex, logger: logger}
+func NewEventsHandler(sagaStore sagaPkg.Store, mutex sagaMutex.Mutex, scheme scheme.KnownTypesRegistry, extractor sagaPkg.SagaUIDService, logger log.Logger) *SagaEventsHandler {
+	return &SagaEventsHandler{sagaStore: sagaStore, idExtractor: extractor, scheme: scheme, mutex: mutex, logger: logger}
 }
 
 func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
@@ -64,7 +64,7 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 	}
 
 	saga := sagaInstance.Saga()
-	saga.SetSchema(e.typesRegistry)
+	saga.SetSchema(e.scheme)
 	saga.Init()
 
 	sagaCtx := sagaPkg.NewSagaCtx(execCtx, sagaInstance)

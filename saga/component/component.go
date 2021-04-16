@@ -20,7 +20,6 @@ type Component struct {
 	contracts        []message.Object
 	sagaStoreFactory StoreFactory
 	sagaMutex        mutex.Mutex
-	schema           scheme.KnownTypesRegistry
 	endpoints        []endpoint.Endpoint
 	configOpts       []configOption
 	store            saga.Store
@@ -57,7 +56,7 @@ func (c Component) Init(mBus *brigadier.MessageBus) error {
 		initApiServer(opts.apiServerMux, store, mBus.Logger())
 	}
 
-	eventHandler := handlers.NewEventsHandler(store, c.sagaMutex, c.schema, opts.uidService, mBus.Logger())
+	eventHandler := handlers.NewEventsHandler(store, c.sagaMutex, mBus.SchemeRegistry(), opts.uidService, mBus.Logger())
 	sagaControlHandler := handlers.NewSagaControlHandler(store, c.sagaMutex, mBus.SchemeRegistry(), opts.uidService, mBus.Logger())
 
 	contractsList := []scheme.Object{
