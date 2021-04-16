@@ -68,6 +68,8 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 	saga.Init()
 
 	sagaCtx := sagaPkg.NewSagaCtx(execCtx, sagaInstance)
+	var sentPayloads []sagaPkg.HistoryEvent
+	sagaInstance.Progress()
 
 	if handler, exists := saga.EventHandlers()[msg.Payload().GroupKind()]; exists {
 
@@ -85,8 +87,9 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 				execCtx.LogMessage(log.ErrorLevel, fmt.Sprintf("error sending delivery for saga %s. Delivery: (%v). %s", sagaCtx.SagaInstance().UID(), delivery, err))
 				return errors.Wrapf(err, "sending delivery for saga %s. Delivery: (%v)", sagaCtx.SagaInstance().UID(), delivery)
 			}
-			//remember sent commands/events
-			sagaCtx.SagaInstance().AttachEvent(sagaPkg.HistoryEvent{UID: outcomingMsg.UID(), Payload: delivery.Payload, CreatedAt: time.Now(), SagaStatus: sagaInstance.Status().String()})
+			//just to remember what we sent out
+			sentPayloads = append(sentPayloads, sagaPkg.HistoryEvent{UID: outcomingMsg.UID(), Payload: delivery.Payload, CreatedAt: time.Now(), SagaStatus: sagaInstance.Status().String()})
+
 		}
 	} else {
 		e.logger.Logf(log.WarnLevel, "no handler defined for event %s from message %s", msgGK, msg.UID())
@@ -95,8 +98,8 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 	//write received event into history
 	sagaInstance.AttachEvent(sagaPkg.HistoryEvent{UID: msg.UID(), Payload: msg.Payload(), CreatedAt: time.Now(), OriginSource: msg.Origin(), SagaStatus: sagaInstance.Status().String()})
 
-	if sagaInstance.Status().Failed() {
-
+	for _, ev := range sentPayloads {
+		sagaInstance.AttachEvent(ev)
 	}
 
 	if err := e.sagaStore.Update(ctx, sagaInstance); err != nil {

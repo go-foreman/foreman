@@ -25,6 +25,7 @@ type Instance interface {
 	Start(sagaCtx SagaContext) error
 	Compensate(sagaCtx SagaContext) error
 	Recover(sagaCtx SagaContext) error
+	Progress()
 	Complete()
 	Fail(ev message.Object)
 
@@ -107,6 +108,10 @@ func (s *sagaInstance) Recover(sagaCtx SagaContext) error {
 func (s *sagaInstance) Complete() {
 	s.instanceStatus.status = sagaStatusCompleted
 	s.update()
+}
+
+func (s *sagaInstance) Progress() {
+	s.instanceStatus.status = sagaStatusInProgress
 }
 
 func (s *sagaInstance) Fail(ev message.Object) {

@@ -45,7 +45,7 @@ type filterOptions struct {
 }
 
 func statusFromStr(str string) (status, error) {
-	statuses := []status{sagaStatusInProgress, sagaStatusFailed, sagaStatusInProgress, sagaStatusCompensating, sagaStatusCompleted, sagaStatusCreated}
+	statuses := []status{sagaStatusInProgress, sagaStatusFailed, sagaStatusInProgress, sagaStatusCompensating, sagaStatusCompleted, sagaStatusCreated, sagaStatusRecovering}
 	for _, s := range statuses {
 		if string(s) == str {
 			return s, nil

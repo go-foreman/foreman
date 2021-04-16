@@ -10,6 +10,7 @@ import (
 	sagaPkg "github.com/go-foreman/foreman/saga"
 	"github.com/go-foreman/foreman/saga/contracts"
 	"github.com/go-foreman/foreman/saga/mutex"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"time"
 )
@@ -71,7 +72,7 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 		}
 
 		if !sagaInstance.Status().Failed() || sagaInstance.Status().Completed() || sagaInstance.Status().Recovering() || sagaInstance.Status().Compensating() {
-			h.logger.Logf(log.InfoLevel, "Saga `%s` has status %s, you can't start recovering the process", sagaInstance.Status(), sagaInstance.UID())
+			h.logger.Logf(log.InfoLevel, "Saga %s has status %s, you can't start recovering the process", sagaInstance.UID(), sagaInstance.Status(), )
 			return nil
 		}
 
@@ -113,14 +114,17 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 		return errors.Errorf("unknown command type `%s` for SagaControlHandler. Supported: StartSagaCommand, RecoverSagaCommand, CompensateSagaCommand", msg.Payload().GroupKind().String())
 	}
 
+	sagaInstance.AttachEvent(sagaPkg.HistoryEvent{UID: msg.UID(), Payload: msg.Payload(), CreatedAt: time.Now(), OriginSource: msg.Origin(), SagaStatus: sagaInstance.Status().String()})
+
 	for _, delivery := range sagaCtx.Deliveries() {
 		h.sagaUIDSvc.AddSagaId(msg.Headers(), sagaCtx.SagaInstance().UID())
 		outcomingMessage := message.NewOutcomingMessage(delivery.Payload, message.WithHeaders(msg.Headers()))
+
 		if err := execCtx.Send(outcomingMessage, delivery.Options...); err != nil {
 			execCtx.LogMessage(log.ErrorLevel, fmt.Sprintf("error sending delivery for saga %s. Delivery: (%v). %s", sagaCtx.SagaInstance().UID(), delivery, err))
 			return errors.Wrapf(err, "error sending delivery for saga %s. Delivery: (%v)", sagaCtx.SagaInstance().UID(), delivery)
 		}
-		sagaCtx.SagaInstance().AttachEvent(sagaPkg.HistoryEvent{UID: msg.UID(), Payload: delivery.Payload, CreatedAt: time.Now(), SagaStatus: sagaInstance.Status().String()})
+		sagaCtx.SagaInstance().AttachEvent(sagaPkg.HistoryEvent{UID: uuid.New().String(), Payload: delivery.Payload, CreatedAt: time.Now(), SagaStatus: sagaInstance.Status().String()})
 	}
 
 	return h.store.Update(ctx, sagaInstance)
