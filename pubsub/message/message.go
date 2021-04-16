@@ -117,6 +117,10 @@ func NewOutcomingMessage(payload Object, passedOptions ...MsgOption) *OutcomingM
 		msg.headers = opts.headers
 	}
 
+	if msg.headers == nil {
+		msg.headers = make(Headers)
+	}
+
 	msg.headers["uid"] = msg.UID()
 
 	return msg

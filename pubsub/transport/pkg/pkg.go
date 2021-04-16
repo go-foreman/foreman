@@ -50,6 +50,9 @@ func (i inAmqpPkg) Payload() []byte {
 }
 
 func (i inAmqpPkg) Headers() map[string]interface{} {
+	if i.delivery.Headers == nil {
+		i.delivery.Headers = make(amqp.Table)
+	}
 	return i.delivery.Headers
 }
 

@@ -6,6 +6,7 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"reflect"
+	"strings"
 )
 
 type Marshaller interface {
@@ -67,13 +68,31 @@ func (j jsonDecoder) walkUnstructured(parentObj Object, unstructured *Unstructur
 				return errors.WithStack(err)
 			}
 
-			reflect.ValueOf(parentObj).Elem().FieldByName(key).Set(reflect.ValueOf(nestedObj))
+			parentValue := reflect.ValueOf(parentObj).Elem()
+
+			field := parentValue.FieldByName(findKeyByTag(parentValue.Type(), key))
+
+			if field.CanSet() {
+				field.Set(reflect.ValueOf(nestedObj))
+			}
 
 			return j.walkUnstructured(nestedObj, v)
 		}
 	}
 
 	return nil
+}
+
+func findKeyByTag(t reflect.Type, key string) string {
+	tagsMap := make(map[string]string)
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		if jsonSpec := strings.Split(field.Tag.Get("json"), ","); len(jsonSpec) > 0 {
+			tagsMap[jsonSpec[0]] = field.Name
+		}
+	}
+
+	return tagsMap[key]
 }
 
 func (j jsonDecoder) decodeUnstructured(unstructured *Unstructured) (Object, error) {

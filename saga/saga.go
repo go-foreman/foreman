@@ -1,8 +1,10 @@
 package saga
 
 import (
+	"fmt"
 	"github.com/go-foreman/foreman/pubsub/message"
 	"github.com/go-foreman/foreman/runtime/scheme"
+	"reflect"
 	"time"
 )
 
@@ -183,17 +185,19 @@ type HistoryEvent struct {
 }
 
 type Saga interface {
-	scheme.Object
+	message.Object
 	Init()
 	Start(execCtx SagaContext) error
 	Compensate(execCtx SagaContext) error
 	Recover(execCtx SagaContext) error
 	EventHandlers() map[scheme.GroupKind]Executor
+	SetSchema(scheme scheme.KnownTypesRegistry)
 }
 
 type BaseSaga struct {
-	scheme.TypeMeta
+	message.ObjectMeta
 	adjacencyMap map[scheme.GroupKind]Executor
+	scheme scheme.KnownTypesRegistry
 }
 
 type Executor func(execCtx SagaContext) error
@@ -204,8 +208,22 @@ func (b *BaseSaga) AddEventHandler(ev message.Object, handler Executor) *BaseSag
 		b.adjacencyMap = make(map[scheme.GroupKind]Executor)
 	}
 
-	b.adjacencyMap[ev.GroupKind()] = handler
+	if b.scheme == nil {
+		panic("schema wasn't set")
+	}
+
+	groupKind, err := b.scheme.ObjectKind(ev)
+
+	if err != nil {
+		panic(fmt.Sprintf("ev %s is not registered in schema", reflect.TypeOf(ev).String()))
+	}
+
+	b.adjacencyMap[*groupKind] = handler
 	return b
+}
+
+func (b *BaseSaga) SetSchema(scheme scheme.KnownTypesRegistry) {
+	b.scheme = scheme
 }
 
 func (b BaseSaga) EventHandlers() map[scheme.GroupKind]Executor {

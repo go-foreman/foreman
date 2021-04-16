@@ -13,9 +13,10 @@ const (
 	group scheme.Group = "test"
 )
 
-type SomeTestType struct {
+type WrapperType struct {
 	ObjectMeta
-	A int
+	Nested Object
+	Value int
 }
 
 type SomeTypeWithNestedType struct {
@@ -24,11 +25,17 @@ type SomeTypeWithNestedType struct {
 	Value int
 }
 
-type WrapperType struct {
+type SomeTestType struct {
 	ObjectMeta
-	Nested Object
+	Value int
+	Child ChildType
+}
+
+type ChildType struct {
 	Value int
 }
+
+
 
 func TestJsonDecoder(t *testing.T) {
 	knownRegistry := scheme.NewKnownTypesRegistry()
@@ -43,7 +50,7 @@ func TestJsonDecoder(t *testing.T) {
 					Group: group.String(),
 				},
 			},
-			A:          1,
+			Value:          1,
 		}
 
 		marshaled, err := decoder.Marshal(instance)
@@ -59,7 +66,7 @@ func TestJsonDecoder(t *testing.T) {
 	t.Run("verify that GK is set from schema before encoding", func(t *testing.T) {
 		knownRegistry.AddKnownTypes(group, &SomeTestType{})
 		instance := &SomeTestType{
-			A:          1,
+			Value:          1,
 		}
 		marshaled, err := decoder.Marshal(instance)
 		require.NoError(t, err)
@@ -68,7 +75,7 @@ func TestJsonDecoder(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, decodedObj)
 		assert.IsType(t, &SomeTestType{}, decodedObj)
-		assert.Equal(t, instance.A, instance.A)
+		assert.Equal(t, instance.Value, instance.Value)
 	})
 	
 	t.Run("decode invalid payload with empty GK", func(t *testing.T) {
@@ -79,7 +86,7 @@ func TestJsonDecoder(t *testing.T) {
 					Group: group.String(),
 				},
 			},
-			A:          1,
+			Value:          1,
 		}
 
 		marshaled, err := json.Marshal(instance)
@@ -105,7 +112,10 @@ func TestJsonDecoder(t *testing.T) {
 		instance := &WrapperType{
 			Nested: &SomeTypeWithNestedType{
 				Nested:     &SomeTestType{
-					A: 1,
+					Value: 1,
+					Child: ChildType{
+						Value: -1,
+					},
 				},
 				Value: 2,
 			},

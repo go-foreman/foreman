@@ -60,11 +60,21 @@ func (c Component) Init(mBus *brigadier.MessageBus) error {
 	eventHandler := handlers.NewEventsHandler(store, c.sagaMutex, c.schema, opts.idExtractor, mBus.Logger())
 	sagaControlHandler := handlers.NewSagaControlHandler(store, c.sagaMutex, mBus.SchemeRegistry(), mBus.Logger())
 
+	contractsList := []scheme.Object{
+		&contracts.StartSagaCommand{},
+		&contracts.RecoverSagaCommand{},
+		&contracts.CompensateSagaCommand{},
+		&contracts.SagaCompletedEvent{},
+		&contracts.SagaChildCompletedEvent{},
+	}
+	mBus.SchemeRegistry().AddKnownTypes(contracts.SystemGroup, contractsList...)
+
 	mBus.Dispatcher().SubscribeForCmd(&contracts.StartSagaCommand{}, sagaControlHandler.Handle)
 	mBus.Dispatcher().SubscribeForCmd(&contracts.RecoverSagaCommand{}, sagaControlHandler.Handle)
 	mBus.Dispatcher().SubscribeForCmd(&contracts.CompensateSagaCommand{}, sagaControlHandler.Handle)
 
 	for _, s := range c.sagas {
+		s.SetSchema(mBus.SchemeRegistry())
 		s.Init()
 
 		for evGK := range s.EventHandlers() {

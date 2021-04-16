@@ -3,28 +3,18 @@ package contracts
 import (
 	"github.com/go-foreman/foreman/pubsub/message"
 	"github.com/go-foreman/foreman/runtime/scheme"
-	"github.com/go-foreman/foreman/saga"
 )
+
 const (
-	systemGroup scheme.Group = "systemSaga"
+	SystemGroup scheme.Group = "systemSaga"
 )
-func init() {
-	contractsList := []scheme.Object{
-		&StartSagaCommand{},
-		&RecoverSagaCommand{},
-		&CompensateSagaCommand{},
-		&SagaCompletedEvent{},
-		&SagaChildCompletedEvent{},
-	}
-	scheme.KnownTypesRegistryInstance.AddKnownTypes(systemGroup, contractsList...)
-}
 
 // StartSagaCommand once received will create SagaInstance, save it to Store and Start()
 type StartSagaCommand struct {
 	message.ObjectMeta
 	SagaId   string      `json:"saga_id"`
 	ParentId string      `json:"parent_id"`
-	Saga     saga.Saga   `json:"saga"`
+	Saga     message.Object   `json:"saga"`
 }
 
 type RecoverSagaCommand struct {

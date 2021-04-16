@@ -134,7 +134,13 @@ func (h SagaControlHandler) createSaga(startCmd *contracts.StartSagaCommand) (sa
 		return nil, errors.Errorf("saga payload is nil")
 	}
 
-	return sagaPkg.NewSagaInstance(startCmd.SagaId, startCmd.ParentId, startCmd.Saga), nil
+	saga, ok := startCmd.Saga.(sagaPkg.Saga)
+
+	if !ok {
+		return nil, errors.Errorf("error asserting that startCmd.Saga is Saga type")
+	}
+
+	return sagaPkg.NewSagaInstance(startCmd.SagaId, startCmd.ParentId, saga), nil
 }
 
 func (h SagaControlHandler) fetchSaga(ctx context.Context, sagaId string) (sagaPkg.Instance, error) {

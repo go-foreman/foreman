@@ -61,10 +61,8 @@ type container struct {
 	messageExuctionCtxFactory execution.MessageExecutionCtxFactory
 	messagesDispatcher        dispatcher.Dispatcher
 	router                    endpoint.Router
-	logger                    log.Logger
 	msgMarshaller             message.Marshaller
 	processor                 subscriber.Processor
-	scheme                    scheme.KnownTypesRegistry
 	components                []Component
 }
 
@@ -89,23 +87,10 @@ func WithDispatcher(dispatcher dispatcher.Dispatcher) ConfigOption {
 	}
 }
 
-// WithSchemeRegistry allows to specify scheme scheme.KnownTypesRegistry
-func WithSchemeRegistry(scheme scheme.KnownTypesRegistry) ConfigOption {
-	return func(c *container) {
-		c.scheme = scheme
-	}
-}
-
 // WithMessageExecutionFactory allows to provide own execution.MessageExecutionCtxFactory
 func WithMessageExecutionFactory(factory execution.MessageExecutionCtxFactory) ConfigOption {
 	return func(c *container) {
 		c.messageExuctionCtxFactory = factory
-	}
-}
-
-func WithLogger(logger log.Logger) ConfigOption {
-	return func(c *container) {
-		c.logger = logger
 	}
 }
 
@@ -148,7 +133,7 @@ func NewMessageBus(logger log.Logger, msgMarshaller message.Marshaller, scheme s
 
 	mBus.messagesDispatcher = container.messagesDispatcher
 	mBus.router = container.router
-	mBus.scheme = container.scheme
+	mBus.scheme = scheme
 
 	subscriberOpt := &subscriberOpts{}
 	subscriberOption(subscriberOpt, &subscriberContainer{

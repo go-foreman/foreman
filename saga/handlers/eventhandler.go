@@ -64,6 +64,7 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 	}
 
 	saga := sagaInstance.Saga()
+	saga.SetSchema(e.typesRegistry)
 	saga.Init()
 
 	sagaCtx := sagaPkg.NewSagaCtx(execCtx, sagaInstance)
