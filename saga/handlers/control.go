@@ -44,7 +44,7 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 		}
 
 		if err := h.store.Create(ctx, sagaInstance); err != nil {
-			return errors.Wrapf(err, "error  saving created saga `%s` with id %s to store", "", cmd.SagaId)
+			return errors.Wrapf(err, "error  saving created saga `%s` with id %s to store", cmd.Saga.GroupKind().String(), cmd.SagaId)
 		}
 
 		sagaCtx = sagaPkg.NewSagaCtx(execCtx, sagaInstance)
