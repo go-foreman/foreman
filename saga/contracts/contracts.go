@@ -19,10 +19,11 @@ func init() {
 	scheme.KnownTypesRegistryInstance.AddKnownTypes(systemGroup, contractsList...)
 }
 
+// StartSagaCommand once received will create SagaInstance, save it to Store and Start()
 type StartSagaCommand struct {
 	message.ObjectMeta
-	SagaId   string      `json:"saga_id" mapstructure:"saga_id"`
-	ParentId string      `json:"parent_id" mapstructure:"parent_id"`
+	SagaId   string      `json:"saga_id"`
+	ParentId string      `json:"parent_id"`
 	Saga     saga.Saga   `json:"saga"`
 }
 

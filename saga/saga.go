@@ -183,7 +183,7 @@ type HistoryEvent struct {
 }
 
 type Saga interface {
-	message.Object
+	scheme.Object
 	Init()
 	Start(execCtx SagaContext) error
 	Compensate(execCtx SagaContext) error
@@ -192,7 +192,7 @@ type Saga interface {
 }
 
 type BaseSaga struct {
-	message.ObjectMeta
+	scheme.TypeMeta
 	adjacencyMap map[scheme.GroupKind]Executor
 }
 

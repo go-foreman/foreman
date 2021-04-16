@@ -3,6 +3,7 @@ package message
 import (
 	"encoding/json"
 	"github.com/go-foreman/foreman/runtime/scheme"
+	"github.com/pkg/errors"
 )
 
 type Unstructured struct {
@@ -13,10 +14,31 @@ type Unstructured struct {
 }
 
 func (u *Unstructured) UnmarshalJSON(b []byte) error {
-	return json.Unmarshal(b, &u.Object)
+	u.Object = make(map[string]interface{})
+	if err := json.Unmarshal(b, &u.Object); err != nil {
+		return errors.Wrap(err, "unmarshalling into Unstructured")
+	}
+
+	u.walkUnstructured()
+
+	return nil
 }
 
-func (u Unstructured) GroupKind() scheme.GroupKind {
+func (u *Unstructured) walkUnstructured() {
+	for key, val := range u.Object {
+		if nestedMap, ok := val.(map[string]interface{}); ok {
+			//it might be nested object. Let's see if has follows schema.Object interface
+			nestedUnstructured := &Unstructured{Object: nestedMap}
+
+			if gk := nestedUnstructured.GroupKind(); !gk.Empty() {
+				u.Object[key] = nestedUnstructured
+				nestedUnstructured.walkUnstructured()
+			}
+		}
+	}
+}
+
+func (u *Unstructured) GroupKind() scheme.GroupKind {
 	gk := scheme.GroupKind{}
 	groupVal, ok := u.Object["group"]
 	if ok {
@@ -28,6 +50,14 @@ func (u Unstructured) GroupKind() scheme.GroupKind {
 		gk.Kind = kindVal.(string)
 	}
 	return gk
+}
+
+func (u *Unstructured) SetGroupKind(gk *scheme.GroupKind) {
+	if u.Object == nil {
+		u.Object = make(map[string]interface{})
+	}
+	u.Object["group"] = gk.Group.String()
+	u.Object["kind"] = gk.Kind
 }
 
 func (u *Unstructured) GetUID() string {

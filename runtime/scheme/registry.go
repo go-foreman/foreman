@@ -11,7 +11,7 @@ var KnownTypesRegistryInstance = NewKnownTypesRegistry()
 type KnownTypesRegistry interface {
 	AddKnownTypes(gv Group, types ...Object)
 	AddKnownTypeWithName(gk GroupKind, obj Object)
-	NewObject(gv GroupKind) (Object, error)
+	NewObject(gk GroupKind) (Object, error)
 	ObjectKind(object Object) (*GroupKind, error)
 }
 

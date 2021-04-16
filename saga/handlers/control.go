@@ -1,14 +1,13 @@
 package handlers
 
 import (
-	log "github.com/go-foreman/foreman/log"
-	sagaPkg "github.com/go-foreman/foreman/saga"
-
 	"context"
 	"fmt"
+	log "github.com/go-foreman/foreman/log"
 	"github.com/go-foreman/foreman/pubsub/message"
 	"github.com/go-foreman/foreman/pubsub/message/execution"
 	"github.com/go-foreman/foreman/runtime/scheme"
+	sagaPkg "github.com/go-foreman/foreman/saga"
 	"github.com/go-foreman/foreman/saga/contracts"
 	"github.com/go-foreman/foreman/saga/mutex"
 	"github.com/pkg/errors"
@@ -38,7 +37,7 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 
 	switch cmd := msg.Payload().(type) {
 	case *contracts.StartSagaCommand:
-		sagaInstance, err = h.createSaga(cmd.SagaId, cmd.ParentId, cmd.Saga)
+		sagaInstance, err = h.createSaga(cmd)
 		if err != nil {
 			return errors.WithStack(err)
 		}
@@ -126,60 +125,16 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 }
 
 //saga is map[string]interface{} on this step
-func (h SagaControlHandler) createSaga(sagaId, parentId, sagaDefinition interface{}) (sagaPkg.Instance, error) {
-	return nil, nil
-	//if sagaId == "" {
-	//	return nil, errors.Errorf("SagaId is empty")
-	//}
-	//
-	//if sagaName == "" {
-	//	return nil, errors.Errorf("SagaName is empty")
-	//}
-	//
-	//if sagaDefinition == nil {
-	//	return nil, errors.Errorf("Saga payload is nil")
-	//}
-	//
-	//sagaToCreate, err := h.typesRegistry.NewObject(scheme.WithKey(sagaName))
-	//
-	//if err != nil {
-	//	return nil, errors.WithStack(err)
-	//}
-	//
-	//sagaType := h.typesRegistry.GetType(scheme.WithKey(sagaName))
-	//
-	//decoderConf := mapstructure.DecoderConfig{
-	//	TagName: "json",
-	//	Result:  &sagaToCreate,
-	//}
-	//
-	//decoder, err := mapstructure.NewDecoder(&decoderConf)
-	//
-	//if err != nil {
-	//	return nil, errors.Wrap(err, "error creating decoder")
-	//}
-	//
-	//if err := decoder.Decode(sagaDefinition); err != nil {
-	//	return nil, message.WithDecoderErr(errors.Wrapf(err, "error decoding payload into saga  %s", "xxxxxxx"))
-	//}
-	//
-	////kek, err := json.Marshal(saga)
-	////
-	////if err != nil {
-	////	return nil, errors.WithStack(err)
-	////}
-	////
-	////if err := json.Unmarshal(kek, &sagaToCreate); err != nil {
-	////	return nil, errors.Wrapf(err, "Error decoding data from message payload interface{} to an original type %s", sagaType.Kind().String())
-	////}
-	//
-	//sagaInterface, ok := sagaToCreate.(sagaPkg.Saga)
-	//
-	//if !ok {
-	//	return nil, errors.Errorf("Error converting interface{} to Saga interface")
-	//}
-	//
-	//return sagaPkg.NewSagaInstance(sagaId, parentId, sagaInterface), nil
+func (h SagaControlHandler) createSaga(startCmd *contracts.StartSagaCommand) (sagaPkg.Instance, error) {
+	if startCmd.SagaId == "" {
+		return nil, errors.Errorf("sagaId is empty")
+	}
+
+	if startCmd.Saga == nil {
+		return nil, errors.Errorf("saga payload is nil")
+	}
+
+	return sagaPkg.NewSagaInstance(startCmd.SagaId, startCmd.ParentId, startCmd.Saga), nil
 }
 
 func (h SagaControlHandler) fetchSaga(ctx context.Context, sagaId string) (sagaPkg.Instance, error) {

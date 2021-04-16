@@ -1,5 +1,10 @@
 package scheme
 
+import (
+	"github.com/pkg/errors"
+	"strings"
+)
+
 type Group string
 
 // Empty returns true if group is empty
@@ -32,4 +37,14 @@ func (gk GroupKind) String() string {
 // Identifier used as uniq key in schema
 func (gk GroupKind) Identifier() string {
 	return gk.String()
+}
+
+func FromString(str string) (GroupKind, error) {
+	items := strings.Split(str, ".")
+
+	if len(items) != 2 {
+		return GroupKind{}, errors.Errorf("error creating GroupKind from '%s'", str)
+	}
+
+	return GroupKind{Group: Group(items[0]), Kind: items[1]}, nil
 }

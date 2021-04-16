@@ -41,3 +41,21 @@ func TestGroupKind(t *testing.T) {
 		assert.Equal(t, "SomeTest", gk.String())
 	})
 }
+
+func TestFromString(t *testing.T) {
+	t.Run("str is valid", func(t *testing.T) {
+		gk, err := FromString("test.SomeTest")
+		assert.NoError(t, err)
+		assert.Equal(t, GroupKind{
+			Group: group,
+			Kind:  "SomeTest",
+		}, gk)
+		assert.False(t, gk.Empty())
+	})
+
+	t.Run("str is invalid", func(t *testing.T) {
+		gk, err := FromString("")
+		assert.EqualError(t, err, "error creating GroupKind from ''")
+		assert.True(t, gk.Empty())
+	})
+}
