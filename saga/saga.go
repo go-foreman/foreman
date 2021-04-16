@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/go-foreman/foreman/pubsub/message"
 	"github.com/go-foreman/foreman/runtime/scheme"
+	"github.com/google/uuid"
 	"reflect"
 	"time"
 )
@@ -30,7 +31,7 @@ type Instance interface {
 	Fail(ev message.Object)
 
 	HistoryEvents() []HistoryEvent
-	AttachEvent(event HistoryEvent)
+	AttachEvent(ev message.Object, origin string, traceUID string)
 
 	StartedAt() *time.Time
 	UpdatedAt() *time.Time
@@ -143,8 +144,15 @@ func (s *sagaInstance) update() {
 	s.updatedAt = &currentTime
 }
 
-func (s *sagaInstance) AttachEvent(event HistoryEvent) {
-	s.historyEvents = append(s.historyEvents, event)
+func (s *sagaInstance) AttachEvent(ev message.Object, origin string, traceUID string) {
+	historyEv := HistoryEvent{
+		UID:          uuid.New().String(),
+		CreatedAt:    time.Now().Round(time.Second).UTC(),
+		Payload:      ev,
+		OriginSource: origin,
+		SagaStatus:   s.instanceStatus.status.String(),
+	}
+	s.historyEvents = append(s.historyEvents, historyEv)
 }
 
 type status string
@@ -188,6 +196,7 @@ type HistoryEvent struct {
 	Payload      message.Object `json:"payload"`
 	OriginSource string      `json:"origin"`
 	SagaStatus   string      `json:"saga_status"` //saga status at the moment
+	TraceUID     string      `json:"trace_uid"` //uid of received message, could be empty
 }
 
 type Saga interface {

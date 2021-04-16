@@ -13,7 +13,6 @@ import (
 	"github.com/stretchr/testify/suite"
 	"strings"
 	"testing"
-	"time"
 )
 
 const(
@@ -112,14 +111,9 @@ func (m *mysqlStoreTest) TestMysqlStore() {
 		assert.Len(t, fetchedSagaInstance.HistoryEvents(), 0)
 
 		someEv := &SomeEvent{Field: "field"}
-		historyEvent := saga.HistoryEvent{
-			UID: uuid.New().String(),
-			CreatedAt:    time.Now().Round(time.Second).UTC(),
-			Payload:      someEv,
-			OriginSource: "originSource",
-			SagaStatus:   "created",
-		}
-		fetchedSagaInstance.AttachEvent(historyEvent)
+
+		sagaInstance = fetchedSagaInstance
+		fetchedSagaInstance.AttachEvent(someEv, "originSource", uuid.New().String())
 
 		err = mysqlStore.Update(ctx, fetchedSagaInstance)
 		require.Error(t, err)
@@ -133,8 +127,9 @@ func (m *mysqlStoreTest) TestMysqlStore() {
 		fetchedSagaInstance, err = mysqlStore.GetById(ctx, sagaInstance.UID())
 		assert.NoError(t, err)
 		require.NotNil(t, fetchedSagaInstance)
+		require.Len(t, sagaInstance.HistoryEvents(), 1)
 		require.Len(t, fetchedSagaInstance.HistoryEvents(), 1)
-		assert.EqualValues(t, historyEvent, fetchedSagaInstance.HistoryEvents()[0])
+		assert.EqualValues(t, sagaInstance.HistoryEvents()[0], fetchedSagaInstance.HistoryEvents()[0])
 
 		fetchedSagaInstance.Fail(&SomeEvent{
 			ObjectMeta: message.ObjectMeta{

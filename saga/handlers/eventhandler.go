@@ -12,7 +12,6 @@ import (
 	"github.com/go-foreman/foreman/runtime/scheme"
 	"github.com/go-foreman/foreman/saga/contracts"
 	"github.com/pkg/errors"
-	"time"
 )
 
 type SagaEventsHandler struct {
@@ -68,7 +67,6 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 	saga.Init()
 
 	sagaCtx := sagaPkg.NewSagaCtx(execCtx, sagaInstance)
-	var sentPayloads []sagaPkg.HistoryEvent
 	sagaInstance.Progress()
 
 	if handler, exists := saga.EventHandlers()[msg.Payload().GroupKind()]; exists {
@@ -86,19 +84,17 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 				execCtx.LogMessage(log.ErrorLevel, fmt.Sprintf("error sending delivery for saga %s. Delivery: (%v). %s", sagaCtx.SagaInstance().UID(), delivery, err))
 				return errors.Wrapf(err, "sending delivery for saga %s. Delivery: (%v)", sagaCtx.SagaInstance().UID(), delivery)
 			}
-			//just to remember what we sent out
-			sentPayloads = append(sentPayloads, sagaPkg.HistoryEvent{UID: outcomingMsg.UID(), Payload: delivery.Payload, CreatedAt: time.Now(), SagaStatus: sagaInstance.Status().String()})
-
 		}
 	} else {
 		e.logger.Logf(log.WarnLevel, "no handler defined for event %s from message %s", msgGK, msg.UID())
 	}
 
 	//write received event into history
-	sagaInstance.AttachEvent(sagaPkg.HistoryEvent{UID: msg.UID(), Payload: msg.Payload(), CreatedAt: time.Now(), OriginSource: msg.Origin(), SagaStatus: sagaInstance.Status().String()})
+	sagaInstance.AttachEvent(msg.Payload(), msg.Origin(), msg.UID())
 
-	for _, ev := range sentPayloads {
-		sagaInstance.AttachEvent(ev)
+	//just to remember what we sent out
+	for _, ev := range sagaCtx.Deliveries() {
+		sagaInstance.AttachEvent(ev.Payload, "", "")
 	}
 
 	if err := e.sagaStore.Update(ctx, sagaInstance); err != nil {

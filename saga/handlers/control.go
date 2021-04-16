@@ -10,9 +10,7 @@ import (
 	sagaPkg "github.com/go-foreman/foreman/saga"
 	"github.com/go-foreman/foreman/saga/contracts"
 	"github.com/go-foreman/foreman/saga/mutex"
-	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	"time"
 )
 
 func NewSagaControlHandler(sagaStore sagaPkg.Store, mutex mutex.Mutex, sagaRegistry scheme.KnownTypesRegistry, sagaUIDSvc sagaPkg.SagaUIDService,logger log.Logger) *SagaControlHandler {
@@ -114,7 +112,7 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 		return errors.Errorf("unknown command type `%s` for SagaControlHandler. Supported: StartSagaCommand, RecoverSagaCommand, CompensateSagaCommand", msg.Payload().GroupKind().String())
 	}
 
-	sagaInstance.AttachEvent(sagaPkg.HistoryEvent{UID: msg.UID(), Payload: msg.Payload(), CreatedAt: time.Now(), OriginSource: msg.Origin(), SagaStatus: sagaInstance.Status().String()})
+	sagaInstance.AttachEvent(msg.Payload(), msg.Origin(), msg.UID())
 
 	for _, delivery := range sagaCtx.Deliveries() {
 		h.sagaUIDSvc.AddSagaId(msg.Headers(), sagaCtx.SagaInstance().UID())
@@ -124,7 +122,7 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 			execCtx.LogMessage(log.ErrorLevel, fmt.Sprintf("error sending delivery for saga %s. Delivery: (%v). %s", sagaCtx.SagaInstance().UID(), delivery, err))
 			return errors.Wrapf(err, "error sending delivery for saga %s. Delivery: (%v)", sagaCtx.SagaInstance().UID(), delivery)
 		}
-		sagaCtx.SagaInstance().AttachEvent(sagaPkg.HistoryEvent{UID: uuid.New().String(), Payload: delivery.Payload, CreatedAt: time.Now(), SagaStatus: sagaInstance.Status().String()})
+		sagaCtx.SagaInstance().AttachEvent(delivery.Payload, "", "")
 	}
 
 	return h.store.Update(ctx, sagaInstance)

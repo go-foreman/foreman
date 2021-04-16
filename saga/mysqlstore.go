@@ -217,7 +217,7 @@ func (s mysqlStore) GetByFilter(ctx context.Context, filters... FilterOption) ([
 	}
 
 	//todo use https://github.com/Masterminds/squirrel ? +1 dependency, is it really needed?
-	query := fmt.Sprintf(`SELECT s.uid, s.parent_uid, s.name, s.payload, s.status, s.started_at, s.updated_at, s.last_failed_ev, sh.uid, sh.name, sh.status, sh.payload, sh.origin, sh.created_at FROM %s s LEFT JOIN %s sh ON s.uid = sh.saga_uid WHERE`, sagaTableName, sagaHistoryTableName)
+	query := fmt.Sprintf(`SELECT s.uid, s.parent_uid, s.name, s.payload, s.status, s.started_at, s.updated_at, s.last_failed_ev, sh.uid, sh.name, sh.status, sh.payload, sh.origin, sh.created_at, sh.trace_uid FROM %s s LEFT JOIN %s sh ON s.uid = sh.saga_uid WHERE`, sagaTableName, sagaHistoryTableName)
 
 	var (
 		args       []interface{}
@@ -282,6 +282,7 @@ func (s mysqlStore) GetByFilter(ctx context.Context, filters... FilterOption) ([
 			&ev.Payload,
 			&ev.OriginSource,
 			&ev.CreatedAt,
+			&ev.TraceUID,
 		); err != nil {
 			return nil, errors.WithStack(err)
 		}
@@ -344,7 +345,7 @@ func (s mysqlStore) Delete(ctx context.Context, sagaId string) error {
 }
 
 func (s mysqlStore) queryEvents(sagaId string) ([]HistoryEvent, error) {
-	rows, err := s.db.Query(fmt.Sprintf("SELECT uid, name, status, payload, origin, created_at FROM %v WHERE saga_uid=? ORDER BY created_at;", sagaHistoryTableName), sagaId)
+	rows, err := s.db.Query(fmt.Sprintf("SELECT uid, name, status, payload, origin, created_at, trace_uid FROM %v WHERE saga_uid=? ORDER BY created_at;", sagaHistoryTableName), sagaId)
 
 	if err != nil {
 		return nil, errors.Wrapf(err, "querying events for saga %s", sagaId)
@@ -361,7 +362,9 @@ func (s mysqlStore) queryEvents(sagaId string) ([]HistoryEvent, error) {
 			&ev.SagaStatus,
 			&ev.Payload,
 			&ev.OriginSource,
-			&ev.CreatedAt); err != nil {
+			&ev.CreatedAt,
+			&ev.TraceUID,
+		); err != nil {
 			return nil, errors.Wrapf(err, "scanning events for saga %s", sagaId)
 		}
 
@@ -394,6 +397,7 @@ func (s mysqlStore) eventFromModel(ev historyEventSqlModel) (*HistoryEvent, erro
 		Payload: eventPayload,
 		CreatedAt: ev.CreatedAt.Time,
 		OriginSource: ev.OriginSource.String,
+		TraceUID: ev.TraceUID.String,
 	}
 
 	return res, nil
@@ -481,6 +485,7 @@ func initMysqlTables(db *sql.DB) error {
 		payload text null,
 		origin varchar(255) null,
 		created_at timestamp null,
+		trace_uid varchar(255) null,
 		constraint saga_history_saga_model_id_fk
 			foreign key (saga_uid) references %v (uid)
 				on update cascade on delete cascade
@@ -518,4 +523,5 @@ type historyEventSqlModel struct {
 	Payload      []byte
 	OriginSource sql.NullString
 	SagaStatus   sql.NullString
+	TraceUID     sql.NullString
 }
