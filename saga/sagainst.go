@@ -28,7 +28,7 @@ type Instance interface {
 	Fail(ev message.Object)
 
 	HistoryEvents() []HistoryEvent
-	AttachEvent(ev message.Object, opts... AttachEvOpt)
+	AddHistoryEvent(ev message.Object, opts...AddEvOpt)
 
 	StartedAt() *time.Time
 	UpdatedAt() *time.Time
@@ -141,8 +141,8 @@ func (s *sagaInstance) update() {
 	s.updatedAt = &currentTime
 }
 
-func (s *sagaInstance) AttachEvent(ev message.Object, opts... AttachEvOpt) {
-	attachOpts := &attachEvOpts{}
+func (s *sagaInstance) AddHistoryEvent(ev message.Object, opts...AddEvOpt) {
+	attachOpts := &addEvOpts{}
 	if len(opts) > 0 {
 		for _, o := range opts {
 			o(attachOpts)
@@ -169,21 +169,21 @@ type HistoryEvent struct {
 	TraceUID     string      `json:"trace_uid"` //uid of received message, could be empty
 }
 
-type attachEvOpts struct {
+type addEvOpts struct {
 	traceUID string
 	origin string
 }
 
-type AttachEvOpt func (o *attachEvOpts)
+type AddEvOpt func (o *addEvOpts)
 
-func WithTraceUID(uid string) AttachEvOpt {
-	return func(o *attachEvOpts) {
+func WithTraceUID(uid string) AddEvOpt {
+	return func(o *addEvOpts) {
 		o.traceUID = uid
 	}
 }
 
-func WithOrigin(origin string) AttachEvOpt {
-	return func(o *attachEvOpts) {
+func WithOrigin(origin string) AddEvOpt {
+	return func(o *addEvOpts) {
 		o.origin = origin
 	}
 }
