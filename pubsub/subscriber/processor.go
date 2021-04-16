@@ -35,19 +35,11 @@ func (p *processor) Process(ctx context.Context, inPkg pkg.IncomingPkg) error {
 		return errors.WithStack(err)
 	}
 
-	uidVal, exists := inPkg.Headers()["uid"]
-
-	if !exists {
+	if inPkg.UID() == "" {
 		return errors.Errorf("error finding uid header in received message. %s", payload.GroupKind().String())
 	}
 
-	uid, ok := uidVal.(string)
-
-	if !ok {
-		return errors.Errorf("error converting uid header value to string %v. %s", uidVal, payload.GroupKind().String())
-	}
-
-	receivedMsg := message.NewReceivedMessage(uid, payload, inPkg.Headers(), time.Now(), inPkg.Origin())
+	receivedMsg := message.NewReceivedMessage(inPkg.UID(), payload, inPkg.Headers(), time.Now(), inPkg.Origin())
 
 	if receivedMsg.Headers().ReturnsCount() >= 10 {
 		return errors.Errorf("message %s was returned more that 10 times. Not acking. It will be removed once TTL expires.", receivedMsg.UID())

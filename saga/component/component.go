@@ -27,7 +27,7 @@ type Component struct {
 }
 
 type opts struct {
-	idExtractor  saga.IdExtractor
+	uidService   saga.SagaUIDService
 	apiServerMux *http.ServeMux
 }
 
@@ -43,8 +43,8 @@ func (c Component) Init(mBus *brigadier.MessageBus) error {
 		config(opts)
 	}
 
-	if opts.idExtractor == nil {
-		opts.idExtractor = saga.NewSagaIdExtractor()
+	if opts.uidService == nil {
+		opts.uidService = saga.NewSagaUIDService()
 	}
 
 	store, err := c.sagaStoreFactory(mBus.Marshaller())
@@ -57,8 +57,8 @@ func (c Component) Init(mBus *brigadier.MessageBus) error {
 		initApiServer(opts.apiServerMux, store, mBus.Logger())
 	}
 
-	eventHandler := handlers.NewEventsHandler(store, c.sagaMutex, c.schema, opts.idExtractor, mBus.Logger())
-	sagaControlHandler := handlers.NewSagaControlHandler(store, c.sagaMutex, mBus.SchemeRegistry(), mBus.Logger())
+	eventHandler := handlers.NewEventsHandler(store, c.sagaMutex, c.schema, opts.uidService, mBus.Logger())
+	sagaControlHandler := handlers.NewSagaControlHandler(store, c.sagaMutex, mBus.SchemeRegistry(), opts.uidService, mBus.Logger())
 
 	contractsList := []scheme.Object{
 		&contracts.StartSagaCommand{},
@@ -114,9 +114,9 @@ func (c *Component) RegisterSagaEndpoints(endpoints ...endpoint.Endpoint) {
 	c.endpoints = append(c.endpoints, endpoints...)
 }
 
-func WithSagaIdExtractor(extractor saga.IdExtractor) configOption {
+func WithSagaUIDService(svc saga.SagaUIDService) configOption {
 	return func(o *opts) {
-		o.idExtractor = extractor
+		o.uidService = svc
 	}
 }
 

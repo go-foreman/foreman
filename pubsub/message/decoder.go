@@ -69,8 +69,13 @@ func (j jsonDecoder) walkUnstructured(parentObj Object, unstructured *Unstructur
 			}
 
 			parentValue := reflect.ValueOf(parentObj).Elem()
+			fieldKey := findKeyByTag(parentValue.Type(), key)
 
-			field := parentValue.FieldByName(findKeyByTag(parentValue.Type(), key))
+			if fieldKey == "" {
+				fieldKey = key
+			}
+
+			field := parentValue.FieldByName(fieldKey)
 
 			if field.CanSet() {
 				field.Set(reflect.ValueOf(nestedObj))

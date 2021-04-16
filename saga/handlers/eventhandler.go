@@ -17,13 +17,13 @@ import (
 
 type SagaEventsHandler struct {
 	sagaStore     sagaPkg.Store
-	idExtractor   sagaPkg.IdExtractor
+	idExtractor   sagaPkg.SagaUIDService
 	typesRegistry scheme.KnownTypesRegistry
 	mutex         sagaMutex.Mutex
 	logger        log.Logger
 }
 
-func NewEventsHandler(sagaStore sagaPkg.Store, mutex sagaMutex.Mutex, sagaRegistry scheme.KnownTypesRegistry, extractor sagaPkg.IdExtractor, logger log.Logger) *SagaEventsHandler {
+func NewEventsHandler(sagaStore sagaPkg.Store, mutex sagaMutex.Mutex, sagaRegistry scheme.KnownTypesRegistry, extractor sagaPkg.SagaUIDService, logger log.Logger) *SagaEventsHandler {
 	return &SagaEventsHandler{sagaStore: sagaStore, idExtractor: extractor, typesRegistry: sagaRegistry, mutex: mutex, logger: logger}
 }
 
@@ -32,10 +32,10 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 	ctx := execCtx.Context()
 	msgGK := msg.Payload().GroupKind().String()
 
-	sagaId, err := e.idExtractor.ExtractSagaId(msg.Headers())
+	sagaId, err := e.idExtractor.ExtractSagaUID(msg.Headers())
 
 	if err != nil {
-		return errors.Wrapf(err, "Error extracting saga id from message %s", msg.UID())
+		return errors.Wrapf(err, "extracting saga id from message %s", msg.UID())
 	}
 
 	//lock saga so nobody can process events for this saga in another consumer's replicas
@@ -78,7 +78,7 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 
 		for _, delivery := range sagaCtx.Deliveries() {
 			headers := execCtx.Message().Headers()
-			headers[sagaPkg.SagaIdKey] = sagaInstance.UID()
+			headers[sagaPkg.SagaUIDKey] = sagaInstance.UID()
 			outcomingMsg := message.NewOutcomingMessage(delivery.Payload, message.WithHeaders(headers))
 
 			if err := execCtx.Send(outcomingMsg, delivery.Options...); err != nil {
@@ -108,7 +108,7 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 		//if parent exists - we should forward this event to parent saga
 		if sagaInstance.ParentID() != "" {
 			headers := execCtx.Message().Headers()
-			headers[sagaPkg.SagaIdKey] = sagaInstance.ParentID()
+			headers[sagaPkg.SagaUIDKey] = sagaInstance.ParentID()
 
 			return execCtx.Send(message.NewOutcomingMessage(&contracts.SagaChildCompletedEvent{SagaId: sagaInstance.UID()}, message.WithHeaders(headers)))
 		}

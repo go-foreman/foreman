@@ -5,21 +5,22 @@ import (
 	"github.com/pkg/errors"
 )
 
-const SagaIdKey = "sagaId"
+const SagaUIDKey = "sagaUID"
 
-type IdExtractor interface {
-	ExtractSagaId(headers message.Headers) (string, error)
+type SagaUIDService interface {
+	ExtractSagaUID(headers message.Headers) (string, error)
+	AddSagaId(headers message.Headers, sagaUID string)
 }
 
-func NewSagaIdExtractor() IdExtractor {
-	return &idHeaderExtractor{}
+func NewSagaUIDService() SagaUIDService {
+	return &sagaUIDService{}
 }
 
-type idHeaderExtractor struct {
+type sagaUIDService struct {
 }
 
-func (i idHeaderExtractor) ExtractSagaId(headers message.Headers) (string, error) {
-	if val, ok := headers[SagaIdKey]; ok {
+func (i sagaUIDService) ExtractSagaUID(headers message.Headers) (string, error) {
+	if val, ok := headers[SagaUIDKey]; ok {
 		sagaId, converted := val.(string)
 
 		if !converted {
@@ -29,5 +30,9 @@ func (i idHeaderExtractor) ExtractSagaId(headers message.Headers) (string, error
 		return sagaId, nil
 	}
 
-	return "", errors.New("saga uid was not found in headers")
+	return "", errors.Errorf("saga uid was not found in headers by key %s", SagaUIDKey)
+}
+
+func (i sagaUIDService) AddSagaId(headers message.Headers, sagaUID string) {
+	headers[SagaUIDKey] = sagaUID
 }

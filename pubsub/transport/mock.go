@@ -96,7 +96,7 @@ type inPkg struct {
 	traceId     string
 }
 
-func (i inPkg) ID() string {
+func (i inPkg) UID() string {
 	return "id"
 }
 
@@ -126,10 +126,6 @@ func (i inPkg) Nack(options ...pkg.AcknowledgmentOption) error {
 
 func (i inPkg) Reject(options ...pkg.AcknowledgmentOption) error {
 	return nil
-}
-
-func (i inPkg) TraceId() string {
-	return i.traceId
 }
 
 func (i inPkg) PublishedAt() time.Time {

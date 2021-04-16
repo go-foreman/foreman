@@ -14,8 +14,8 @@ import (
 	"time"
 )
 
-func NewSagaControlHandler(sagaStore sagaPkg.Store, mutex mutex.Mutex, sagaRegistry scheme.KnownTypesRegistry, logger log.Logger) *SagaControlHandler {
-	return &SagaControlHandler{typesRegistry: sagaRegistry, store: sagaStore, mutex: mutex, logger: logger}
+func NewSagaControlHandler(sagaStore sagaPkg.Store, mutex mutex.Mutex, sagaRegistry scheme.KnownTypesRegistry, sagaUIDSvc sagaPkg.SagaUIDService,logger log.Logger) *SagaControlHandler {
+	return &SagaControlHandler{typesRegistry: sagaRegistry, store: sagaStore, mutex: mutex, sagaUIDSvc: sagaUIDSvc, logger: logger}
 }
 
 type SagaControlHandler struct {
@@ -23,6 +23,7 @@ type SagaControlHandler struct {
 	store         sagaPkg.Store
 	mutex         mutex.Mutex
 	logger        log.Logger
+	sagaUIDSvc    sagaPkg.SagaUIDService
 }
 
 func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error {
@@ -113,6 +114,7 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 	}
 
 	for _, delivery := range sagaCtx.Deliveries() {
+		h.sagaUIDSvc.AddSagaId(msg.Headers(), sagaCtx.SagaInstance().UID())
 		outcomingMessage := message.NewOutcomingMessage(delivery.Payload, message.WithHeaders(msg.Headers()))
 		if err := execCtx.Send(outcomingMessage, delivery.Options...); err != nil {
 			execCtx.LogMessage(log.ErrorLevel, fmt.Sprintf("error sending delivery for saga %s. Delivery: (%v). %s", sagaCtx.SagaInstance().UID(), delivery, err))

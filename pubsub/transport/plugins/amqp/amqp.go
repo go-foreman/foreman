@@ -223,7 +223,7 @@ func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, o
 						return
 					}
 
-					income <- pkg.NewAmqpIncomingPackage(msg, msg.MessageId, queue.Name())
+					income <- pkg.NewAmqpIncomingPackage(msg, queue.Name())
 				case <-ctx.Done():
 					t.logger.Logf(log.WarnLevel, "Canceled context. Stopped consuming queue %s", queue.Name())
 					return
