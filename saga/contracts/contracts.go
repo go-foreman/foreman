@@ -1,37 +1,38 @@
 package contracts
 
-import "github.com/go-foreman/foreman/runtime/scheme"
+import (
+	"github.com/go-foreman/foreman/pubsub/message"
+	"github.com/go-foreman/foreman/runtime/scheme"
+)
 
-func init() {
-	contractsList := []interface{}{
-		&StartSagaCommand{},
-		&RecoverSagaCommand{},
-		&CompensateSagaCommand{},
-		&SagaCompletedEvent{},
-		&SagaChildCompletedEvent{},
-	}
-	scheme.KnownTypesRegistryInstance.RegisterTypes(contractsList...)
-}
+const (
+	SystemGroup scheme.Group = "systemSaga"
+)
 
+// StartSagaCommand once received will create SagaInstance, save it to Store and Start()
 type StartSagaCommand struct {
-	SagaId   string      `json:"saga_id" mapstructure:"saga_id"`
-	ParentId string      `json:"parent_id" mapstructure:"parent_id"`
-	SagaName string      `json:"saga_name" mapstructure:"saga_name"`
-	Saga     interface{} `json:"saga"`
+	message.ObjectMeta
+	SagaId   string      `json:"saga_id"`
+	ParentId string      `json:"parent_id"`
+	Saga     message.Object   `json:"saga"`
 }
 
 type RecoverSagaCommand struct {
+	message.ObjectMeta
 	SagaId string `json:"saga_id"`
 }
 
 type CompensateSagaCommand struct {
+	message.ObjectMeta
 	SagaId string `json:"saga_id"`
 }
 
 type SagaCompletedEvent struct {
+	message.ObjectMeta
 	SagaId string `json:"saga_id"`
 }
 
 type SagaChildCompletedEvent struct {
+	message.ObjectMeta
 	SagaId string `json:"saga_id"`
 }

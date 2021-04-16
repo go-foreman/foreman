@@ -3,6 +3,7 @@ package subscriber
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/go-foreman/foreman/log"
 	msgDispatcher "github.com/go-foreman/foreman/pubsub/dispatcher"
@@ -18,39 +19,45 @@ type Processor interface {
 
 type processor struct {
 	logger            log.Logger
-	decoder           message.Decoder
+	decoder           message.Marshaller
 	dispatcher        msgDispatcher.Dispatcher
 	msgExecCtxFactory execution.MessageExecutionCtxFactory
 }
 
-func NewMessageProcessor(decoder message.Decoder, msgExecCtxFactory execution.MessageExecutionCtxFactory, msgDispatcher msgDispatcher.Dispatcher, logger log.Logger) Processor {
+func NewMessageProcessor(decoder message.Marshaller, msgExecCtxFactory execution.MessageExecutionCtxFactory, msgDispatcher msgDispatcher.Dispatcher, logger log.Logger) Processor {
 	return &processor{decoder: decoder, msgExecCtxFactory: msgExecCtxFactory, dispatcher: msgDispatcher, logger: logger}
 }
 
 func (p *processor) Process(ctx context.Context, inPkg pkg.IncomingPkg) error {
-	msg, err := p.decoder.Decode(inPkg)
+	payload, err := p.decoder.Unmarshal(inPkg.Payload())
 	if err != nil {
 		p.logger.Logf(log.ErrorLevel, "Failed to decode IncomingPkg into Message. %s", err)
 		return errors.WithStack(err)
 	}
 
-	if msg.Headers.ReturnsCount() >= 10 {
-		return errors.Errorf("Message %s was returned more that 10 times. Not acking. It will be removed once TTL expires.", msg.ID)
+	if inPkg.UID() == "" {
+		return errors.Errorf("error finding uid header in received message. %s", payload.GroupKind().String())
 	}
 
-	executors := p.dispatcher.Match(msg)
+	receivedMsg := message.NewReceivedMessage(inPkg.UID(), payload, inPkg.Headers(), time.Now(), inPkg.Origin())
+
+	if receivedMsg.Headers().ReturnsCount() >= 10 {
+		return errors.Errorf("message %s was returned more that 10 times. Not acking. It will be removed once TTL expires.", receivedMsg.UID())
+	}
+
+	executors := p.dispatcher.Match(payload)
 
 	if len(executors) == 0 {
-		errMsg := fmt.Sprintf("No executors defined for message %s %s of type %s.", msg.ID, msg.Name, msg.Type)
+		errMsg := fmt.Sprintf("No executors defined for message %s %s", receivedMsg.UID(), payload.GroupKind())
 		p.logger.Log(log.ErrorLevel, errMsg)
 		return WithNoExecutorsDefinedErr(errors.New(errMsg))
 	}
 
-	execCtx := p.msgExecCtxFactory.CreateCtx(ctx, inPkg, msg)
+	execCtx := p.msgExecCtxFactory.CreateCtx(ctx, inPkg, receivedMsg)
 
 	for _, exec := range executors {
 		if err := exec(execCtx); err != nil {
-			return errors.Wrapf(err, "error executing message %s of type %s. %s.", msg.Name, msg.Type, err)
+			return errors.Wrapf(err, "error executing message %s %s", receivedMsg.UID(), payload.GroupKind())
 		}
 	}
 

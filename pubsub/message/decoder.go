@@ -2,18 +2,20 @@ package message
 
 import (
 	"encoding/json"
-	"github.com/go-foreman/foreman/pubsub/transport/pkg"
 	"github.com/go-foreman/foreman/runtime/scheme"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+	"reflect"
+	"strings"
 )
 
-type Decoder interface {
-	Decode(inPkg pkg.IncomingPkg) (*Message, error)
+type Marshaller interface {
+	Unmarshal(b []byte) (Object, error)
+	Marshal(obj Object) ([]byte, error)
 }
 
-func NewJsonDecoder(knownTypes scheme.KnownTypesRegistry) Decoder {
-	return &JsonEncoder{knownTypes: knownTypes}
+func NewJsonMarshaller(knownTypes scheme.KnownTypesRegistry) Marshaller {
+	return &jsonDecoder{knownTypes: knownTypes}
 }
 
 type DecoderErr struct {
@@ -24,58 +26,166 @@ func WithDecoderErr(err error) error {
 	return DecoderErr{err}
 }
 
-type JsonEncoder struct {
+type jsonDecoder struct {
 	knownTypes scheme.KnownTypesRegistry
+	decoder mapstructure.Decoder
 }
 
-func (j JsonEncoder) Decode(inPkg pkg.IncomingPkg) (*Message, error) {
-	var decoded Message
+func (j jsonDecoder) Unmarshal(b []byte) (Object, error) {
+	unstructured := &Unstructured{}
 
-	err := json.Unmarshal(inPkg.Payload(), &decoded)
-
-	if err != nil {
+	if err := unstructured.UnmarshalJSON(b); err != nil {
 		return nil, WithDecoderErr(err)
 	}
 
-	//message.Payload now is map[string]interface{} and we are going to fill this data into needed type from KnownTypesRegistry
-	//then in any handler user will be able to do myType, ok := msg.Payload.(*MyType)
-
-	payload, err := j.knownTypes.LoadType(scheme.WithKey(decoded.Name))
+	obj, err := j.decode(unstructured)
 
 	if err != nil {
-		return nil, WithDecoderErr(errors.Wrapf(err, "error decoding pkg payload into message"))
+		return nil, errors.WithStack(err)
 	}
 
-	//kek, err := json.Marshal(decoded.Payload)
-	//
-	//if err != nil {
-	//	return nil, WithDecoderErr(err)
-	//}
-	//
-	//if err := json.Unmarshal(kek, &payload); err != nil {
-	//	return nil, WithDecoderErr(errors.Wrapf(err, "Error decoding data from message payload interface{} to an original type %s", decoded.Name))
-	//}
+	return obj, nil
+}
+
+func (j jsonDecoder) decode(unstructured *Unstructured) (Object, error) {
+	parentObj, err := j.decodeUnstructured(unstructured)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	if err := j.walkUnstructured(parentObj, unstructured); err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	return parentObj, nil
+}
+
+func (j jsonDecoder) walkUnstructured(parentObj Object, unstructured *Unstructured) error {
+	for key, value := range unstructured.Object {
+		if v, ok := value.(*Unstructured); ok {
+			nestedObj, err := j.decodeUnstructured(v)
+			if err != nil {
+				return errors.WithStack(err)
+			}
+
+			parentValue := reflect.ValueOf(parentObj).Elem()
+			fieldKey := findKeyByTag(parentValue.Type(), key)
+
+			if fieldKey == "" {
+				fieldKey = key
+			}
+
+			field := parentValue.FieldByName(fieldKey)
+
+			if field.CanSet() {
+				field.Set(reflect.ValueOf(nestedObj))
+			}
+
+			return j.walkUnstructured(nestedObj, v)
+		}
+	}
+
+	return nil
+}
+
+func findKeyByTag(t reflect.Type, key string) string {
+	tagsMap := make(map[string]string)
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		if jsonSpec := strings.Split(field.Tag.Get("json"), ","); len(jsonSpec) > 0 {
+			tagsMap[jsonSpec[0]] = field.Name
+		}
+	}
+
+	return tagsMap[key]
+}
+
+func (j jsonDecoder) decodeUnstructured(unstructured *Unstructured) (Object, error) {
+	nestedObj, err := j.loadObj(unstructured)
+
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
 
 	decoderConf := mapstructure.DecoderConfig{
-		Squash:  true,
+		//Squash:  true,
 		TagName: "json",
-		Result:  &payload,
+		Result:  &nestedObj,
 	}
 
 	decoder, err := mapstructure.NewDecoder(&decoderConf)
 
 	if err != nil {
-		return nil, WithDecoderErr(errors.WithStack(err))
+		return nil, errors.Wrapf(err, "creating decoder for %v", unstructured.GroupKind().String())
 	}
 
-	if err := decoder.Decode(decoded.Payload); err != nil {
-		return nil, WithDecoderErr(errors.Errorf("Error decoding data from message payload interface{} to an original type %s", decoded.Name))
+	if err := decoder.Decode(unstructured.Object); err != nil {
+		return nil, errors.Wrapf(err, "decoding unstructured %s. data: %v", unstructured.GroupKind().String(), unstructured.Object)
 	}
 
-	decoded.Payload = payload
-	decoded.OriginSource = inPkg.Origin()
-	decoded.Headers = inPkg.Headers()
-	decoded.ReceivedAt = inPkg.ReceivedAt()
+	return nestedObj, nil
+}
 
-	return &decoded, nil
+func (j jsonDecoder) loadObj(unstructured *Unstructured) (Object, error) {
+	gk := unstructured.GroupKind()
+
+	if gk.Empty() {
+		return nil, errors.Errorf("GroupKing is empty in Unstructured. data: %v", unstructured)
+	}
+
+	obj, err := j.knownTypes.NewObject(gk)
+
+	if err != nil {
+		return nil, errors.Wrapf(err, "creating new obj for %s data: %v", gk.String(), unstructured)
+	}
+
+	return obj, nil
+}
+
+// Marshal marshals Object into json. it has side effect though, it will set GK if obj has empty GK
+func (j jsonDecoder) Marshal(obj Object) ([]byte, error) {
+	encodingTo := obj
+
+	//todo what if obj has embedded obj with already filled GroupKind? this obj will be marshalled with wrong GK
+	if err := j.setGroupKind(obj); err != nil {
+		return nil, errors.Wrapf(err, "setting GK recursively for %v", obj)
+	}
+
+	encodedBytes, err := json.Marshal(encodingTo)
+
+	if err != nil {
+		return nil, WithDecoderErr(errors.Wrapf(err, "encoding obj %v, GK: %s", obj, encodingTo.GroupKind().String()))
+	}
+
+	return encodedBytes, nil
+}
+
+var objectType = reflect.TypeOf((*Object)(nil)).Elem()
+
+func(j jsonDecoder) setGroupKind(obj Object) error {
+	if gk := obj.GroupKind(); gk.Empty() {
+		gk, err := j.knownTypes.ObjectKind(obj)
+		if err != nil {
+			return WithDecoderErr(errors.Wrapf(err, "encoding %v", obj))
+		}
+		obj.SetGroupKind(gk)
+	}
+
+	//we not allow nested Object
+	structVal := reflect.ValueOf(obj)
+	structType := structVal.Type().Elem()
+
+	for i := 0; i < structType.NumField(); i++ {
+		if currentField := structType.Field(i).Type; currentField.Kind() == reflect.Interface {
+			if currentField.Implements(objectType) {
+				next, ok := structVal.Elem().Field(i).Interface().(Object)
+				if !ok {
+					return WithDecoderErr(errors.Errorf("converting %s to Object interface", structType.String()))
+				}
+				return j.setGroupKind(next)
+			}
+		}
+	}
+
+	return nil
 }

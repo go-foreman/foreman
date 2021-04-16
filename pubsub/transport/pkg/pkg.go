@@ -6,14 +6,13 @@ import (
 )
 
 type IncomingPkg interface {
-	ID() string
+	UID() string
 	Origin() string
 	Payload() []byte
 	Headers() map[string]interface{}
 	Ack(options ...AcknowledgmentOption) error
 	Nack(options ...AcknowledgmentOption) error
 	Reject(options ...AcknowledgmentOption) error
-	TraceId() string
 	ReceivedAt() time.Time
 	PublishedAt() time.Time
 }
@@ -25,8 +24,8 @@ type ackOpts struct {
 
 type AcknowledgmentOption func(options *ackOpts)
 
-func NewAmqpIncomingPackage(delivery amqp.Delivery, traceId, origin string) IncomingPkg {
-	return &inAmqpPkg{traceId: traceId, origin: origin, receivedAt: time.Now(), delivery: delivery}
+func NewAmqpIncomingPackage(delivery amqp.Delivery, origin string) IncomingPkg {
+	return &inAmqpPkg{origin: origin, receivedAt: time.Now(), delivery: delivery}
 }
 
 type inAmqpPkg struct {
@@ -34,11 +33,14 @@ type inAmqpPkg struct {
 	receivedAt time.Time
 	origin     string
 	attributes map[string]string
-	traceId    string
 }
 
-func (i inAmqpPkg) ID() string {
-	return i.delivery.MessageId
+func (i inAmqpPkg) UID() string {
+	uidVal, ok := i.Headers()["uid"]
+	if ok {
+		return uidVal.(string)
+	}
+	return ""
 }
 
 func (i inAmqpPkg) Origin() string {
@@ -50,6 +52,10 @@ func (i inAmqpPkg) Payload() []byte {
 }
 
 func (i inAmqpPkg) Headers() map[string]interface{} {
+	if i.delivery.Headers == nil {
+		i.delivery.Headers = make(amqp.Table)
+	}
+
 	return i.delivery.Headers
 }
 
@@ -82,10 +88,6 @@ func (i inAmqpPkg) Reject(options ...AcknowledgmentOption) error {
 	}
 
 	return i.delivery.Reject(opts.requeue)
-}
-
-func (i inAmqpPkg) TraceId() string {
-	return i.traceId
 }
 
 func (i inAmqpPkg) PublishedAt() time.Time {

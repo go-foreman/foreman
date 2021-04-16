@@ -16,29 +16,26 @@ import (
 )
 
 type SagaEventsHandler struct {
-	sagaStore     sagaPkg.Store
-	idExtractor   sagaPkg.IdExtractor
-	typesRegistry scheme.KnownTypesRegistry
-	mutex         sagaMutex.Mutex
-	logger        log.Logger
+	sagaStore  sagaPkg.Store
+	sagaUIDSvc sagaPkg.SagaUIDService
+	scheme     scheme.KnownTypesRegistry
+	mutex      sagaMutex.Mutex
+	logger     log.Logger
 }
 
-func NewEventsHandler(sagaStore sagaPkg.Store, mutex sagaMutex.Mutex, sagaRegistry scheme.KnownTypesRegistry, extractor sagaPkg.IdExtractor, logger log.Logger) *SagaEventsHandler {
-	return &SagaEventsHandler{sagaStore: sagaStore, idExtractor: extractor, typesRegistry: sagaRegistry, mutex: mutex, logger: logger}
+func NewEventsHandler(sagaStore sagaPkg.Store, mutex sagaMutex.Mutex, scheme scheme.KnownTypesRegistry, extractor sagaPkg.SagaUIDService, logger log.Logger) *SagaEventsHandler {
+	return &SagaEventsHandler{sagaStore: sagaStore, sagaUIDSvc: extractor, scheme: scheme, mutex: mutex, logger: logger}
 }
 
 func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 	msg := execCtx.Message()
 	ctx := execCtx.Context()
+	msgGK := msg.Payload().GroupKind().String()
 
-	if msg.Type != message.EventType {
-		return errors.Errorf("Received message %s is not an event type", msg.ID)
-	}
-
-	sagaId, err := e.idExtractor.ExtractSagaId(msg)
+	sagaId, err := e.sagaUIDSvc.ExtractSagaUID(msg.Headers())
 
 	if err != nil {
-		return errors.Wrapf(err, "Error extracting saga id from message %s", msg.ID)
+		return errors.Wrapf(err, "extracting saga id from message %s", msg.UID())
 	}
 
 	//lock saga so nobody can process events for this saga in another consumer's replicas
@@ -67,42 +64,54 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 	}
 
 	saga := sagaInstance.Saga()
+	saga.SetSchema(e.scheme)
 	saga.Init()
 
 	sagaCtx := sagaPkg.NewSagaCtx(execCtx, sagaInstance)
+	var sentPayloads []sagaPkg.HistoryEvent
+	sagaInstance.Progress()
 
-	if handler, exists := saga.EventHandlers()[msg.Name]; exists {
+	if handler, exists := saga.EventHandlers()[msg.Payload().GroupKind()]; exists {
 
 		if err := handler(sagaCtx); err != nil {
-			execCtx.LogMessage(log.ErrorLevel, fmt.Sprintf("error handling saga event %s from message %s: %s", msg.Name, msg.ID, err))
-			return errors.Wrapf(err, "error handling event %s from message %s", msg.Name, msg.ID)
+			execCtx.LogMessage(log.ErrorLevel, fmt.Sprintf("error handling saga event %s from message %s: %s", msgGK, msg.UID(), err))
+			return errors.Wrapf(err, "handling event %s from message %s", msgGK, msg.UID())
 		}
 
 		for _, delivery := range sagaCtx.Deliveries() {
-			if err := execCtx.Send(delivery.Message, delivery.Options...); err != nil {
-				execCtx.LogMessage(log.ErrorLevel, fmt.Sprintf("error sending delivery for saga %s. Delivery: (%v). %s", sagaCtx.SagaInstance().ID(), delivery, err))
-				return errors.Wrapf(err, "error sending delivery for saga %s. Delivery: (%v)", sagaCtx.SagaInstance().ID(), delivery)
+			e.sagaUIDSvc.AddSagaId(execCtx.Message().Headers(), sagaInstance.UID())
+			outcomingMsg := message.NewOutcomingMessage(delivery.Payload, message.WithHeaders(execCtx.Message().Headers()))
+
+			if err := execCtx.Send(outcomingMsg, delivery.Options...); err != nil {
+				execCtx.LogMessage(log.ErrorLevel, fmt.Sprintf("error sending delivery for saga %s. Delivery: (%v). %s", sagaCtx.SagaInstance().UID(), delivery, err))
+				return errors.Wrapf(err, "sending delivery for saga %s. Delivery: (%v)", sagaCtx.SagaInstance().UID(), delivery)
 			}
-			sagaCtx.SagaInstance().AttachEvent(sagaPkg.HistoryEvent{Metadata: delivery.Message.Metadata, Payload: delivery.Message.Payload, CreatedAt: time.Now()})
+			//just to remember what we sent out
+			sentPayloads = append(sentPayloads, sagaPkg.HistoryEvent{UID: outcomingMsg.UID(), Payload: delivery.Payload, CreatedAt: time.Now(), SagaStatus: sagaInstance.Status().String()})
+
 		}
 	} else {
-		e.logger.Logf(log.WarnLevel, "No handler defined for event %s from message %s", msg.Name, msg.ID)
+		e.logger.Logf(log.WarnLevel, "no handler defined for event %s from message %s", msgGK, msg.UID())
 	}
 
-	sagaInstance.AttachEvent(sagaPkg.HistoryEvent{Metadata: msg.Metadata, Payload: msg.Payload, CreatedAt: time.Now(), OriginSource: msg.OriginSource, SagaStatus: sagaInstance.Status().String(), Description: msg.Description})
+	//write received event into history
+	sagaInstance.AttachEvent(sagaPkg.HistoryEvent{UID: msg.UID(), Payload: msg.Payload(), CreatedAt: time.Now(), OriginSource: msg.Origin(), SagaStatus: sagaInstance.Status().String()})
+
+	for _, ev := range sentPayloads {
+		sagaInstance.AttachEvent(ev)
+	}
 
 	if err := e.sagaStore.Update(ctx, sagaInstance); err != nil {
-		return errors.Wrapf(err, "error saving saga's %s state to db", sagaInstance.ID())
+		return errors.Wrapf(err, "error saving saga's %s state to db", sagaInstance.UID())
 	}
 
 	//sending an event about saga completion to parent if it exists and to all regular handlers.
 	if sagaInstance.Status().Completed() {
-		var msg = &message.Message{}
 		//if parent exists - we should forward this event to parent saga
 		if sagaInstance.ParentID() != "" {
-			msg = message.NewEventMessage(contracts.SagaChildCompletedEvent{SagaId: sagaInstance.ID()})
-			msg.Headers[sagaPkg.SagaIdKey] = sagaInstance.ParentID()
-			return execCtx.Send(msg)
+			e.sagaUIDSvc.AddSagaId(execCtx.Message().Headers(), sagaInstance.ParentID())
+
+			return execCtx.Send(message.NewOutcomingMessage(&contracts.SagaChildCompletedEvent{SagaId: sagaInstance.UID()}, message.WithHeaders(execCtx.Message().Headers())))
 		}
 	}
 

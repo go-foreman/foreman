@@ -87,7 +87,7 @@ func (s *subscriber) processPackage(ctx context.Context, inPkg pkg.IncomingPkg) 
 	var toAck bool
 
 	if err := s.processor.Process(processorCtx, inPkg); err != nil {
-		s.logger.Logf(log.ErrorLevel, "error happened while processing pkg %s from %s. %s\n", inPkg.TraceId(), inPkg.Origin(), err)
+		s.logger.Logf(log.ErrorLevel, "error happened while processing pkg %s from %s. %s\n", inPkg.UID(), inPkg.Origin(), err)
 		originalErr := errors.Cause(err)
 
 		if statusErr, ok := originalErr.(pubsubErr.StatusErr); ok {
@@ -101,7 +101,7 @@ func (s *subscriber) processPackage(ctx context.Context, inPkg pkg.IncomingPkg) 
 
 	if toAck {
 		if err := inPkg.Ack(); err != nil {
-			s.logger.Logf(log.ErrorLevel, "error acking package %s. %s", inPkg.TraceId(), err)
+			s.logger.Logf(log.ErrorLevel, "error acking package %s. %s", inPkg.UID(), err)
 		}
 	}
 }

@@ -3,41 +3,8 @@ package message
 import (
 	"github.com/go-foreman/foreman/runtime/scheme"
 	"github.com/google/uuid"
-	"github.com/pkg/errors"
 	"time"
 )
-
-const (
-	EventType MessageType = "event"
-	CommandType MessageType = "command"
-)
-
-type Metadata struct {
-	ID      string  `json:"id"`
-	Name    string  `json:"name"`
-	Type    MessageType  `json:"type"`
-	Headers Headers `json:"headers"`
-}
-
-func (m *Message) ReturnsCount() int {
-	v, exists := m.Headers["returnsCount"]
-	if !exists {
-		return 0
-	}
-	returnsCount, ok := v.(int)
-	if !ok {
-		return 0
-	}
-	return returnsCount
-}
-
-type Message struct {
-	Metadata     `json:"metadata"`
-	Payload      interface{} `json:"payload"`
-	Description  string      `json:"description"`
-	OriginSource string      `json:"-"`
-	ReceivedAt   time.Time   `json:"-"`
-}
 
 type Headers map[string]interface{}
 
@@ -68,32 +35,72 @@ func (m Headers) RegisterReturn() {
 	m["returnsCount"] = returnsCount
 }
 
-type MessageType string
+type Object interface {
+	scheme.Object
+}
 
-func ParseMessageType(msgType string) (MessageType, error) {
-	var t MessageType
-	switch msgType {
-	case "event":
-		t = EventType
-	case "command":
-		t = CommandType
-	default:
-		return "", errors.Errorf("unknown messageType")
+type ObjectMeta struct {
+	scheme.TypeMeta
+}
+
+type ReceivedMessage struct {
+	uid string
+	headers Headers
+	payload Object
+	receivedAt time.Time
+	origin string
+}
+
+func NewReceivedMessage(uid string, payload Object, headers Headers, receivedAt time.Time, origin string) *ReceivedMessage {
+	return &ReceivedMessage{
+		uid: uid,
+		headers:    headers,
+		payload:    payload,
+		receivedAt: receivedAt,
+		origin:     origin,
 	}
-
-	return t, nil
 }
 
-func NewEventMessage(payload interface{}, options ...MsgOption) *Message {
-	return NewMessage(scheme.WithStruct(payload), EventType, payload, options...)
+func (m ReceivedMessage) UID() string {
+	return m.uid
 }
 
-func NewCommandMessage(payload interface{}, options ...MsgOption) *Message {
-	return NewMessage(scheme.WithStruct(payload), CommandType, payload, options...)
+func (m ReceivedMessage) Headers() Headers {
+	return m.headers
 }
 
-//NewMessage accepts only structs as payload. If you want to pass scalar data type - wrap it in a struct.
-func NewMessage(keyChoice scheme.KeyChoice, msgType MessageType, payload interface{}, passedOptions ...MsgOption) *Message {
+func (m ReceivedMessage) Payload() Object {
+	return m.payload
+}
+
+func (m ReceivedMessage) ReceivedAt() time.Time {
+	return m.receivedAt
+}
+
+func (m ReceivedMessage) Origin() string {
+	return m.origin
+}
+
+type OutcomingMessage struct {
+	obj Object
+	uid string
+	headers Headers
+}
+
+func (m OutcomingMessage) Headers() Headers {
+	return m.headers
+}
+
+func (m OutcomingMessage) UID() string {
+	return m.uid
+}
+
+func (m OutcomingMessage) Payload() Object {
+	return m.obj
+}
+
+//NewOutcomingMessage accepts only structs as payload. If you want to pass scalar data type - wrap it in a struct.
+func NewOutcomingMessage(payload Object, passedOptions ...MsgOption) *OutcomingMessage {
 	opts := &opts{}
 
 	if len(passedOptions) > 0 {
@@ -104,17 +111,27 @@ func NewMessage(keyChoice scheme.KeyChoice, msgType MessageType, payload interfa
 		}
 	}
 
-	msg := &Message{Metadata: Metadata{ID: uuid.New().String(), Name: keyChoice(), Type: msgType, Headers: make(Headers)}, Payload: payload}
-
-	if opts.description != "" {
-		msg.Description = opts.description
-	}
+	msg := &OutcomingMessage{uid: uuid.New().String(), obj: payload}
 
 	if opts.headers != nil {
-		msg.Headers = opts.headers
+		msg.headers = opts.headers
 	}
 
+	if msg.headers == nil {
+		msg.headers = make(Headers)
+	}
+
+	msg.headers["uid"] = msg.UID()
+
 	return msg
+}
+
+func FromReceivedMsg(received *ReceivedMessage) *OutcomingMessage {
+	return &OutcomingMessage{
+		headers: received.Headers(),
+		uid: received.UID(),
+		obj: received.Payload(),
+	}
 }
 
 type MsgOption func(attr *opts)
@@ -122,12 +139,6 @@ type MsgOption func(attr *opts)
 type opts struct {
 	description string
 	headers     Headers
-}
-
-func WithDescription(description string) MsgOption {
-	return func(attr *opts) {
-		attr.description = description
-	}
 }
 
 func WithHeaders(headers Headers) MsgOption {

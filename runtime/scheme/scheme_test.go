@@ -2,100 +2,153 @@ package scheme
 
 import (
 	"github.com/stretchr/testify/assert"
-	"reflect"
-
+	"github.com/stretchr/testify/require"
 	"testing"
 )
 
-const someTypeTypePkgPath = "github.com/go-foreman/foreman/runtime/scheme.sometesttype"
+const (
+	group Group = "test"
+)
 
 type SomeTestType struct {
+	TypeMeta
 	A int
 }
 
 type SomeAnotherTestType struct {
+	TypeMeta
 	B int
 }
 
-func TestRegisterTypes(t *testing.T) {
-	testCases := []struct {
-		registry        KnownTypesRegistry
-		registerType    interface{}
-		registerWithKey bool
-		key             string
-		isType          interface{}
-		loadBy          []KeyChoice
-	}{
-		//registered ptr, loaded by struct with a ptr, as value and by key which is pkg path
-		{
-			registry:     NewKnownTypesRegistry(),
-			registerType: &SomeTestType{},
-			isType:       &SomeTestType{},
-			loadBy:       []KeyChoice{WithStruct(&SomeTestType{}), WithStruct(SomeTestType{}), WithKey(someTypeTypePkgPath)},
-		},
-		//registered by value, loaded by struct with a ptr, as value and by key. Loaded type is ptr.
-		{
-			registry:     NewKnownTypesRegistry(),
-			registerType: SomeTestType{},
-			isType:       &SomeTestType{},
-			loadBy:       []KeyChoice{WithStruct(&SomeTestType{}), WithStruct(SomeTestType{}), WithKey(someTypeTypePkgPath)},
-		},
-		{
-			registry:        NewKnownTypesRegistry(),
-			registerType:    &SomeTestType{},
-			registerWithKey: true,
-			key:             "someKey",
-			isType:          &SomeTestType{},
-			loadBy:          []KeyChoice{WithKey("someKey")},
-		},
-		{
-			registry:        NewKnownTypesRegistry(),
-			registerType:    SomeTestType{},
-			registerWithKey: true,
-			key:             "someKey",
-			isType:          &SomeTestType{},
-			loadBy:          []KeyChoice{WithKey("someKey")},
-		},
-	}
+type WithEmbeddedStruct struct {
+	SomeTestType
+	Kek int
+}
 
-	for _, testCase := range testCases {
-		if testCase.registerWithKey {
-			testCase.registry.RegisterTypeWithKey(WithKey(testCase.key), testCase.registerType)
-		} else {
-			testCase.registry.RegisterTypes(testCase.registerType)
-		}
+func TestKnownTypesRegistry_AddKnownTypeWithName(t *testing.T) {
+	knownRegistry := NewKnownTypesRegistry()
 
-		for _, loadBy := range testCase.loadBy {
-			loadedType, err := testCase.registry.LoadType(loadBy)
-			assert.Nil(t, err)
-			assert.NotNil(t, loadedType)
-			assert.IsType(t, loadedType, testCase.isType)
-		}
-	}
+	t.Run("add known type by pointer", func(t *testing.T) {
+		knownRegistry.AddKnownTypeWithName(GroupKind{
+			Group:   group,
+			Kind:    "CustomKind",
+		}, &SomeTestType{})
 
-	registry := NewKnownTypesRegistry()
-	registry.RegisterTypes(&SomeTestType{})
-	loadedType, err := registry.LoadType(WithStruct(&SomeAnotherTestType{}))
-	assert.NotNil(t, err)
-	assert.Contains(t, err.Error(), "is not registered in KnownTypes")
-	assert.Nil(t, loadedType)
+		someTestTypeInstance, err := knownRegistry.NewObject(GroupKind{
+			Group:   group,
+			Kind:    "CustomKind",
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, someTestTypeInstance)
+		assert.IsType(t, &SomeTestType{}, someTestTypeInstance)
+	})
+
+	t.Run("add known type by value", func(t *testing.T) {
+		knownRegistry.AddKnownTypeWithName(GroupKind{
+			Group: group,
+			Kind: "SomeKind",
+		}, &SomeTestType{})
+
+		someKindInstance, err := knownRegistry.NewObject(GroupKind{
+			Group:   group,
+			Kind:    "CustomKind",
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, someKindInstance)
+		assert.IsType(t, &SomeTestType{}, someKindInstance)
+	})
+
+	t.Run("group is empty", func(t *testing.T) {
+		expected := "group is required on all types: CustomKind scheme.SomeTestType"
+		require.PanicsWithValue(t, expected, func() {
+			knownRegistry.AddKnownTypeWithName(GroupKind{
+				Group:   "",
+				Kind:    "CustomKind",
+			}, &SomeTestType{})
+		})
+	})
+
+	t.Run("double registration", func(t *testing.T) {
+		expected := "Double registration of different types for test.CustomKind: old=github.com/go-foreman/foreman/runtime/scheme.SomeTestType, new=github.com/go-foreman/foreman/runtime/scheme.SomeAnotherTestType"
+		require.PanicsWithValue(t, expected, func() {
+			knownRegistry.AddKnownTypeWithName(GroupKind{
+				Group:   group,
+				Kind:    "CustomKind",
+			}, &SomeAnotherTestType{})
+		})
+	})
+
+	t.Run("object is not struct type", func(t *testing.T) {
+		wrongType := notStructType("xxx")
+		assert.PanicsWithValue(t, "all types must be pointers to structs", func() {
+			knownRegistry.AddKnownTypeWithName(GroupKind{
+				Group:   group,
+				Kind:    "WrongKind",
+			}, &wrongType)
+		})
+	})
+
+	t.Run("schema returns no kind for not registered object with embedded schema.obj", func(t *testing.T) {
+		knownRegistry.AddKnownTypes(group, &SomeTestType{})
+		embeddedInstance, err := knownRegistry.ObjectKind(&WithEmbeddedStruct{})
+		assert.Error(t, err)
+		assert.EqualError(t, err, "no kind is registered in schema for the type WithEmbeddedStruct")
+		assert.Nil(t, embeddedInstance)
+	})
+
+	//t.Run("schema panics when register type with another embedded schema.obj on the same level without explicitly specifying TypeMeta", func(t *testing.T) {
+	//	expected := "struct has embedded another struct on the first level which implement Object interface. need implement explicitly Object interface(embed TypeMeta struct)"
+	//	assert.PanicsWithValue(t, expected, func() {
+	//		knownRegistry.AddKnownTypes(group, &WithEmbeddedStruct{})
+	//	})
+	//})
+}
+
+func TestKnownTypesRegistry_AddKnownTypes(t *testing.T) {
+	knownRegistry := NewKnownTypesRegistry()
+
+	t.Run("no types passed", func(t *testing.T) {
+		//no error, nothing is registered
+		knownRegistry.AddKnownTypes(group)
+	})
+
+	t.Run("added two types", func(t *testing.T) {
+		knownRegistry.AddKnownTypes(group, &SomeTestType{}, &SomeAnotherTestType{})
+		someTestType, err := knownRegistry.NewObject(GroupKind{
+			Group:   group,
+			Kind:    "SomeTestType",
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, someTestType)
+		assert.IsType(t, &SomeTestType{}, someTestType)
+
+		someAnotherTestType, err := knownRegistry.NewObject(GroupKind{
+			Group:   group,
+			Kind:    "SomeAnotherTestType",
+		})
+		require.NoError(t, err)
+		assert.NotNil(t, someAnotherTestType)
+		assert.IsType(t, &SomeAnotherTestType{}, someAnotherTestType)
+	})
+
+	t.Run("type is not registered", func(t *testing.T) {
+		loadedType, err := knownRegistry.NewObject(GroupKind{
+			Group:   group,
+			Kind:    "XXXSomeTestType",
+		})
+		assert.Nil(t, loadedType)
+		assert.Error(t, err)
+		assert.EqualError(t, err, "type test.XXXSomeTestType is not registered in KnownTypes")
+	})
+}
+
+type notStructType string
+
+func (n notStructType) GroupKind() GroupKind {
+	panic("implement me")
+}
+
+func (n notStructType) SetGroupKind(gk *GroupKind) {
 
 }
 
-func TestGetType(t *testing.T) {
-	registry := NewKnownTypesRegistry()
-	registry.RegisterTypes(&SomeTestType{})
-
-	gotType := registry.GetType(WithStruct(&SomeAnotherTestType{}))
-	assert.Nil(t, gotType)
-
-	gotType = registry.GetType(WithStruct(&SomeTestType{}))
-	assert.NotNil(t, gotType)
-	assert.True(t, gotType.String() == reflect.TypeOf(&SomeTestType{}).String())
-
-}
-
-func TestGetStructTypeKey(t *testing.T) {
-	assert.Equal(t, GetStructTypeKey(&SomeTestType{}), someTypeTypePkgPath)
-	assert.Equal(t, GetStructTypeKey(SomeTestType{}), someTypeTypePkgPath)
-}

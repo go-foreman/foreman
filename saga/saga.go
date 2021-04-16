@@ -1,9 +1,10 @@
 package saga
 
 import (
+	"fmt"
 	"github.com/go-foreman/foreman/pubsub/message"
 	"github.com/go-foreman/foreman/runtime/scheme"
-	"github.com/pkg/errors"
+	"reflect"
 	"time"
 )
 
@@ -17,15 +18,16 @@ const (
 )
 
 type Instance interface {
-	ID() string
+	UID() string
 	Saga() Saga
 	Status() Status
 
 	Start(sagaCtx SagaContext) error
 	Compensate(sagaCtx SagaContext) error
 	Recover(sagaCtx SagaContext) error
+	Progress()
 	Complete()
-	Fail()
+	Fail(ev message.Object)
 
 	HistoryEvents() []HistoryEvent
 	AttachEvent(event HistoryEvent)
@@ -38,6 +40,7 @@ type Instance interface {
 type Status interface {
 	InProgress() bool
 	Failed() bool
+	FailedOnEvent() message.Object
 	Recovering() bool
 	Compensating() bool
 	Completed() bool
@@ -46,30 +49,32 @@ type Status interface {
 
 func NewSagaInstance(id, parentId string, saga Saga) Instance {
 	return &sagaInstance{
-		id: id,
+		uid:      id,
 		parentID: parentId,
-		saga: saga,
-		status: sagaStatusCreated,
+		saga:     saga,
+		instanceStatus: instanceStatus{
+			status:        sagaStatusCreated,
+		},
 		historyEvents: make([]HistoryEvent, 0),
 	}
 }
 
 type sagaInstance struct {
-	id            string
-	parentID      string
-	saga          Saga
-	historyEvents []HistoryEvent
-	startedAt     *time.Time
-	updatedAt     *time.Time
-	status        Status
+	uid            string
+	parentID       string
+	saga           Saga
+	historyEvents  []HistoryEvent
+	startedAt      *time.Time
+	updatedAt      *time.Time
+	instanceStatus instanceStatus
 }
 
 func (s sagaInstance) ParentID() string {
 	return s.parentID
 }
 
-func (s sagaInstance) ID() string {
-	return s.id
+func (s sagaInstance) UID() string {
+	return s.uid
 }
 
 func (s sagaInstance) Saga() Saga {
@@ -77,11 +82,11 @@ func (s sagaInstance) Saga() Saga {
 }
 
 func (s sagaInstance) Status() Status {
-	return s.status
+	return s.instanceStatus
 }
 
 func (s *sagaInstance) Start(sagaCtx SagaContext) error {
-	s.status = sagaStatusInProgress
+	s.instanceStatus.status = sagaStatusInProgress
 	current := time.Now().Round(time.Second).UTC()
 	s.startedAt = &current
 	s.update()
@@ -89,24 +94,29 @@ func (s *sagaInstance) Start(sagaCtx SagaContext) error {
 }
 
 func (s *sagaInstance) Compensate(sagaCtx SagaContext) error {
-	s.status = sagaStatusCompensating
+	s.instanceStatus.status = sagaStatusCompensating
 	s.update()
 	return s.saga.Compensate(sagaCtx)
 }
 
 func (s *sagaInstance) Recover(sagaCtx SagaContext) error {
-	s.status = sagaStatusRecovering
+	s.instanceStatus.status = sagaStatusRecovering
 	s.update()
 	return s.saga.Recover(sagaCtx)
 }
 
 func (s *sagaInstance) Complete() {
-	s.status = sagaStatusCompleted
+	s.instanceStatus.status = sagaStatusCompleted
 	s.update()
 }
 
-func (s *sagaInstance) Fail() {
-	s.status = sagaStatusFailed
+func (s *sagaInstance) Progress() {
+	s.instanceStatus.status = sagaStatusInProgress
+}
+
+func (s *sagaInstance) Fail(ev message.Object) {
+	s.instanceStatus.status = sagaStatusFailed
+	s.instanceStatus.lastFailedEv = ev
 	s.update()
 }
 
@@ -129,23 +139,12 @@ func (s sagaInstance) UpdatedAt() *time.Time {
 }
 
 func (s *sagaInstance) update() {
-	currentTime := time.Now()
+	currentTime := time.Now().Round(time.Second).UTC()
 	s.updatedAt = &currentTime
 }
 
 func (s *sagaInstance) AttachEvent(event HistoryEvent) {
 	s.historyEvents = append(s.historyEvents, event)
-}
-
-func StatusFromStr(str string) (Status, error) {
-	statuses := []status{sagaStatusInProgress, sagaStatusFailed, sagaStatusInProgress, sagaStatusCompensating, sagaStatusCompleted, sagaStatusCreated}
-	for _, s := range statuses {
-		if string(s) == str {
-			return s, nil
-		}
-	}
-
-	return nil, errors.Errorf("unknown status string")
 }
 
 type status string
@@ -174,42 +173,65 @@ func (s status) String() string {
 	return string(s)
 }
 
+type instanceStatus struct {
+	status
+	lastFailedEv message.Object
+}
+
+func (i instanceStatus) FailedOnEvent() message.Object {
+	return i.lastFailedEv
+}
+
 type HistoryEvent struct {
-	message.Metadata
+	UID          string      `json:"uid"`
 	CreatedAt    time.Time   `json:"created_at"`
-	Payload      interface{} `json:"payload"`
-	OriginSource string      `json:"origin_source"`
+	Payload      message.Object `json:"payload"`
+	OriginSource string      `json:"origin"`
 	SagaStatus   string      `json:"saga_status"` //saga status at the moment
-	Description  string      `json:"description"`
 }
 
 type Saga interface {
-	//you should register all the handlers here
+	message.Object
 	Init()
 	Start(execCtx SagaContext) error
 	Compensate(execCtx SagaContext) error
 	Recover(execCtx SagaContext) error
-	EventHandlers() map[string]Executor
+	EventHandlers() map[scheme.GroupKind]Executor
+	SetSchema(scheme scheme.KnownTypesRegistry)
 }
 
 type BaseSaga struct {
-	adjacencyMap map[string]Executor
+	message.ObjectMeta
+	adjacencyMap map[scheme.GroupKind]Executor
+	scheme scheme.KnownTypesRegistry
 }
 
 type Executor func(execCtx SagaContext) error
 
-func (b *BaseSaga) AddEventHandler(event interface{}, handler Executor) *BaseSaga {
+func (b *BaseSaga) AddEventHandler(ev message.Object, handler Executor) *BaseSaga {
 	//lazy initialization
 	if b.adjacencyMap == nil {
-		b.adjacencyMap = make(map[string]Executor)
+		b.adjacencyMap = make(map[scheme.GroupKind]Executor)
 	}
 
-	eventKey := scheme.WithStruct(event)
+	if b.scheme == nil {
+		panic("schema wasn't set")
+	}
 
-	b.adjacencyMap[eventKey()] = handler
+	groupKind, err := b.scheme.ObjectKind(ev)
+
+	if err != nil {
+		panic(fmt.Sprintf("ev %s is not registered in schema", reflect.TypeOf(ev).String()))
+	}
+
+	b.adjacencyMap[*groupKind] = handler
 	return b
 }
 
-func (b BaseSaga) EventHandlers() map[string]Executor {
+func (b *BaseSaga) SetSchema(scheme scheme.KnownTypesRegistry) {
+	b.scheme = scheme
+}
+
+func (b BaseSaga) EventHandlers() map[scheme.GroupKind]Executor {
 	return b.adjacencyMap
 }

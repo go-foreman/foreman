@@ -8,11 +8,12 @@ import (
 
 type Endpoint interface {
 	Name() string
-	Send(ctx context.Context, message *message.Message, headers map[string]interface{}, options ...DeliveryOption) error
+	Send(ctx context.Context, message *message.OutcomingMessage, options ...DeliveryOption) error
 }
 
 type deliveryOptions struct {
 	delay *time.Duration
+	headers message.Headers
 }
 
 func WithDelay(delay time.Duration) DeliveryOption {

@@ -1,23 +1,22 @@
 package handlers
 
 import (
-	log "github.com/go-foreman/foreman/log"
-	sagaPkg "github.com/go-foreman/foreman/saga"
-
 	"context"
 	"fmt"
+	log "github.com/go-foreman/foreman/log"
 	"github.com/go-foreman/foreman/pubsub/message"
 	"github.com/go-foreman/foreman/pubsub/message/execution"
 	"github.com/go-foreman/foreman/runtime/scheme"
+	sagaPkg "github.com/go-foreman/foreman/saga"
 	"github.com/go-foreman/foreman/saga/contracts"
 	"github.com/go-foreman/foreman/saga/mutex"
-	"github.com/mitchellh/mapstructure"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"time"
 )
 
-func NewSagaControlHandler(sagaStore sagaPkg.Store, mutex mutex.Mutex, sagaRegistry scheme.KnownTypesRegistry, logger log.Logger) *SagaControlHandler {
-	return &SagaControlHandler{typesRegistry: sagaRegistry, store: sagaStore, mutex: mutex, logger: logger}
+func NewSagaControlHandler(sagaStore sagaPkg.Store, mutex mutex.Mutex, sagaRegistry scheme.KnownTypesRegistry, sagaUIDSvc sagaPkg.SagaUIDService,logger log.Logger) *SagaControlHandler {
+	return &SagaControlHandler{typesRegistry: sagaRegistry, store: sagaStore, mutex: mutex, sagaUIDSvc: sagaUIDSvc, logger: logger}
 }
 
 type SagaControlHandler struct {
@@ -25,6 +24,7 @@ type SagaControlHandler struct {
 	store         sagaPkg.Store
 	mutex         mutex.Mutex
 	logger        log.Logger
+	sagaUIDSvc    sagaPkg.SagaUIDService
 }
 
 func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error {
@@ -37,21 +37,21 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 	ctx := execCtx.Context()
 	msg := execCtx.Message()
 
-	switch cmd := msg.Payload.(type) {
+	switch cmd := msg.Payload().(type) {
 	case *contracts.StartSagaCommand:
-		sagaInstance, err = h.createSaga(cmd.SagaId, cmd.ParentId, cmd.SagaName, cmd.Saga)
+		sagaInstance, err = h.createSaga(cmd)
 		if err != nil {
 			return errors.WithStack(err)
 		}
 
 		if err := h.store.Create(ctx, sagaInstance); err != nil {
-			return errors.Wrapf(err, "error  saving created saga `%s` with id %s to store", cmd.SagaName, cmd.SagaId)
+			return errors.Wrapf(err, "error  saving created saga `%s` with id %s to store", cmd.Saga.GroupKind().String(), cmd.SagaId)
 		}
 
 		sagaCtx = sagaPkg.NewSagaCtx(execCtx, sagaInstance)
 
 		if err := sagaInstance.Start(sagaCtx); err != nil {
-			return errors.Wrapf(err, "error starting saga `%s`", sagaInstance.ID())
+			return errors.Wrapf(err, "error starting saga `%s`", sagaInstance.UID())
 		}
 
 	case *contracts.RecoverSagaCommand:
@@ -72,14 +72,14 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 		}
 
 		if !sagaInstance.Status().Failed() || sagaInstance.Status().Completed() || sagaInstance.Status().Recovering() || sagaInstance.Status().Compensating() {
-			h.logger.Logf(log.InfoLevel, "Saga `%s` has status %s, you can't start recovering the process", sagaInstance.Status(), sagaInstance.ID())
+			h.logger.Logf(log.InfoLevel, "Saga %s has status %s, you can't start recovering the process", sagaInstance.UID(), sagaInstance.Status(), )
 			return nil
 		}
 
 		sagaCtx = sagaPkg.NewSagaCtx(execCtx, sagaInstance)
 
 		if err := sagaInstance.Recover(sagaCtx); err != nil {
-			return errors.Wrapf(err, "error recovering saga `%s`", sagaInstance.ID())
+			return errors.Wrapf(err, "error recovering saga `%s`", sagaInstance.UID())
 		}
 
 	case *contracts.CompensateSagaCommand:
@@ -100,86 +100,53 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 		}
 
 		if !sagaInstance.Status().Failed() || sagaInstance.Status().Compensating() {
-			h.logger.Logf(log.InfoLevel, "Saga `%s` has status `%s`, you can't compensate the process", sagaInstance.ID(), sagaInstance.Status())
+			h.logger.Logf(log.InfoLevel, "Saga `%s` has status `%s`, you can't compensate the process", sagaInstance.UID(), sagaInstance.Status())
 			return nil
 		}
 
 		sagaCtx = sagaPkg.NewSagaCtx(execCtx, sagaInstance)
 
 		if err := sagaInstance.Compensate(sagaCtx); err != nil {
-			return errors.Wrapf(err, "error compensating saga `%s`", sagaInstance.ID())
+			return errors.Wrapf(err, "error compensating saga `%s`", sagaInstance.UID())
 		}
 
 	default:
-		return errors.Errorf("Unknown command type `%s` for SagaControlHandler. Supported: StartSagaCommand, RecoverSagaCommand, CompensateSagaCommand", msg.Type)
+		return errors.Errorf("unknown command type `%s` for SagaControlHandler. Supported: StartSagaCommand, RecoverSagaCommand, CompensateSagaCommand", msg.Payload().GroupKind().String())
 	}
 
+	sagaInstance.AttachEvent(sagaPkg.HistoryEvent{UID: msg.UID(), Payload: msg.Payload(), CreatedAt: time.Now(), OriginSource: msg.Origin(), SagaStatus: sagaInstance.Status().String()})
+
 	for _, delivery := range sagaCtx.Deliveries() {
-		if err := execCtx.Send(delivery.Message, delivery.Options...); err != nil {
-			execCtx.LogMessage(log.ErrorLevel, fmt.Sprintf("error sending delivery for saga %s. Delivery: (%v). %s", sagaCtx.SagaInstance().ID(), delivery, err))
-			return errors.Wrapf(err, "error sending delivery for saga %s. Delivery: (%v)", sagaCtx.SagaInstance().ID(), delivery)
+		h.sagaUIDSvc.AddSagaId(msg.Headers(), sagaCtx.SagaInstance().UID())
+		outcomingMessage := message.NewOutcomingMessage(delivery.Payload, message.WithHeaders(msg.Headers()))
+
+		if err := execCtx.Send(outcomingMessage, delivery.Options...); err != nil {
+			execCtx.LogMessage(log.ErrorLevel, fmt.Sprintf("error sending delivery for saga %s. Delivery: (%v). %s", sagaCtx.SagaInstance().UID(), delivery, err))
+			return errors.Wrapf(err, "error sending delivery for saga %s. Delivery: (%v)", sagaCtx.SagaInstance().UID(), delivery)
 		}
-		sagaCtx.SagaInstance().AttachEvent(sagaPkg.HistoryEvent{Metadata: delivery.Message.Metadata, Payload: delivery.Message.Payload, CreatedAt: time.Now()})
+		sagaCtx.SagaInstance().AttachEvent(sagaPkg.HistoryEvent{UID: uuid.New().String(), Payload: delivery.Payload, CreatedAt: time.Now(), SagaStatus: sagaInstance.Status().String()})
 	}
 
 	return h.store.Update(ctx, sagaInstance)
 }
 
 //saga is map[string]interface{} on this step
-func (h SagaControlHandler) createSaga(sagaId, parentId, sagaName string, sagaDefinition interface{}) (sagaPkg.Instance, error) {
-
-	if sagaId == "" {
-		return nil, errors.Errorf("SagaId is empty")
+func (h SagaControlHandler) createSaga(startCmd *contracts.StartSagaCommand) (sagaPkg.Instance, error) {
+	if startCmd.SagaId == "" {
+		return nil, errors.Errorf("sagaId is empty")
 	}
 
-	if sagaName == "" {
-		return nil, errors.Errorf("SagaName is empty")
+	if startCmd.Saga == nil {
+		return nil, errors.Errorf("saga payload is nil")
 	}
 
-	if sagaDefinition == nil {
-		return nil, errors.Errorf("Saga payload is nil")
-	}
-
-	sagaToCreate, err := h.typesRegistry.LoadType(scheme.WithKey(sagaName))
-
-	if err != nil {
-		return nil, errors.WithStack(err)
-	}
-
-	sagaType := h.typesRegistry.GetType(scheme.WithKey(sagaName))
-
-	decoderConf := mapstructure.DecoderConfig{
-		TagName: "json",
-		Result:  &sagaToCreate,
-	}
-
-	decoder, err := mapstructure.NewDecoder(&decoderConf)
-
-	if err != nil {
-		return nil, errors.Wrap(err, "error creating decoder")
-	}
-
-	if err := decoder.Decode(sagaDefinition); err != nil {
-		return nil, message.WithDecoderErr(errors.Wrapf(err, "error decoding payload into saga  %s", sagaType.String()))
-	}
-
-	//kek, err := json.Marshal(saga)
-	//
-	//if err != nil {
-	//	return nil, errors.WithStack(err)
-	//}
-	//
-	//if err := json.Unmarshal(kek, &sagaToCreate); err != nil {
-	//	return nil, errors.Wrapf(err, "Error decoding data from message payload interface{} to an original type %s", sagaType.Kind().String())
-	//}
-
-	sagaInterface, ok := sagaToCreate.(sagaPkg.Saga)
+	saga, ok := startCmd.Saga.(sagaPkg.Saga)
 
 	if !ok {
-		return nil, errors.Errorf("Error converting interface{} to Saga interface")
+		return nil, errors.Errorf("error asserting that startCmd.Saga is Saga type")
 	}
 
-	return sagaPkg.NewSagaInstance(sagaId, parentId, sagaInterface), nil
+	return sagaPkg.NewSagaInstance(startCmd.SagaId, startCmd.ParentId, saga), nil
 }
 
 func (h SagaControlHandler) fetchSaga(ctx context.Context, sagaId string) (sagaPkg.Instance, error) {

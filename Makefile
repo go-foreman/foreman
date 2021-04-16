@@ -49,7 +49,7 @@ testsuite-clean: docker-clean
 #            gotestsum ./... --junitfile /tmp/test-reports/unit-tests.xml
 
 test:
-	go test ./...
+	go test ./... -cover
 
 lint:
 	@if gofmt -l . | egrep -v ^vendor/ | grep .go; then \

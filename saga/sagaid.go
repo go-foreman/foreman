@@ -5,29 +5,38 @@ import (
 	"github.com/pkg/errors"
 )
 
-const SagaIdKey = "sagaId"
+const sagaUIDKey = "sagaUID"
 
-type IdExtractor interface {
-	ExtractSagaId(msg *message.Message) (string, error)
+// SagaUIDService manipulates with sagaId in headers
+type SagaUIDService interface {
+	ExtractSagaUID(headers message.Headers) (string, error)
+	AddSagaId(headers message.Headers, sagaUID string)
 }
 
-func NewSagaIdExtractor() IdExtractor {
-	return &idHeaderExtractor{}
+// NewSagaUIDService constructs default implementation of SagaUIDService
+func NewSagaUIDService() SagaUIDService {
+	return &sagaUIDService{}
 }
 
-type idHeaderExtractor struct {
+type sagaUIDService struct {
 }
 
-func (i idHeaderExtractor) ExtractSagaId(msg *message.Message) (string, error) {
-	if val, ok := msg.Headers[SagaIdKey]; ok {
+// ExtractSagaUID extracts sagaUID key from headers
+func (i sagaUIDService) ExtractSagaUID(headers message.Headers) (string, error) {
+	if val, ok := headers[sagaUIDKey]; ok {
 		sagaId, converted := val.(string)
 
 		if !converted {
-			return "", errors.Errorf("Saga id was found, but has wrong type, should be string")
+			return "", errors.Errorf("Saga uid was found, but has wrong type, should be string")
 		}
 
 		return sagaId, nil
 	}
 
-	return "", errors.Errorf("Saga id was not found in message's %s headers of type %s", msg.ID, msg.Type)
+	return "", errors.Errorf("saga uid was not found in headers by key %s", sagaUIDKey)
+}
+
+// AddSagaId adds sagaUID to headers
+func (i sagaUIDService) AddSagaId(headers message.Headers, sagaUID string) {
+	headers[sagaUIDKey] = sagaUID
 }
