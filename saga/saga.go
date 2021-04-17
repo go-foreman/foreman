@@ -10,9 +10,9 @@ import (
 type Saga interface {
 	message.Object
 	Init()
-	Start(execCtx SagaContext) error
-	Compensate(execCtx SagaContext) error
-	Recover(execCtx SagaContext) error
+	Start(sagaCtx SagaContext) error
+	Compensate(sagaCtx SagaContext) error
+	Recover(sagaCtx SagaContext) error
 	EventHandlers() map[scheme.GroupKind]Executor
 	SetSchema(scheme scheme.KnownTypesRegistry)
 }
