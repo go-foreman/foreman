@@ -5,7 +5,6 @@ import (
 	"github.com/go-foreman/foreman/log"
 	"github.com/go-foreman/foreman/pubsub/endpoint"
 	"github.com/go-foreman/foreman/pubsub/message"
-	"github.com/go-foreman/foreman/runtime/scheme"
 	"github.com/go-foreman/foreman/saga"
 	"github.com/go-foreman/foreman/saga/api/handlers/status"
 	"github.com/go-foreman/foreman/saga/contracts"
@@ -59,14 +58,7 @@ func (c Component) Init(mBus *brigadier.MessageBus) error {
 	eventHandler := handlers.NewEventsHandler(store, c.sagaMutex, mBus.SchemeRegistry(), opts.uidService, mBus.Logger())
 	sagaControlHandler := handlers.NewSagaControlHandler(store, c.sagaMutex, mBus.SchemeRegistry(), opts.uidService, mBus.Logger())
 
-	contractsList := []scheme.Object{
-		&contracts.StartSagaCommand{},
-		&contracts.RecoverSagaCommand{},
-		&contracts.CompensateSagaCommand{},
-		&contracts.SagaCompletedEvent{},
-		&contracts.SagaChildCompletedEvent{},
-	}
-	mBus.SchemeRegistry().AddKnownTypes(contracts.SystemGroup, contractsList...)
+	contracts.RegisterSagaContracts(mBus.SchemeRegistry())
 
 	mBus.Dispatcher().SubscribeForCmd(&contracts.StartSagaCommand{}, sagaControlHandler.Handle)
 	mBus.Dispatcher().SubscribeForCmd(&contracts.RecoverSagaCommand{}, sagaControlHandler.Handle)

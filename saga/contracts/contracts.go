@@ -6,8 +6,20 @@ import (
 )
 
 const (
-	SystemGroup scheme.Group = "systemSaga"
+	systemGroup scheme.Group = "systemSaga"
 )
+
+// RegisterSagaContracts registers all system saga contacts in specified scheme
+func RegisterSagaContracts(scheme scheme.KnownTypesRegistry) {
+	scheme.AddKnownTypes(
+		systemGroup,
+		&StartSagaCommand{},
+		&RecoverSagaCommand{},
+		&CompensateSagaCommand{},
+		&SagaCompletedEvent{},
+		&SagaChildCompletedEvent{},
+	)
+}
 
 // StartSagaCommand once received will create SagaInstance, save it to Store and Start()
 type StartSagaCommand struct {
