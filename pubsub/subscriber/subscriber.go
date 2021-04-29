@@ -111,12 +111,14 @@ func (s *subscriber) Stop(ctx context.Context) error {
 		s.logger.Logf(log.InfoLevel, "Graceful shutdown. Waiting subscriber for finishing %d tasks in progress", s.workerDispatcher.busyWorkers())
 	}
 
+	waitingTicker := time.Tick(time.Second)
+
 	for s.workerDispatcher.busyWorkers() > 0 {
 		select {
-		case <-ctx.Done():
+		case <- ctx.Done():
 			s.logger.Logf(log.WarnLevel, "Stopped subscriber because of canceled parent ctx")
 			return nil
-		case <-time.After(time.Second):
+		case <- waitingTicker:
 			s.logger.Logf(log.InfoLevel, "Waiting for processor to finish all remaining tasks in a queue. Tasks in progress: %d", s.workerDispatcher.busyWorkers())
 		}
 	}
