@@ -36,9 +36,9 @@ func (w *worker) start() {
 			//tell dispatcher that I'm ready to work
 			w.dispatcherQueue <- w.myTasks
 			select {
-			case <-w.ctx.Done():
+			case <- w.ctx.Done():
 				return
-			case task, open := <-w.myTasks:
+			case task, open := <- w.myTasks:
 				if !open {
 					return
 				}
@@ -69,25 +69,14 @@ func (d *dispatcher) start(ctx context.Context) {
 	d.ctx = ctx
 
 	var i uint
-	for i < d.workersCount {
-		workerCtx, _ := context.WithCancel(ctx)
-		worker := newWorker(workerCtx, d.workersQueues)
+
+	for i = 0; i < d.workersCount; i++ {
+		worker := newWorker(ctx, d.workersQueues)
 		worker.start()
-		i++
 	}
 }
 
-func (d dispatcher) schedule(task task) {
-	for {
-		select {
-		case <-d.ctx.Done():
-			return
-		case worker, opened := <-d.workersQueues:
-			if !opened {
-				return
-			}
-			worker <- task
-			return
-		}
-	}
+// readyWorker return worker's chan that is ready to accept a job to do
+func (d dispatcher) readyWorker() dispatcherQueue {
+	return d.workersQueues
 }

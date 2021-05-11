@@ -61,7 +61,7 @@ func (p *processor) Process(ctx context.Context, inPkg pkg.IncomingPkg) error {
 		}
 	}
 
-	return nil
+	return errors.Errorf("some err happened")
 }
 
 type NoExecutorsDefinedErr struct {

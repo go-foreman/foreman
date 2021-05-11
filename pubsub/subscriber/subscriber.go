@@ -1,7 +1,7 @@
 package subscriber
 
 import (
-	log "github.com/go-foreman/foreman/log"
+	"github.com/go-foreman/foreman/log"
 	pubsubErr "github.com/go-foreman/foreman/pubsub/errors"
 	"github.com/go-foreman/foreman/pubsub/transport/plugins/amqp"
 	"os"
@@ -16,9 +16,10 @@ import (
 )
 
 const (
-	maxTasksInProgress              = 100
-	packageProcessingMaxTimeSeconds = 60
-	gracefulShutdownTimeoutSeconds  = 120
+	maxTasksInProgress                     = 100
+	packageProcessingMaxTime time.Duration = time.Second * 60
+	gracefulShutdownTimeout  time.Duration = time.Second * 120
+	scheduleTimeout          time.Duration = time.Second
 )
 
 type Subscriber interface {
@@ -46,8 +47,9 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
 
 	consumerCtx, cancelConsumerCtx := context.WithCancel(ctx)
-	dispatcherCtx, cancelWorkers := context.WithCancel(ctx)
-	shutdownCtx, _ := context.WithTimeout(context.Background(), time.Second*gracefulShutdownTimeoutSeconds)
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), gracefulShutdownTimeout)
+	defer shutdownCancel()
+	defer cancelConsumerCtx()
 
 	consumedPkgs, err := s.transport.Consume(consumerCtx, queues, amqp.WithQosPrefetchCount(maxTasksInProgress))
 
@@ -55,35 +57,57 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 		return errors.WithStack(err)
 	}
 
-	s.workerDispatcher.start(dispatcherCtx)
+	s.workerDispatcher.start(consumerCtx)
+
+	testCtx, _ := context.WithTimeout(context.Background(), time.Second * 10)
+
+	scheduleTicker := time.NewTicker(scheduleTimeout)
+
+	defer scheduleTicker.Stop()
 
 	for {
 		select {
-		case incomingPkg, opened := <-consumedPkgs:
-			if !opened {
+		case worker, open := <- s.workerDispatcher.readyWorker():
+			if !open {
+				s.logger.Logf(log.InfoLevel, "worker's channel is closed")
 				return nil
 			}
-			s.workerDispatcher.schedule(newTaskProcessPkg(ctx, incomingPkg, s))
+			select {
+			case <- scheduleTicker.C:
+				s.logger.Logf(log.InfoLevel, "worker was waiting %s for a job to start. returning to main loop", scheduleTimeout.String())
+				break
+			case incomingPkg, open := <-consumedPkgs:
+				if !open {
+					return nil
+				}
+				worker <- newTaskProcessPkg(ctx, incomingPkg, s, s.logger)
+			}
 		case <-ctx.Done():
 			s.logger.Logf(log.InfoLevel, "Subscriber's context was canceled")
 			if err := s.Stop(shutdownCtx); err != nil {
-				s.logger.Logf(log.ErrorLevel, "Error stopping subscriber gracefully %s", err)
+				s.logger.Logf(log.ErrorLevel, "error stopping subscriber gracefully %s", err)
 			}
 			return nil
 		case <-signalChan:
 			s.logger.Logf(log.InfoLevel, "Received kill signal")
-			cancelConsumerCtx()
 			if err := s.Stop(shutdownCtx); err != nil {
-				s.logger.Logf(log.ErrorLevel, "Error stopping subscriber gracefully %s", err)
+				s.logger.Logf(log.ErrorLevel, "error stopping subscriber gracefully %s", err)
 			}
-			cancelWorkers()
+			return nil
+		case <- testCtx.Done():
+			s.logger.Logf(log.InfoLevel, "Test kill")
+			if err := s.Stop(shutdownCtx); err != nil {
+				s.logger.Logf(log.ErrorLevel, "error stopping subscriber gracefully %s", err)
+			}
 			return nil
 		}
 	}
 }
 
 func (s *subscriber) processPackage(ctx context.Context, inPkg pkg.IncomingPkg) {
-	processorCtx, _ := context.WithTimeout(ctx, time.Second*packageProcessingMaxTimeSeconds)
+	processorCtx, processorCancel := context.WithTimeout(ctx, packageProcessingMaxTime)
+	defer processorCancel()
+
 	var toAck bool
 
 	if err := s.processor.Process(processorCtx, inPkg); err != nil {
@@ -111,14 +135,15 @@ func (s *subscriber) Stop(ctx context.Context) error {
 		s.logger.Logf(log.InfoLevel, "Graceful shutdown. Waiting subscriber for finishing %d tasks in progress", s.workerDispatcher.busyWorkers())
 	}
 
-	waitingTicker := time.Tick(time.Second)
+	waitingTicker := time.NewTicker(time.Second)
+	defer waitingTicker.Stop()
 
 	for s.workerDispatcher.busyWorkers() > 0 {
 		select {
 		case <- ctx.Done():
 			s.logger.Logf(log.WarnLevel, "Stopped subscriber because of canceled parent ctx")
 			return nil
-		case <- waitingTicker:
+		case <- waitingTicker.C:
 			s.logger.Logf(log.InfoLevel, "Waiting for processor to finish all remaining tasks in a queue. Tasks in progress: %d", s.workerDispatcher.busyWorkers())
 		}
 	}
@@ -132,16 +157,42 @@ type processPkg struct {
 	ctx        context.Context
 	pkg        pkg.IncomingPkg
 	subscriber *subscriber
+	logger log.Logger
 }
 
-func newTaskProcessPkg(ctx context.Context, pkg pkg.IncomingPkg, subscriber *subscriber) *processPkg {
+func newTaskProcessPkg(ctx context.Context, pkg pkg.IncomingPkg, subscriber *subscriber, logger log.Logger) *processPkg {
 	return &processPkg{
 		ctx:        ctx,
 		pkg:        pkg,
 		subscriber: subscriber,
+		logger: logger,
 	}
 }
 
 func (p *processPkg) do() {
 	p.subscriber.processPackage(p.ctx, p.pkg)
 }
+
+//func (p *processPkg) do() {
+//	p.logger.Logf(log.InfoLevel, "started %s", p.pkg.UID())
+//	ctx, cancel := context.WithCancel(p.ctx)
+//	defer cancel()
+//
+//	go func() {
+//		defer cancel()
+//		p.subscriber.processPackage(p.ctx, p.pkg)
+//	}()
+//
+//	processingTimer := time.NewTicker(time.Second*2)
+//	defer processingTimer.Stop()
+//
+//	for {
+//		select {
+//		case <- ctx.Done():
+//			p.logger.Logf(log.InfoLevel, "finished %s", p.pkg.UID())
+//			return
+//		case <- processingTimer.C:
+//			p.logger.Logf(log.InfoLevel, "seems job is hung %s", p.pkg.UID())
+//		}
+//	}
+//}
