@@ -13,3 +13,6 @@ func (n nilLogger) Log(level Level, v ...interface{}) {
 
 func (n nilLogger) Logf(level Level, template string, args ...interface{}) {
 }
+
+func (n nilLogger) SetLevel(level Level) {
+}

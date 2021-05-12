@@ -155,7 +155,7 @@ func (t *amqpTransport) Send(ctx context.Context, outboundPkg pkg.OutboundPkg, o
 		},
 	)
 	if err != nil {
-		return errors.WithStack(err)
+		return errors.Wrap(err, "sending out pkg")
 	}
 
 	return nil
@@ -182,22 +182,19 @@ func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, o
 
 	income := make(chan pkg.IncomingPkg)
 
-	consumersWait := sync.WaitGroup{}
+	consumersWait := &sync.WaitGroup{}
 
 	for _, q := range queues {
 		consumersWait.Add(1)
 		go func(queue transport.Queue) {
 			defer consumersWait.Done()
 
-			//if err := ch.Qos(1, 0, true); err != nil {
-			//	t.logger.Log(log.ErrorLevel, err)
-			//	return
-			//}
-
 			defer func() {
-				if err := t.consumingChannel.Cancel(queue.Name(), false); err != nil {
+				t.logger.Logf(log.InfoLevel,"canceling consumer %s", queue.Name())
+				if err := t.consumingChannel.Cancel(queue.Name(), true); err != nil {
 					t.logger.Logf(log.ErrorLevel, "error canceling consumer %s", err)
 				}
+				t.logger.Logf(log.InfoLevel, "canceled consumer %s", queue.Name())
 			}()
 
 			msgs, err := t.consumingChannel.Consume(
@@ -235,6 +232,7 @@ func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, o
 	go func() {
 		consumersWait.Wait()
 		close(income)
+		t.logger.Logf(log.InfoLevel, "closed consumer channel")
 	}()
 
 	return income, nil

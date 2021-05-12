@@ -41,10 +41,6 @@ func (p *processor) Process(ctx context.Context, inPkg pkg.IncomingPkg) error {
 
 	receivedMsg := message.NewReceivedMessage(inPkg.UID(), payload, inPkg.Headers(), time.Now(), inPkg.Origin())
 
-	if receivedMsg.Headers().ReturnsCount() >= 10 {
-		return errors.Errorf("message %s was returned more that 10 times. Not acking. It will be removed once TTL expires.", receivedMsg.UID())
-	}
-
 	executors := p.dispatcher.Match(payload)
 
 	if len(executors) == 0 {
