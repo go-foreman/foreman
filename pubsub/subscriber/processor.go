@@ -49,8 +49,6 @@ func (p *processor) Process(ctx context.Context, inPkg pkg.IncomingPkg) error {
 		return WithNoExecutorsDefinedErr(errors.New(errMsg))
 	}
 
-	return errors.Errorf("some err happened")
-
 	execCtx := p.msgExecCtxFactory.CreateCtx(ctx, inPkg, receivedMsg)
 
 	for _, exec := range executors {
