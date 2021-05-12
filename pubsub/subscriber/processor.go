@@ -41,10 +41,6 @@ func (p *processor) Process(ctx context.Context, inPkg pkg.IncomingPkg) error {
 
 	receivedMsg := message.NewReceivedMessage(inPkg.UID(), payload, inPkg.Headers(), time.Now(), inPkg.Origin())
 
-	if receivedMsg.Headers().ReturnsCount() >= 10 {
-		return errors.Errorf("message %s was returned more that 10 times. Not acking. It will be removed once TTL expires.", receivedMsg.UID())
-	}
-
 	executors := p.dispatcher.Match(payload)
 
 	if len(executors) == 0 {
@@ -52,6 +48,8 @@ func (p *processor) Process(ctx context.Context, inPkg pkg.IncomingPkg) error {
 		p.logger.Log(log.ErrorLevel, errMsg)
 		return WithNoExecutorsDefinedErr(errors.New(errMsg))
 	}
+
+	return errors.Errorf("some err happened")
 
 	execCtx := p.msgExecCtxFactory.CreateCtx(ctx, inPkg, receivedMsg)
 
@@ -61,7 +59,7 @@ func (p *processor) Process(ctx context.Context, inPkg pkg.IncomingPkg) error {
 		}
 	}
 
-	return errors.Errorf("some err happened")
+	return nil
 }
 
 type NoExecutorsDefinedErr struct {

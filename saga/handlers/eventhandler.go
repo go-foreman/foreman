@@ -2,7 +2,6 @@ package handlers
 
 import (
 	log "github.com/go-foreman/foreman/log"
-	busErrs "github.com/go-foreman/foreman/pubsub/errors"
 	sagaPkg "github.com/go-foreman/foreman/saga"
 	sagaMutex "github.com/go-foreman/foreman/saga/mutex"
 
@@ -59,7 +58,7 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 	}
 
 	if sagaInstance.Status().Completed() {
-		return busErrs.WithStatusErr(busErrs.NoRetry, errors.Errorf("Saga %s already completed", sagaId))
+		return errors.Errorf("Saga %s already completed", sagaId)
 	}
 
 	saga := sagaInstance.Saga()

@@ -2,7 +2,6 @@ package subscriber
 
 import (
 	"github.com/go-foreman/foreman/log"
-	pubsubErr "github.com/go-foreman/foreman/pubsub/errors"
 	"github.com/go-foreman/foreman/pubsub/transport/plugins/amqp"
 	"os"
 	"os/signal"
@@ -59,22 +58,21 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 
 	s.workerDispatcher.start(consumerCtx)
 
-	testCtx, _ := context.WithTimeout(context.Background(), time.Second * 10)
-
 	scheduleTicker := time.NewTicker(scheduleTimeout)
 
 	defer scheduleTicker.Stop()
 
 	for {
 		select {
-		case worker, open := <- s.workerDispatcher.readyWorker():
+		case worker, open := <- s.workerDispatcher.queue():
 			if !open {
 				s.logger.Logf(log.InfoLevel, "worker's channel is closed")
 				return nil
 			}
 			select {
 			case <- scheduleTicker.C:
-				s.logger.Logf(log.InfoLevel, "worker was waiting %s for a job to start. returning to main loop", scheduleTimeout.String())
+				s.logger.Logf(log.DebugLevel, "worker was waiting %s for a job to start. returning him to the pool", scheduleTimeout.String())
+				s.workerDispatcher.queue() <- worker
 				break
 			case incomingPkg, open := <-consumedPkgs:
 				if !open {
@@ -94,7 +92,7 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 				s.logger.Logf(log.ErrorLevel, "error stopping subscriber gracefully %s", err)
 			}
 			return nil
-		case <- testCtx.Done():
+		case <- time.After(time.Second * 15):
 			s.logger.Logf(log.InfoLevel, "Test kill")
 			if err := s.Stop(shutdownCtx); err != nil {
 				s.logger.Logf(log.ErrorLevel, "error stopping subscriber gracefully %s", err)
@@ -108,25 +106,14 @@ func (s *subscriber) processPackage(ctx context.Context, inPkg pkg.IncomingPkg) 
 	processorCtx, processorCancel := context.WithTimeout(ctx, packageProcessingMaxTime)
 	defer processorCancel()
 
-	var toAck bool
-
 	if err := s.processor.Process(processorCtx, inPkg); err != nil {
 		s.logger.Logf(log.ErrorLevel, "error happened while processing pkg %s from %s. %s\n", inPkg.UID(), inPkg.Origin(), err)
-		originalErr := errors.Cause(err)
 
-		if statusErr, ok := originalErr.(pubsubErr.StatusErr); ok {
-			if statusErr.Status == pubsubErr.NoRetry {
-				toAck = true
-			}
-		}
-	} else {
-		toAck = true
+		return
 	}
 
-	if toAck {
-		if err := inPkg.Ack(); err != nil {
-			s.logger.Logf(log.ErrorLevel, "error acking package %s. %s", inPkg.UID(), err)
-		}
+	if err := inPkg.Ack(); err != nil {
+		s.logger.Logf(log.ErrorLevel, "error acking package %s. %s", inPkg.UID(), err)
 	}
 }
 

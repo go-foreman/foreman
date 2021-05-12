@@ -77,6 +77,6 @@ func (d *dispatcher) start(ctx context.Context) {
 }
 
 // readyWorker return worker's chan that is ready to accept a job to do
-func (d dispatcher) readyWorker() dispatcherQueue {
+func (d dispatcher) queue() dispatcherQueue {
 	return d.workersQueues
 }
