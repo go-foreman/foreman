@@ -153,27 +153,3 @@ func newTaskProcessPkg(ctx context.Context, pkg pkg.IncomingPkg, subscriber *sub
 func (p *processPkg) do() {
 	p.subscriber.processPackage(p.ctx, p.pkg)
 }
-
-//func (p *processPkg) do() {
-//	p.logger.Logf(log.InfoLevel, "started %s", p.pkg.UID())
-//	ctx, cancel := context.WithCancel(p.ctx)
-//	defer cancel()
-//
-//	go func() {
-//		defer cancel()
-//		p.subscriber.processPackage(p.ctx, p.pkg)
-//	}()
-//
-//	processingTimer := time.NewTicker(time.Second*2)
-//	defer processingTimer.Stop()
-//
-//	for {
-//		select {
-//		case <- ctx.Done():
-//			p.logger.Logf(log.InfoLevel, "finished %s", p.pkg.UID())
-//			return
-//		case <- processingTimer.C:
-//			p.logger.Logf(log.InfoLevel, "seems job is hung %s", p.pkg.UID())
-//		}
-//	}
-//}
