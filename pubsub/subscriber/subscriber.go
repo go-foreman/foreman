@@ -92,12 +92,6 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 				s.logger.Logf(log.ErrorLevel, "error stopping subscriber gracefully %s", err)
 			}
 			return nil
-		case <- time.After(time.Second * 15):
-			s.logger.Logf(log.InfoLevel, "Test kill")
-			if err := s.Stop(shutdownCtx); err != nil {
-				s.logger.Logf(log.ErrorLevel, "error stopping subscriber gracefully %s", err)
-			}
-			return nil
 		}
 	}
 }
