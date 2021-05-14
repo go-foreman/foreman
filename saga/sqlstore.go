@@ -65,7 +65,7 @@ func (s sqlStore) Create(ctx context.Context, sagaInstance Instance) error {
 	}
 
 	if err := tx.Commit(); err != nil {
-		return errors.Wrapf(err, "commiting saga instance %s into mysql store", sagaInstance.UID())
+		return errors.Wrapf(err, "commiting saga instance %s into the store", sagaInstance.UID())
 	}
 
 	return nil
