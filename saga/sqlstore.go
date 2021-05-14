@@ -6,31 +6,41 @@ import (
 	"fmt"
 	"github.com/go-foreman/foreman/pubsub/message"
 	"github.com/pkg/errors"
+	"strconv"
+	"time"
 )
 
-type mysqlStore struct {
+const (
+	MYSQLDriver SQLDriver = "mysql"
+	PGDriver SQLDriver = "pg"
+)
+
+type SQLDriver string
+
+type sqlStore struct {
 	msgMarshaller message.Marshaller
 	db            *sql.DB
+	driver SQLDriver
 }
 
-func NewMysqlSagaStore(db *sql.DB, msgMarshaller message.Marshaller) (Store, error) {
-	err := initMysqlTables(db)
-	if err != nil {
+// NewSQLSagaStore creates sql saga store, it supports mysql and postgres drivers.
+// driver param is required because of https://github.com/golang/go/issues/3602. Better this than +1 dependency or copy pasting code
+func NewSQLSagaStore(db *sql.DB, driver SQLDriver,  msgMarshaller message.Marshaller) (Store, error) {
+	s := &sqlStore{db: db, driver: driver, msgMarshaller: msgMarshaller}
+	if err := s.initTables(); err != nil {
 		return nil, errors.WithStack(err)
 	}
 
-	return &mysqlStore{db: db, msgMarshaller: msgMarshaller}, nil
+	return s, nil
 }
 
 // Create saves saga instance into mysql store. History events, last failed event are not persisted at this step, there is not way for them to be at creation step.
-func (s mysqlStore) Create(ctx context.Context, sagaInstance Instance) error {
+func (s sqlStore) Create(ctx context.Context, sagaInstance Instance) error {
 	payload, err := s.msgMarshaller.Marshal(sagaInstance.Saga())
 
 	if err != nil {
 		return errors.WithStack(err)
 	}
-
-	sagaName := sagaInstance.Saga().GroupKind().String()
 
 	tx, err := s.db.Begin()
 
@@ -38,10 +48,10 @@ func (s mysqlStore) Create(ctx context.Context, sagaInstance Instance) error {
 		return errors.WithStack(err)
 	}
 
-	_, err = tx.ExecContext(ctx, fmt.Sprintf("INSERT INTO %v (uid, parent_uid, name, payload, status, started_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?);", sagaTableName),
+	_, err = tx.ExecContext(ctx, s.prepQuery(fmt.Sprintf("INSERT INTO %v (uid, parent_uid, name, payload, status, started_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?);", sagaTableName)),
 		sagaInstance.UID(),
 		sagaInstance.ParentID(),
-		sagaName,
+		sagaInstance.Saga().GroupKind().String(),
 		payload,
 		sagaInstance.Status().String(),
 		sagaInstance.StartedAt(),
@@ -55,13 +65,13 @@ func (s mysqlStore) Create(ctx context.Context, sagaInstance Instance) error {
 	}
 
 	if err := tx.Commit(); err != nil {
-		return errors.Wrapf(err, "commiting saga instance %s into mysql store", sagaInstance.UID())
+		return errors.Wrapf(err, "commiting saga instance %s into the store", sagaInstance.UID())
 	}
 
 	return nil
 }
 
-func (s mysqlStore) Update(ctx context.Context, sagaInstance Instance) error {
+func (s sqlStore) Update(ctx context.Context, sagaInstance Instance) error {
 	payload, err := s.msgMarshaller.Marshal(sagaInstance.Saga())
 	sagaName := sagaInstance.Saga().GroupKind().String()
 
@@ -86,7 +96,7 @@ func (s mysqlStore) Update(ctx context.Context, sagaInstance Instance) error {
 		return errors.WithStack(err)
 	}
 
-	_, err = tx.ExecContext(ctx, fmt.Sprintf("UPDATE %v SET parent_uid=?, name=?, payload=?, status=?, started_at=?, updated_at=?, last_failed_ev=? WHERE uid=?;", sagaTableName),
+	_, err = tx.ExecContext(ctx, s.prepQuery(fmt.Sprintf("UPDATE %v SET parent_uid=?, name=?, payload=?, status=?, started_at=?, updated_at=?, last_failed_ev=? WHERE uid=?;", sagaTableName)),
 		sagaInstance.ParentID(),
 		sagaName,
 		payload,
@@ -104,7 +114,7 @@ func (s mysqlStore) Update(ctx context.Context, sagaInstance Instance) error {
 		return errors.WithStack(err)
 	}
 
-	rows, err := tx.QueryContext(ctx, fmt.Sprintf("SELECT uid FROM %v WHERE saga_uid=?;", sagaHistoryTableName), sagaInstance.UID())
+	rows, err := tx.QueryContext(ctx, s.prepQuery(fmt.Sprintf("SELECT uid FROM %v WHERE saga_uid=?;", sagaHistoryTableName)), sagaInstance.UID())
 
 	if err != nil {
 		if rErr := tx.Rollback(); rErr != nil {
@@ -144,7 +154,7 @@ func (s mysqlStore) Update(ctx context.Context, sagaInstance Instance) error {
 				return errors.WithStack(err)
 			}
 
-			_, err = tx.Exec(fmt.Sprintf("INSERT INTO %v (uid, saga_uid, name, status, payload, origin, created_at, trace_uid) VALUES (?, ?, ?, ?, ?, ?, ?, ?);", sagaHistoryTableName),
+			_, err = tx.Exec(s.prepQuery(fmt.Sprintf("INSERT INTO %v (uid, saga_uid, name, status, payload, origin, created_at, trace_uid) VALUES (?, ?, ?, ?, ?, ?, ?, ?);", sagaHistoryTableName)),
 				ev.UID,
 				sagaInstance.UID(),
 				ev.Payload.GroupKind().String(),
@@ -171,9 +181,9 @@ func (s mysqlStore) Update(ctx context.Context, sagaInstance Instance) error {
 	return nil
 }
 
-func (s mysqlStore) GetById(ctx context.Context, sagaId string) (Instance, error) {
+func (s sqlStore) GetById(ctx context.Context, sagaId string) (Instance, error) {
 	sagaData := sagaSqlModel{}
-	err := s.db.QueryRowContext(ctx, fmt.Sprintf("SELECT s.uid, s.parent_uid, s.name, s.payload, s.status, s.last_failed_ev, s.started_at, s.updated_at FROM %v s WHERE uid=?;", sagaTableName), sagaId).
+	err := s.db.QueryRowContext(ctx, s.prepQuery(fmt.Sprintf("SELECT s.uid, s.parent_uid, s.name, s.payload, s.status, s.last_failed_ev, s.started_at, s.updated_at FROM %v s WHERE uid=?;", sagaTableName)), sagaId).
 		Scan(
 			&sagaData.ID,
 			&sagaData.ParentID,
@@ -208,7 +218,7 @@ func (s mysqlStore) GetById(ctx context.Context, sagaId string) (Instance, error
 	return sagaInstance, nil
 }
 
-func (s mysqlStore) GetByFilter(ctx context.Context, filters... FilterOption) ([]Instance, error) {
+func (s sqlStore) GetByFilter(ctx context.Context, filters... FilterOption) ([]Instance, error) {
 	if len(filters) == 0 {
 		return nil, errors.Errorf("No filters found, you have to specify at least one so result won't be whole store")
 	}
@@ -220,7 +230,26 @@ func (s mysqlStore) GetByFilter(ctx context.Context, filters... FilterOption) ([
 	}
 
 	//todo use https://github.com/Masterminds/squirrel ? +1 dependency, is it really needed?
-	query := fmt.Sprintf(`SELECT s.uid, s.parent_uid, s.name, s.payload, s.status, s.started_at, s.updated_at, s.last_failed_ev, sh.uid, sh.name, sh.status, sh.payload, sh.origin, sh.created_at, sh.trace_uid FROM %s s LEFT JOIN %s sh ON s.uid = sh.saga_uid WHERE`, sagaTableName, sagaHistoryTableName)
+	query := fmt.Sprintf(
+`SELECT 
+			s.uid,
+			s.parent_uid,
+			s.name,
+			s.payload,
+			s.status,
+			s.started_at,
+			s.updated_at,
+			s.last_failed_ev,
+			sh.uid,
+			sh.name,
+			sh.status,
+			sh.payload,
+			sh.origin,
+			sh.created_at,
+			sh.trace_uid 
+		FROM %s s LEFT JOIN %s sh 
+		ON s.uid = sh.saga_uid WHERE`,
+	sagaTableName, sagaHistoryTableName)
 
 	var (
 		args       []interface{}
@@ -258,7 +287,7 @@ func (s mysqlStore) GetByFilter(ctx context.Context, filters... FilterOption) ([
 		}
 	}
 
-	rows, err := s.db.QueryContext(ctx, query, args...)
+	rows, err := s.db.QueryContext(ctx, s.prepQuery(query), args...)
 
 	if err != nil {
 		return nil, errors.Wrap(err, "querying sagas with filter")
@@ -328,8 +357,8 @@ func (s mysqlStore) GetByFilter(ctx context.Context, filters... FilterOption) ([
 	return res, nil
 }
 
-func (s mysqlStore) Delete(ctx context.Context, sagaId string) error {
-	res, err := s.db.ExecContext(ctx, fmt.Sprintf("DELETE FROM %v WHERE uid=?;", sagaTableName), sagaId)
+func (s sqlStore) Delete(ctx context.Context, sagaId string) error {
+	res, err := s.db.ExecContext(ctx, s.prepQuery(fmt.Sprintf("DELETE FROM %v WHERE uid=?;", sagaTableName)), sagaId)
 	if err != nil {
 		return errors.Wrapf(err, "executing delete query for saga %s", sagaId)
 	}
@@ -347,8 +376,8 @@ func (s mysqlStore) Delete(ctx context.Context, sagaId string) error {
 	return errors.Errorf("no saga instance %s found", sagaId)
 }
 
-func (s mysqlStore) queryEvents(sagaId string) ([]HistoryEvent, error) {
-	rows, err := s.db.Query(fmt.Sprintf("SELECT uid, name, status, payload, origin, created_at, trace_uid FROM %v WHERE saga_uid=? ORDER BY created_at;", sagaHistoryTableName), sagaId)
+func (s sqlStore) queryEvents(sagaId string) ([]HistoryEvent, error) {
+	rows, err := s.db.Query(s.prepQuery(fmt.Sprintf("SELECT uid, name, status, payload, origin, created_at, trace_uid FROM %v WHERE saga_uid=? ORDER BY created_at;", sagaHistoryTableName)), sagaId)
 
 	if err != nil {
 		return nil, errors.Wrapf(err, "querying events for saga %s", sagaId)
@@ -387,7 +416,7 @@ func (s mysqlStore) queryEvents(sagaId string) ([]HistoryEvent, error) {
 	return messages, nil
 }
 
-func (s mysqlStore) eventFromModel(ev historyEventSqlModel) (*HistoryEvent, error) {
+func (s sqlStore) eventFromModel(ev historyEventSqlModel) (*HistoryEvent, error) {
 	eventPayload, err := s.msgMarshaller.Unmarshal(ev.Payload)
 
 	if err != nil {
@@ -406,7 +435,7 @@ func (s mysqlStore) eventFromModel(ev historyEventSqlModel) (*HistoryEvent, erro
 	return res, nil
 }
 
-func (s mysqlStore) instanceFromModel(sagaData sagaSqlModel) (*sagaInstance, error) {
+func (s sqlStore) instanceFromModel(sagaData sagaSqlModel) (*sagaInstance, error) {
 	status, err := statusFromStr(sagaData.Status.String)
 	if err != nil {
 		return nil, errors.Wrapf(err, "parsing status of %s", sagaData.ID.String)
@@ -453,14 +482,17 @@ func (s mysqlStore) instanceFromModel(sagaData sagaSqlModel) (*sagaInstance, err
 	return sagaInstance, nil
 }
 
-func initMysqlTables(db *sql.DB) error {
-	tx, err := db.Begin()
+func (s sqlStore) initTables() error {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second * 30)
+	defer cancel()
+
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{})
 
 	if err != nil {
 		return errors.WithStack(err)
 	}
 
-	_, err = tx.Exec(fmt.Sprintf(`create table if not exists %v
+	_, err = tx.ExecContext(ctx, fmt.Sprintf(`create table if not exists %v
 	(
 		uid varchar(255) not null primary key,
 		parent_uid varchar(255) null,
@@ -479,7 +511,7 @@ func initMysqlTables(db *sql.DB) error {
 		return errors.WithStack(err)
 	}
 
-	_, err = tx.Exec(fmt.Sprintf(`create table if not exists %v
+	_, err = tx.ExecContext(ctx, fmt.Sprintf(`create table if not exists %v
 	(
 		uid varchar(255) not null primary key,
 		saga_uid varchar(255) not null,
@@ -508,23 +540,22 @@ func initMysqlTables(db *sql.DB) error {
 	return nil
 }
 
-type sagaSqlModel struct {
-	ID        sql.NullString
-	ParentID  sql.NullString
-	Name      sql.NullString
-	Payload   []byte
-	Status    sql.NullString
-	LastFailedMsg []byte
-	StartedAt sql.NullTime
-	UpdatedAt sql.NullTime
-}
+// prepQuery replaces wildcard params to specific driver. Standard wildcard is '?'
+func (s *sqlStore) prepQuery(query string) string {
+	var res []byte
 
-type historyEventSqlModel struct {
-	ID      sql.NullString
-	Name    sql.NullString
-	CreatedAt    sql.NullTime
-	Payload      []byte
-	OriginSource sql.NullString
-	SagaStatus   sql.NullString
-	TraceUID     sql.NullString
+	counter := 1
+
+	for i := 0; i < len(query); i++ {
+		if query[i] == '?' && s.driver == PGDriver {
+			res = append(append(res, '$'), []byte(strconv.Itoa(counter))...)
+			counter++
+
+			continue
+
+		}
+		res = append(res, query[i])
+	}
+
+	return string(res)
 }

@@ -2,6 +2,7 @@ package saga
 
 import (
 	"context"
+	"database/sql"
 	"github.com/pkg/errors"
 )
 
@@ -53,4 +54,25 @@ func statusFromStr(str string) (status, error) {
 	}
 
 	return "", errors.Errorf("unknown status string")
+}
+
+type sagaSqlModel struct {
+	ID        sql.NullString
+	ParentID  sql.NullString
+	Name      sql.NullString
+	Payload   []byte
+	Status    sql.NullString
+	LastFailedMsg []byte
+	StartedAt sql.NullTime
+	UpdatedAt sql.NullTime
+}
+
+type historyEventSqlModel struct {
+	ID      sql.NullString
+	Name    sql.NullString
+	CreatedAt    sql.NullTime
+	Payload      []byte
+	OriginSource sql.NullString
+	SagaStatus   sql.NullString
+	TraceUID     sql.NullString
 }
