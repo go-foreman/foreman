@@ -8,6 +8,8 @@ import (
 	"github.com/stretchr/testify/suite"
 	"os"
 	"time"
+
+	_ "github.com/jackc/pgx/v4/stdlib"
 )
 
 type PgSuite struct {
