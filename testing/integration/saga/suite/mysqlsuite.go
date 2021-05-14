@@ -38,7 +38,7 @@ func (s *MysqlSuite) Connection() *sql.DB {
 
 // TearDownSuite teardown at the end of test
 func (s *MysqlSuite) TearDownSuite() {
-	res, err := s.dbConn.Exec("DROP TABLE saga_history, saga;")
+	res, err := s.dbConn.Exec("DROP TABLE IF EXISTS saga_history, saga;")
 	require.NoError(s.T(), err)
 	require.NotNil(s.T(), res)
 	require.NoError(s.T(), s.dbConn.Close())

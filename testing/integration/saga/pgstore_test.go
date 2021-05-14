@@ -22,15 +22,14 @@ func TestPGSuite(t *testing.T) {
 func (p *pgStoreTest) TestPGStore() {
 	t := p.T()
 
-	dbConnection := p.Connection()
 	schemeRegistry := scheme.NewKnownTypesRegistry()
 	schemeRegistry.AddKnownTypes(testGroup, &WorkflowSaga{})
 	schemeRegistry.AddKnownTypes(testGroup, &FilterSaga{})
 	marshaller := message.NewJsonMarshaller(schemeRegistry)
-	pgStore, err := saga.NewSQLSagaStore(dbConnection, saga.PGDriver, marshaller)
+	pgStore, err := saga.NewSQLSagaStore(p.Connection(), saga.PGDriver, marshaller)
 
 	require.NoError(t, err)
 	require.NotNil(t, pgStore)
 
-	testUseCases(t, pgStore, schemeRegistry, dbConnection)
+	testUseCases(t, pgStore, schemeRegistry, p.Connection())
 }
