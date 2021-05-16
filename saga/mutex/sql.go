@@ -110,9 +110,13 @@ func (p *pgsqlMutex) Lock(ctx context.Context, sagaId string) error {
 			return WithMutexErr(errors.Wrapf(err, "obtaining a connection from pool for saga %s", sagaId))
 		}
 
-		if err := conn.PingContext(ctx); err == nil {
-			break
+		if err := conn.PingContext(ctx); err != nil {
+			if i < retries -1 {
+				continue
+			}
 		}
+
+		break
 	}
 
 	if _, err := conn.ExecContext(ctx, `SELECT pg_advisory_lock(hashtext($1));`, sagaId); err != nil {
