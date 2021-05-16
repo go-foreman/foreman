@@ -99,6 +99,8 @@ func (p *pgsqlMutex) Lock(ctx context.Context, sagaId string) error {
 	// test "release not existing lock" failed right after "failed to acquire a lock".
 	// the last one closes connection on fail and for some reason this connection was assigned to the first test,
 	// thus failing with message: ---"acquiring lock for saga bbb. sql: connection is already closed. also failed to close connection sql: connection is already closed"---
+	// https://github.com/golang/go/issues/39449
+	// https://github.com/golang/go/issues/32530
 
 	// I'll create an issue and try to investigate into this bug
 	for i := 0; i < retries; i++ {
