@@ -32,19 +32,19 @@ func TestMysqlSuite(t *testing.T) {
 
 func (m *mysqlStoreTest) TestMysqlStore() {
 	t := m.T()
-	dbConnection := m.Connection()
+
 	schemeRegistry := scheme.NewKnownTypesRegistry()
 	schemeRegistry.AddKnownTypes(testGroup, &WorkflowSaga{})
 	schemeRegistry.AddKnownTypes(testGroup, &FilterSaga{})
-	store, err := saga.NewSQLSagaStore(dbConnection, saga.MYSQLDriver, message.NewJsonMarshaller(schemeRegistry))
+	store, err := saga.NewSQLSagaStore(m.Connection(), saga.MYSQLDriver, message.NewJsonMarshaller(schemeRegistry))
 
 	require.NoError(t, err)
 	require.NotNil(t, store)
 
-	testUseCases(t, store, schemeRegistry, dbConnection)
+	testSQLStoreUseCases(t, store, schemeRegistry, m.Connection())
 }
 
-func testUseCases(t *testing.T, store saga.Store, schemeRegistry scheme.KnownTypesRegistry, dbConnection *sql.DB) {
+func testSQLStoreUseCases(t *testing.T, store saga.Store, schemeRegistry scheme.KnownTypesRegistry, dbConnection *sql.DB) {
 	t.Run("initialized store tables", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second * 30)
 		defer cancel()

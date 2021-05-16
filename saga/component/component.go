@@ -21,7 +21,6 @@ type Component struct {
 	sagaMutex        mutex.Mutex
 	endpoints        []endpoint.Endpoint
 	configOpts       []configOption
-	store            saga.Store
 }
 
 type opts struct {
