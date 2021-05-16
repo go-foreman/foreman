@@ -31,5 +31,5 @@ func (p *pgStoreTest) TestPGStore() {
 	require.NoError(t, err)
 	require.NotNil(t, pgStore)
 
-	testUseCases(t, pgStore, schemeRegistry, p.Connection())
+	testSQLStoreUseCases(t, pgStore, schemeRegistry, p.Connection())
 }

@@ -41,10 +41,10 @@ func (m *mysqlStoreTest) TestMysqlStore() {
 	require.NoError(t, err)
 	require.NotNil(t, store)
 
-	testUseCases(t, store, schemeRegistry, m.Connection())
+	testSQLStoreUseCases(t, store, schemeRegistry, m.Connection())
 }
 
-func testUseCases(t *testing.T, store saga.Store, schemeRegistry scheme.KnownTypesRegistry, dbConnection *sql.DB) {
+func testSQLStoreUseCases(t *testing.T, store saga.Store, schemeRegistry scheme.KnownTypesRegistry, dbConnection *sql.DB) {
 	t.Run("initialized store tables", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second * 30)
 		defer cancel()

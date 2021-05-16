@@ -45,7 +45,7 @@ func (s *PgSuite) TearDownSuite() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second * 10)
 	defer cancel()
 
-	res, err := s.dbConn.ExecContext(ctx, "DROP TABLE saga_history, saga;")
+	res, err := s.dbConn.ExecContext(ctx, "DROP TABLE IF EXISTS saga_history, saga;")
 	require.NoError(s.T(), err)
 	require.NotNil(s.T(), res)
 	require.NoError(s.T(), s.dbConn.Close())
