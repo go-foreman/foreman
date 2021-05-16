@@ -43,13 +43,13 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 		}
 
 		if err := h.store.Create(ctx, sagaInstance); err != nil {
-			return errors.Wrapf(err, "error  saving created saga `%s` with id %s to store", cmd.Saga.GroupKind().String(), cmd.SagaUID)
+			return errors.Wrapf(err, "saving created saga `%s` with id %s to store", cmd.Saga.GroupKind().String(), cmd.SagaUID)
 		}
 
 		sagaCtx = sagaPkg.NewSagaCtx(execCtx, sagaInstance)
 
 		if err := sagaInstance.Start(sagaCtx); err != nil {
-			return errors.Wrapf(err, "error starting saga `%s`", sagaInstance.UID())
+			return errors.Wrapf(err, "starting saga `%s`", sagaInstance.UID())
 		}
 
 	case *contracts.RecoverSagaCommand:
@@ -77,7 +77,7 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 		sagaCtx = sagaPkg.NewSagaCtx(execCtx, sagaInstance)
 
 		if err := sagaInstance.Recover(sagaCtx); err != nil {
-			return errors.Wrapf(err, "error recovering saga `%s`", sagaInstance.UID())
+			return errors.Wrapf(err, "recovering saga `%s`", sagaInstance.UID())
 		}
 
 	case *contracts.CompensateSagaCommand:
@@ -105,7 +105,7 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 		sagaCtx = sagaPkg.NewSagaCtx(execCtx, sagaInstance)
 
 		if err := sagaInstance.Compensate(sagaCtx); err != nil {
-			return errors.Wrapf(err, "error compensating saga `%s`", sagaInstance.UID())
+			return errors.Wrapf(err, "compensating saga `%s`", sagaInstance.UID())
 		}
 
 	default:
@@ -119,8 +119,8 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 		outcomingMessage := message.NewOutcomingMessage(delivery.Payload, message.WithHeaders(msg.Headers()))
 
 		if err := execCtx.Send(outcomingMessage, delivery.Options...); err != nil {
-			execCtx.LogMessage(log.ErrorLevel, fmt.Sprintf("error sending delivery for saga %s. Delivery: (%v). %s", sagaCtx.SagaInstance().UID(), delivery, err))
-			return errors.Wrapf(err, "error sending delivery for saga %s. Delivery: (%v)", sagaCtx.SagaInstance().UID(), delivery)
+			execCtx.LogMessage(log.ErrorLevel, fmt.Sprintf("sending delivery for saga %s. Delivery: (%v). %s", sagaCtx.SagaInstance().UID(), delivery, err))
+			return errors.Wrapf(err, "sending delivery for saga %s. Delivery: (%v)", sagaCtx.SagaInstance().UID(), delivery)
 		}
 		sagaCtx.SagaInstance().AddHistoryEvent(delivery.Payload)
 	}
@@ -151,7 +151,7 @@ func (h SagaControlHandler) fetchSaga(ctx context.Context, sagaId string) (sagaP
 	sagaInstance, err := h.store.GetById(ctx, sagaId)
 
 	if err != nil {
-		return nil, errors.Wrapf(err, "error fetching saga instance `%s` from store", sagaId)
+		return nil, errors.Wrapf(err, "fetching saga instance `%s` from store", sagaId)
 	}
 
 	if sagaInstance == nil {
