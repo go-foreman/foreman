@@ -40,7 +40,7 @@ func NewSubscriber(transport transport.Transport, processor Processor, logger lo
 func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 	s.logger.Logf(log.InfoLevel, "Started subscriber. Listening to queues: %v", queues)
 
-	signalChan := make(chan os.Signal)
+	signalChan := make(chan os.Signal, 1)
 	defer close(signalChan)
 
 	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
