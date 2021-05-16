@@ -7,6 +7,7 @@ import (
 	"github.com/go-foreman/foreman/saga/mutex"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"math/rand"
 	"testing"
 	"time"
 )
@@ -144,5 +145,44 @@ func testSQLMutexUseCases(t *testing.T, mutexFabric func() mutex.Mutex, dbConnec
 		err := sqlMutex.Release(ctx, id)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "connection which acquiring lock is not found in runtime map. Was Release() called after processing a message?")
+	})
+
+	t.Run("acquire and release a lot of mutex", func(t *testing.T) {
+		rand.Seed(time.Now().UnixNano())
+		locksCount := 100
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second * 60)
+		defer cancel()
+
+		locksIds := make(chan string)
+		doneCh := make(chan struct{})
+
+		go func() {
+			for id := range locksIds {
+				go func(lockedId string) {
+					time.Sleep(time.Duration(rand.Intn(500-100) + 100) * time.Millisecond)
+					releaseCtx, cancel := context.WithTimeout(context.Background(), time.Second * 5)
+					defer cancel()
+					assert.NoError(t, sqlMutex.Release(releaseCtx, lockedId))
+				}(id)
+			}
+
+			doneCh <-struct {}{}
+		}()
+
+		for i := 0; i < locksCount; i++ {
+			id := fmt.Sprintf("said-%d", i)
+			require.NoError(t, sqlMutex.Lock(ctx, id))
+			locksIds <- id
+		}
+
+		close(locksIds)
+
+		select {
+		case <- ctx.Done():
+			t.FailNow()
+		case <- doneCh:
+			return
+		}
 	})
 }

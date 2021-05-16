@@ -18,7 +18,7 @@ const (
 	maxTasksInProgress                     = 100
 	packageProcessingMaxTime time.Duration = time.Second * 60
 	gracefulShutdownTimeout  time.Duration = time.Second * 120
-	scheduleTimeout          time.Duration = time.Second
+	scheduleTimeout          time.Duration = time.Second * 3
 )
 
 type Subscriber interface {

@@ -78,6 +78,10 @@ func (m *mysqlMutex) Release(ctx context.Context, sagaId string) error {
 	delete(m.connections, sagaId)
 	m.mapLock.Unlock()
 
+	if err := conn.Close(); err != nil {
+		return WithMutexErr(errors.Wrapf(err, "closing connection for saga's %s mutex", sagaId))
+	}
+
 	return nil
 }
 
