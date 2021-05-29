@@ -64,7 +64,7 @@ test:
 	go test ./... -cover
 
 .PHONY: test-report
-test-report: create_reports_dir #lint
+test-report:
 	#go test -coverprofile=$(CI_REPORTS_DIR)/coverage.txt -covermode=atomic -json $(UNIT_TEST_PKGS) > $(CI_REPORTS_DIR)/report.json
 	go test -coverprofile=coverage.txt -covermode=atomic $(UNIT_TEST_PKGS)
 
@@ -76,7 +76,7 @@ lint:
 	golangci-lint run -v
 
 .PHONY: lint-report
-lint-report: create_reports_dir
+lint-report:
 	golangci-lintgolangci-lint run -v --issues-exit-code=0 --out-format checkstyle > lint-report.xml
 
 .PHONY: create_reports_dir
