@@ -1,9 +1,8 @@
 module github.com/go-foreman/foreman
 
-go 1.14
+go 1.16
 
 require (
-	github.com/gogo/protobuf v1.3.2
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/google/uuid v1.1.2
 	github.com/jackc/pgx/v4 v4.11.0
