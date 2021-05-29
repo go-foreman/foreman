@@ -2,11 +2,12 @@ package message
 
 import (
 	"encoding/json"
+	"reflect"
+	"strings"
+
 	"github.com/go-foreman/foreman/runtime/scheme"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
-	"reflect"
-	"strings"
 )
 
 type Marshaller interface {
@@ -28,7 +29,6 @@ func WithDecoderErr(err error) error {
 
 type jsonDecoder struct {
 	knownTypes scheme.KnownTypesRegistry
-	decoder mapstructure.Decoder
 }
 
 func (j jsonDecoder) Unmarshal(b []byte) (Object, error) {
@@ -162,7 +162,7 @@ func (j jsonDecoder) Marshal(obj Object) ([]byte, error) {
 
 var objectType = reflect.TypeOf((*Object)(nil)).Elem()
 
-func(j jsonDecoder) setGroupKind(obj Object) error {
+func (j jsonDecoder) setGroupKind(obj Object) error {
 	if gk := obj.GroupKind(); gk.Empty() {
 		gk, err := j.knownTypes.ObjectKind(obj)
 		if err != nil {

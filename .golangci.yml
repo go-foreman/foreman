@@ -41,7 +41,7 @@ linters:
     - varcheck
     - goimports
     - typecheck
-    - errorlint
+    #- errorlint
     - gofmt
     - misspell
     - nestif
@@ -57,6 +57,12 @@ linters-settings:
     go: "1.16"
   unused:
     go: "1.16"
+  gosec:
+    # Available rules: https://github.com/securego/gosec#available-rules
+    excludes:
+      - G404
+  nestif:
+    min-complexity: 8
 
 
 issues:

@@ -4,15 +4,16 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/go-foreman/foreman/pubsub/message"
-	"github.com/pkg/errors"
 	"strconv"
 	"time"
+
+	"github.com/go-foreman/foreman/pubsub/message"
+	"github.com/pkg/errors"
 )
 
 const (
 	MYSQLDriver SQLDriver = "mysql"
-	PGDriver SQLDriver = "pg"
+	PGDriver    SQLDriver = "pg"
 )
 
 type SQLDriver string
@@ -20,15 +21,15 @@ type SQLDriver string
 type sqlStore struct {
 	msgMarshaller message.Marshaller
 	db            *sql.DB
-	driver SQLDriver
+	driver        SQLDriver
 }
 
 // NewSQLSagaStore creates sql saga store, it supports mysql and postgres drivers.
 // driver param is required because of https://github.com/golang/go/issues/3602. Better this than +1 dependency or copy pasting code
-func NewSQLSagaStore(db *sql.DB, driver SQLDriver,  msgMarshaller message.Marshaller) (Store, error) {
+func NewSQLSagaStore(db *sql.DB, driver SQLDriver, msgMarshaller message.Marshaller) (Store, error) {
 	s := &sqlStore{db: db, driver: driver, msgMarshaller: msgMarshaller}
 	if err := s.initTables(); err != nil {
-		return nil, errors.WithStack(err)
+		return nil, errors.Wrapf(err, "initializing tables for SQLSagaStore, driver %s", driver)
 	}
 
 	return s, nil
@@ -45,7 +46,7 @@ func (s sqlStore) Create(ctx context.Context, sagaInstance Instance) error {
 	tx, err := s.db.Begin()
 
 	if err != nil {
-		return errors.WithStack(err)
+		return errors.Wrapf(err, "beginning a transaction for saga %s", sagaInstance.UID())
 	}
 
 	_, err = tx.ExecContext(ctx, s.prepQuery(fmt.Sprintf("INSERT INTO %v (uid, parent_uid, name, payload, status, started_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?);", sagaTableName)),
@@ -59,13 +60,13 @@ func (s sqlStore) Create(ctx context.Context, sagaInstance Instance) error {
 	)
 	if err != nil {
 		if rErr := tx.Rollback(); rErr != nil {
-			return errors.Wrapf(rErr, "error rollback when %s", err)
+			return errors.Wrapf(rErr, "rollback when %s", err)
 		}
-		return errors.WithStack(err)
+		return errors.Wrapf(err, "inserting saga instance %s", sagaInstance.UID())
 	}
 
 	if err := tx.Commit(); err != nil {
-		return errors.Wrapf(err, "commiting saga instance %s into the store", sagaInstance.UID())
+		return errors.Wrapf(err, "committing saga instance %s into the store", sagaInstance.UID())
 	}
 
 	return nil
@@ -118,29 +119,30 @@ func (s sqlStore) Update(ctx context.Context, sagaInstance Instance) error {
 
 	if err != nil {
 		if rErr := tx.Rollback(); rErr != nil {
-			return errors.Wrapf(rErr, "error rollback when %s", err)
+			return errors.Wrapf(rErr, "rollback when %s", err)
 		}
 		return errors.Wrapf(err, "querying %s for saga_uid %s", sagaHistoryTableName, sagaInstance.UID())
 	}
 
-	var id string
-	ids := make(map[string]string)
-	for rows.Next() {
-		err := rows.Scan(&id)
+	defer rows.Close()
 
-		if err != nil {
+	var eventID string
+	eventsIDs := make(map[string]string)
+
+	for rows.Next() {
+		if err := rows.Scan(&eventID); err != nil {
 			if rErr := tx.Rollback(); rErr != nil {
 				return errors.Wrapf(rErr, "error rollback when %s", err)
 			}
-			return errors.WithStack(err)
+			return errors.Wrap(err, "scanning row")
 		}
 
-		ids[id] = id
+		eventsIDs[eventID] = eventID
 	}
 
-	if len(ids) < len(sagaInstance.HistoryEvents()) {
+	if len(eventsIDs) < len(sagaInstance.HistoryEvents()) {
 		for _, ev := range sagaInstance.HistoryEvents() {
-			if _, exists := ids[ev.UID]; exists {
+			if _, exists := eventsIDs[ev.UID]; !exists {
 				continue
 			}
 
@@ -148,7 +150,7 @@ func (s sqlStore) Update(ctx context.Context, sagaInstance Instance) error {
 
 			if err != nil {
 				if rErr := tx.Rollback(); rErr != nil {
-					return errors.Wrapf(rErr, "error rollback when %s", err)
+					return errors.Wrapf(rErr, "rollback when %s", err)
 				}
 
 				return errors.WithStack(err)
@@ -167,7 +169,7 @@ func (s sqlStore) Update(ctx context.Context, sagaInstance Instance) error {
 
 			if err != nil {
 				if rErr := tx.Rollback(); rErr != nil {
-					return errors.Wrapf(rErr, "error rollback when %s", err)
+					return errors.Wrapf(rErr, "rollback when %s", err)
 				}
 				return errors.Wrapf(err, "inserting history event %v for saga %s", ev, sagaInstance.UID())
 			}
@@ -175,7 +177,7 @@ func (s sqlStore) Update(ctx context.Context, sagaInstance Instance) error {
 	}
 
 	if err := tx.Commit(); err != nil {
-		return errors.WithStack(err)
+		return errors.Wrapf(err, "committing update of events for saga %s", sagaInstance.UID())
 	}
 
 	return nil
@@ -218,7 +220,7 @@ func (s sqlStore) GetById(ctx context.Context, sagaId string) (Instance, error) 
 	return sagaInstance, nil
 }
 
-func (s sqlStore) GetByFilter(ctx context.Context, filters... FilterOption) ([]Instance, error) {
+func (s sqlStore) GetByFilter(ctx context.Context, filters ...FilterOption) ([]Instance, error) {
 	if len(filters) == 0 {
 		return nil, errors.Errorf("No filters found, you have to specify at least one so result won't be whole store")
 	}
@@ -231,7 +233,7 @@ func (s sqlStore) GetByFilter(ctx context.Context, filters... FilterOption) ([]I
 
 	//todo use https://github.com/Masterminds/squirrel ? +1 dependency, is it really needed?
 	query := fmt.Sprintf(
-`SELECT 
+		`SELECT 
 			s.uid,
 			s.parent_uid,
 			s.name,
@@ -249,7 +251,7 @@ func (s sqlStore) GetByFilter(ctx context.Context, filters... FilterOption) ([]I
 			sh.trace_uid 
 		FROM %s s LEFT JOIN %s sh 
 		ON s.uid = sh.saga_uid WHERE`,
-	sagaTableName, sagaHistoryTableName)
+		sagaTableName, sagaHistoryTableName)
 
 	var (
 		args       []interface{}
@@ -292,6 +294,8 @@ func (s sqlStore) GetByFilter(ctx context.Context, filters... FilterOption) ([]I
 	if err != nil {
 		return nil, errors.Wrap(err, "querying sagas with filter")
 	}
+
+	defer rows.Close()
 
 	sagas := make(map[string]*sagaInstance)
 
@@ -383,6 +387,8 @@ func (s sqlStore) queryEvents(sagaId string) ([]HistoryEvent, error) {
 		return nil, errors.Wrapf(err, "querying events for saga %s", sagaId)
 	}
 
+	defer rows.Close()
+
 	messages := make([]HistoryEvent, 0)
 
 	for rows.Next() {
@@ -424,12 +430,12 @@ func (s sqlStore) eventFromModel(ev historyEventSqlModel) (*HistoryEvent, error)
 	}
 
 	res := &HistoryEvent{
-		UID: ev.ID.String,
-		SagaStatus: ev.SagaStatus.String,
-		Payload: eventPayload,
-		CreatedAt: ev.CreatedAt.Time,
+		UID:          ev.ID.String,
+		SagaStatus:   ev.SagaStatus.String,
+		Payload:      eventPayload,
+		CreatedAt:    ev.CreatedAt.Time,
 		OriginSource: ev.OriginSource.String,
-		TraceUID: ev.TraceUID.String,
+		TraceUID:     ev.TraceUID.String,
 	}
 
 	return res, nil
@@ -443,10 +449,10 @@ func (s sqlStore) instanceFromModel(sagaData sagaSqlModel) (*sagaInstance, error
 
 	sagaInstance := &sagaInstance{
 		uid: sagaData.ID.String,
-		instanceStatus:    instanceStatus{
-			status:        status,
+		instanceStatus: instanceStatus{
+			status: status,
 		},
-		parentID:  sagaData.ParentID.String,
+		parentID:      sagaData.ParentID.String,
 		historyEvents: make([]HistoryEvent, 0),
 	}
 
@@ -483,7 +489,7 @@ func (s sqlStore) instanceFromModel(sagaData sagaSqlModel) (*sagaInstance, error
 }
 
 func (s sqlStore) initTables() error {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second * 30)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{})

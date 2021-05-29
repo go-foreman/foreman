@@ -1,13 +1,14 @@
 package dispatcher
 
 import (
+	"reflect"
+	"testing"
+
 	"github.com/go-foreman/foreman/pubsub/message"
 	"github.com/go-foreman/foreman/pubsub/message/execution"
 	"github.com/go-foreman/foreman/runtime/scheme"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"reflect"
-	"testing"
 )
 
 type registerAccountCmd struct {
@@ -24,10 +25,6 @@ type accountRegisteredEvent struct {
 
 type confirmationSentEvent struct {
 	message.ObjectMeta
-}
-
-func allExecutor(execCtx execution.MessageExecutionCtx) error {
-	return nil
 }
 
 type service struct {
@@ -77,7 +74,7 @@ func TestDispatcher_SubscribeForCmd(t *testing.T) {
 			dispatcher.SubscribeForCmd(wrongType, handler.handle)
 		})
 	})
-	
+
 	t.Run("cross subscription for an event", func(t *testing.T) {
 		dispatcher := NewDispatcher()
 		dispatcher.SubscribeForCmd(&registerAccountCmd{}, handler.handle)
@@ -140,7 +137,7 @@ func TestDispatcher_SubscribeForAllEvents(t *testing.T) {
 		require.Len(t, listeners, 1)
 		assertThisValueExists(t, handler.handle, listeners)
 	})
-	
+
 	t.Run("subscribe for an event by duplicating handler for all events", func(t *testing.T) {
 		dispatcher := NewDispatcher()
 		dispatcher.SubscribeForAllEvents(handler.handle)
@@ -182,4 +179,3 @@ func assertThisValueExists(t *testing.T, expected execution.Executor, executors 
 	}
 	assert.True(t, exists, "expected executor is not found among executors")
 }
-

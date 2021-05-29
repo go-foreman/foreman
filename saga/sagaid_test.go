@@ -2,10 +2,11 @@ package saga
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/go-foreman/foreman/pubsub/message"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestNewSagaUIDService(t *testing.T) {

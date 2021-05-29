@@ -1,10 +1,11 @@
 package amqp
 
 import (
-	"github.com/go-foreman/foreman/log"
-	"github.com/streadway/amqp"
 	"sync/atomic"
 	"time"
+
+	"github.com/go-foreman/foreman/log"
+	"github.com/streadway/amqp"
 )
 
 const (

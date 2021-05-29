@@ -1,9 +1,10 @@
 package scheme
 
 import (
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 const (
@@ -30,13 +31,13 @@ func TestKnownTypesRegistry_AddKnownTypeWithName(t *testing.T) {
 
 	t.Run("add known type by pointer", func(t *testing.T) {
 		knownRegistry.AddKnownTypeWithName(GroupKind{
-			Group:   group,
-			Kind:    "CustomKind",
+			Group: group,
+			Kind:  "CustomKind",
 		}, &SomeTestType{})
 
 		someTestTypeInstance, err := knownRegistry.NewObject(GroupKind{
-			Group:   group,
-			Kind:    "CustomKind",
+			Group: group,
+			Kind:  "CustomKind",
 		})
 		require.NoError(t, err)
 		assert.NotNil(t, someTestTypeInstance)
@@ -46,12 +47,12 @@ func TestKnownTypesRegistry_AddKnownTypeWithName(t *testing.T) {
 	t.Run("add known type by value", func(t *testing.T) {
 		knownRegistry.AddKnownTypeWithName(GroupKind{
 			Group: group,
-			Kind: "SomeKind",
+			Kind:  "SomeKind",
 		}, &SomeTestType{})
 
 		someKindInstance, err := knownRegistry.NewObject(GroupKind{
-			Group:   group,
-			Kind:    "CustomKind",
+			Group: group,
+			Kind:  "CustomKind",
 		})
 		require.NoError(t, err)
 		assert.NotNil(t, someKindInstance)
@@ -62,8 +63,8 @@ func TestKnownTypesRegistry_AddKnownTypeWithName(t *testing.T) {
 		expected := "group is required on all types: CustomKind scheme.SomeTestType"
 		require.PanicsWithValue(t, expected, func() {
 			knownRegistry.AddKnownTypeWithName(GroupKind{
-				Group:   "",
-				Kind:    "CustomKind",
+				Group: "",
+				Kind:  "CustomKind",
 			}, &SomeTestType{})
 		})
 	})
@@ -72,8 +73,8 @@ func TestKnownTypesRegistry_AddKnownTypeWithName(t *testing.T) {
 		expected := "Double registration of different types for test.CustomKind: old=github.com/go-foreman/foreman/runtime/scheme.SomeTestType, new=github.com/go-foreman/foreman/runtime/scheme.SomeAnotherTestType"
 		require.PanicsWithValue(t, expected, func() {
 			knownRegistry.AddKnownTypeWithName(GroupKind{
-				Group:   group,
-				Kind:    "CustomKind",
+				Group: group,
+				Kind:  "CustomKind",
 			}, &SomeAnotherTestType{})
 		})
 	})
@@ -82,8 +83,8 @@ func TestKnownTypesRegistry_AddKnownTypeWithName(t *testing.T) {
 		wrongType := notStructType("xxx")
 		assert.PanicsWithValue(t, "all types must be pointers to structs", func() {
 			knownRegistry.AddKnownTypeWithName(GroupKind{
-				Group:   group,
-				Kind:    "WrongKind",
+				Group: group,
+				Kind:  "WrongKind",
 			}, &wrongType)
 		})
 	})
@@ -115,16 +116,16 @@ func TestKnownTypesRegistry_AddKnownTypes(t *testing.T) {
 	t.Run("added two types", func(t *testing.T) {
 		knownRegistry.AddKnownTypes(group, &SomeTestType{}, &SomeAnotherTestType{})
 		someTestType, err := knownRegistry.NewObject(GroupKind{
-			Group:   group,
-			Kind:    "SomeTestType",
+			Group: group,
+			Kind:  "SomeTestType",
 		})
 		require.NoError(t, err)
 		assert.NotNil(t, someTestType)
 		assert.IsType(t, &SomeTestType{}, someTestType)
 
 		someAnotherTestType, err := knownRegistry.NewObject(GroupKind{
-			Group:   group,
-			Kind:    "SomeAnotherTestType",
+			Group: group,
+			Kind:  "SomeAnotherTestType",
 		})
 		require.NoError(t, err)
 		assert.NotNil(t, someAnotherTestType)
@@ -133,8 +134,8 @@ func TestKnownTypesRegistry_AddKnownTypes(t *testing.T) {
 
 	t.Run("type is not registered", func(t *testing.T) {
 		loadedType, err := knownRegistry.NewObject(GroupKind{
-			Group:   group,
-			Kind:    "XXXSomeTestType",
+			Group: group,
+			Kind:  "XXXSomeTestType",
 		})
 		assert.Nil(t, loadedType)
 		assert.Error(t, err)
@@ -151,4 +152,3 @@ func (n notStructType) GroupKind() GroupKind {
 func (n notStructType) SetGroupKind(gk *GroupKind) {
 
 }
-

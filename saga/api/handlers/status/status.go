@@ -3,12 +3,13 @@ package status
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"strings"
+
 	"github.com/go-foreman/foreman/log"
 	"github.com/go-foreman/foreman/saga"
 	sagaApiErrors "github.com/go-foreman/foreman/saga/api/errors"
 	"github.com/pkg/errors"
-	"net/http"
-	"strings"
 )
 
 type StatusResponse struct {

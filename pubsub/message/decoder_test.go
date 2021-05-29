@@ -2,11 +2,12 @@ package message
 
 import (
 	"encoding/json"
+	"strings"
+	"testing"
+
 	"github.com/go-foreman/foreman/runtime/scheme"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"strings"
-	"testing"
 )
 
 const (
@@ -16,13 +17,13 @@ const (
 type WrapperType struct {
 	ObjectMeta
 	Nested Object
-	Value int
+	Value  int
 }
 
 type SomeTypeWithNestedType struct {
 	ObjectMeta
 	Nested Object
-	Value int
+	Value  int
 }
 
 type SomeTestType struct {
@@ -34,8 +35,6 @@ type SomeTestType struct {
 type ChildType struct {
 	Value int
 }
-
-
 
 func TestJsonDecoder(t *testing.T) {
 	knownRegistry := scheme.NewKnownTypesRegistry()
@@ -50,7 +49,7 @@ func TestJsonDecoder(t *testing.T) {
 					Group: group.String(),
 				},
 			},
-			Value:          1,
+			Value: 1,
 		}
 
 		marshaled, err := decoder.Marshal(instance)
@@ -66,7 +65,7 @@ func TestJsonDecoder(t *testing.T) {
 	t.Run("verify that GK is set from schema before encoding", func(t *testing.T) {
 		knownRegistry.AddKnownTypes(group, &SomeTestType{})
 		instance := &SomeTestType{
-			Value:          1,
+			Value: 1,
 		}
 		marshaled, err := decoder.Marshal(instance)
 		require.NoError(t, err)
@@ -77,7 +76,7 @@ func TestJsonDecoder(t *testing.T) {
 		assert.IsType(t, &SomeTestType{}, decodedObj)
 		assert.Equal(t, instance.Value, instance.Value)
 	})
-	
+
 	t.Run("decode invalid payload with empty GK", func(t *testing.T) {
 		instance := &SomeTestType{
 			ObjectMeta: ObjectMeta{
@@ -86,7 +85,7 @@ func TestJsonDecoder(t *testing.T) {
 					Group: group.String(),
 				},
 			},
-			Value:          1,
+			Value: 1,
 		}
 
 		marshaled, err := json.Marshal(instance)
@@ -111,7 +110,7 @@ func TestJsonDecoder(t *testing.T) {
 		knownRegistry.AddKnownTypes(group, &WrapperType{})
 		instance := &WrapperType{
 			Nested: &SomeTypeWithNestedType{
-				Nested:     &SomeTestType{
+				Nested: &SomeTestType{
 					Value: 1,
 					Child: ChildType{
 						Value: -1,
@@ -131,4 +130,3 @@ func TestJsonDecoder(t *testing.T) {
 		assert.EqualValues(t, instance, decodedObj)
 	})
 }
-

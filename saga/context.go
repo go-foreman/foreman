@@ -3,6 +3,7 @@ package saga
 import (
 	"context"
 	"fmt"
+
 	"github.com/go-foreman/foreman/log"
 	"github.com/go-foreman/foreman/pubsub/endpoint"
 	"github.com/go-foreman/foreman/pubsub/message"

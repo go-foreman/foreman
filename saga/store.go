@@ -3,6 +3,7 @@ package saga
 import (
 	"context"
 	"database/sql"
+
 	"github.com/pkg/errors"
 )
 
@@ -16,7 +17,7 @@ type FilterOption func(opts *filterOptions)
 type Store interface {
 	Create(ctx context.Context, saga Instance) error
 	GetById(ctx context.Context, sagaId string) (Instance, error)
-	GetByFilter(ctx context.Context, filters... FilterOption) ([]Instance, error)
+	GetByFilter(ctx context.Context, filters ...FilterOption) ([]Instance, error)
 	Update(ctx context.Context, saga Instance) error
 	Delete(ctx context.Context, sagaId string) error
 }
@@ -57,19 +58,19 @@ func statusFromStr(str string) (status, error) {
 }
 
 type sagaSqlModel struct {
-	ID        sql.NullString
-	ParentID  sql.NullString
-	Name      sql.NullString
-	Payload   []byte
-	Status    sql.NullString
+	ID            sql.NullString
+	ParentID      sql.NullString
+	Name          sql.NullString
+	Payload       []byte
+	Status        sql.NullString
 	LastFailedMsg []byte
-	StartedAt sql.NullTime
-	UpdatedAt sql.NullTime
+	StartedAt     sql.NullTime
+	UpdatedAt     sql.NullTime
 }
 
 type historyEventSqlModel struct {
-	ID      sql.NullString
-	Name    sql.NullString
+	ID           sql.NullString
+	Name         sql.NullString
 	CreatedAt    sql.NullTime
 	Payload      []byte
 	OriginSource sql.NullString

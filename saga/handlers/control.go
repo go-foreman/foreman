@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+
 	log "github.com/go-foreman/foreman/log"
 	"github.com/go-foreman/foreman/pubsub/message"
 	"github.com/go-foreman/foreman/pubsub/message/execution"
@@ -13,7 +14,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func NewSagaControlHandler(sagaStore sagaPkg.Store, mutex mutex.Mutex, sagaRegistry scheme.KnownTypesRegistry, sagaUIDSvc sagaPkg.SagaUIDService,logger log.Logger) *SagaControlHandler {
+func NewSagaControlHandler(sagaStore sagaPkg.Store, mutex mutex.Mutex, sagaRegistry scheme.KnownTypesRegistry, sagaUIDSvc sagaPkg.SagaUIDService, logger log.Logger) *SagaControlHandler {
 	return &SagaControlHandler{typesRegistry: sagaRegistry, store: sagaStore, mutex: mutex, sagaUIDSvc: sagaUIDSvc, logger: logger}
 }
 
@@ -70,7 +71,7 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 		}
 
 		if !sagaInstance.Status().Failed() || sagaInstance.Status().Completed() || sagaInstance.Status().Recovering() || sagaInstance.Status().Compensating() {
-			h.logger.Logf(log.InfoLevel, "Saga %s has status %s, you can't start recovering the process", sagaInstance.UID(), sagaInstance.Status(), )
+			h.logger.Logf(log.InfoLevel, "Saga %s has status %s, you can't start recovering the process", sagaInstance.UID(), sagaInstance.Status())
 			return nil
 		}
 

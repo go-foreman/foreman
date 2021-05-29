@@ -17,10 +17,6 @@ type worker struct {
 	myTasks         workerQueue
 }
 
-func (w *worker) workerQueue() workerQueue {
-	return w.myTasks
-}
-
 func newWorker(ctx context.Context, dispatcherQueue dispatcherQueue) worker {
 	return worker{
 		ctx:             ctx,

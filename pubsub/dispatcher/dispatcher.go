@@ -2,10 +2,11 @@ package dispatcher
 
 import (
 	"fmt"
+	"reflect"
+
 	"github.com/go-foreman/foreman/pubsub/message"
 	"github.com/go-foreman/foreman/pubsub/message/execution"
 	"github.com/go-foreman/foreman/runtime/scheme"
-	"reflect"
 )
 
 type Dispatcher interface {
@@ -17,14 +18,14 @@ type Dispatcher interface {
 
 func NewDispatcher() Dispatcher {
 	return &dispatcher{
-		handlers: make(map[reflect.Type][]execution.Executor),
+		handlers:  make(map[reflect.Type][]execution.Executor),
 		listeners: make(map[reflect.Type][]execution.Executor),
 	}
 }
 
 type dispatcher struct {
-	handlers  map[reflect.Type][]execution.Executor
-	listeners map[reflect.Type][]execution.Executor
+	handlers        map[reflect.Type][]execution.Executor
+	listeners       map[reflect.Type][]execution.Executor
 	allEvsListeners []execution.Executor
 }
 

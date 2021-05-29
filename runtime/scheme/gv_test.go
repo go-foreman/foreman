@@ -2,8 +2,9 @@ package scheme
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestGroup(t *testing.T) {
@@ -22,9 +23,9 @@ func TestGroupKind(t *testing.T) {
 	t.Run("GK is ok", func(t *testing.T) {
 		gk := GroupKind{
 			Group: group,
-			Kind: "SomeTest",
+			Kind:  "SomeTest",
 		}
-		assert.Equal(t, fmt.Sprintf("%s.%s",group, "SomeTest"), gk.String())
+		assert.Equal(t, fmt.Sprintf("%s.%s", group, "SomeTest"), gk.String())
 		assert.Equal(t, gk.String(), gk.Identifier())
 	})
 
@@ -35,7 +36,7 @@ func TestGroupKind(t *testing.T) {
 
 	t.Run("GK has empty group", func(t *testing.T) {
 		gk := GroupKind{
-			Kind:  "SomeTest",
+			Kind: "SomeTest",
 		}
 		assert.False(t, gk.Empty())
 		assert.Equal(t, "SomeTest", gk.String())

@@ -2,8 +2,9 @@ package endpoint
 
 import (
 	"context"
-	"github.com/go-foreman/foreman/pubsub/message"
 	"time"
+
+	"github.com/go-foreman/foreman/pubsub/message"
 )
 
 type Endpoint interface {
@@ -13,7 +14,6 @@ type Endpoint interface {
 
 type deliveryOptions struct {
 	delay *time.Duration
-	headers message.Headers
 }
 
 func WithDelay(delay time.Duration) DeliveryOption {

@@ -4,10 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
 	"os"
 	"time"
+
+	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 
 	_ "github.com/jackc/pgx/v4/stdlib"
 )
@@ -26,7 +27,7 @@ func (s *PgSuite) SetupSuite() {
 		connectionStr = v
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second * 10)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
 	var err error
@@ -42,7 +43,7 @@ func (s *PgSuite) Connection() *sql.DB {
 
 // TearDownSuite teardown at the end of test
 func (s *PgSuite) TearDownSuite() {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second * 10)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
 	res, err := s.dbConn.ExecContext(ctx, "DROP TABLE IF EXISTS saga_history, saga;")

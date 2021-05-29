@@ -1,13 +1,14 @@
 package endpoint
 
 import (
+	"reflect"
+
 	"github.com/go-foreman/foreman/pubsub/message"
 	"github.com/go-foreman/foreman/runtime/scheme"
-	"reflect"
 )
 
 type Router interface {
-	RegisterEndpoint(endpoint Endpoint, objects... message.Object)
+	RegisterEndpoint(endpoint Endpoint, objects ...message.Object)
 	Route(obj message.Object) []Endpoint
 }
 
@@ -21,7 +22,7 @@ type router struct {
 	routes map[reflect.Type][]Endpoint
 }
 
-func (r *router) RegisterEndpoint(endpoint Endpoint, objects... message.Object) {
+func (r *router) RegisterEndpoint(endpoint Endpoint, objects ...message.Object) {
 	for _, obj := range objects {
 		structType := scheme.GetStructType(obj)
 		r.routes[structType] = append(r.routes[structType], endpoint)

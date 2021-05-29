@@ -1,8 +1,9 @@
 package pkg
 
 import (
-	"github.com/streadway/amqp"
 	"time"
+
+	"github.com/streadway/amqp"
 )
 
 type IncomingPkg interface {

@@ -2,11 +2,12 @@ package endpoint
 
 import (
 	"context"
+	"time"
+
 	"github.com/go-foreman/foreman/pubsub/message"
 	"github.com/go-foreman/foreman/pubsub/transport"
 	"github.com/go-foreman/foreman/pubsub/transport/pkg"
 	"github.com/pkg/errors"
-	"time"
 )
 
 type AmqpEndpoint struct {
@@ -27,11 +28,9 @@ func (a AmqpEndpoint) Name() string {
 func (a AmqpEndpoint) Send(ctx context.Context, msg *message.OutcomingMessage, opts ...DeliveryOption) error {
 	deliveryOpts := &deliveryOptions{}
 
-	if opts != nil {
-		for _, opt := range opts {
-			if err := opt(deliveryOpts); err != nil {
-				return errors.Wrapf(err, "error compiling delivery options for message %s", msg.UID())
-			}
+	for _, opt := range opts {
+		if err := opt(deliveryOpts); err != nil {
+			return errors.Wrapf(err, "error compiling delivery options for message %s", msg.UID())
 		}
 	}
 

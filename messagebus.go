@@ -2,6 +2,7 @@ package brigadier
 
 import (
 	"errors"
+
 	"github.com/go-foreman/foreman/log"
 	"github.com/go-foreman/foreman/pubsub/dispatcher"
 	"github.com/go-foreman/foreman/pubsub/endpoint"
