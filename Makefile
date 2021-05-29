@@ -20,7 +20,7 @@ ENV_LOCAL_TEST=\
   MYSQL_USER=foreman \
   MYSQL_PASSWORD=foreman
 
-CI_REPORTS_DIR ?= reports
+#CI_REPORTS_DIR ?= reports
 
 .PHONY: tools
 tools:
@@ -65,7 +65,8 @@ test:
 
 .PHONY: test-report
 test-report: create_reports_dir #lint
-	go test -coverprofile=$(CI_REPORTS_DIR)/coverage.out -json $(UNIT_TEST_PKGS) > $(CI_REPORTS_DIR)/report.json
+	#go test -coverprofile=$(CI_REPORTS_DIR)/coverage.txt -covermode=atomic -json $(UNIT_TEST_PKGS) > $(CI_REPORTS_DIR)/report.json
+	go test -coverprofile=coverage.txt -covermode=atomic $(UNIT_TEST_PKGS)
 
 integration-test:
 	go test $(INTEGRATION_TEST_PKGS)
@@ -76,7 +77,7 @@ lint:
 
 .PHONY: lint-report
 lint-report: create_reports_dir
-	golangci-lintgolangci-lint run -v --issues-exit-code=0 --out-format checkstyle > $(CI_REPORTS_DIR)/report.xml
+	golangci-lintgolangci-lint run -v --issues-exit-code=0 --out-format checkstyle > lint-report.xml
 
 .PHONY: create_reports_dir
 create_reports_dir:

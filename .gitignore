@@ -10,6 +10,9 @@
 classes/
 out/
 
+coverage.txt
+lint-report.xml
+
 ######################
 # Mac OSX
 ######################
