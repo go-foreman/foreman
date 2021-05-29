@@ -80,3 +80,7 @@ lint-report: create_reports_dir
 .PHONY: create_reports_dir
 create_reports_dir:
 	mkdir -p $(CI_REPORTS_DIR)
+
+.PHONY: mod-download
+mod-download:
+	go mod download
