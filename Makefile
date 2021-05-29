@@ -25,7 +25,8 @@ CI_REPORTS_DIR ?= reports
 .PHONY: tools
 tools:
 	go get -v $(TOOLS)
-	wget -O- -nv https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.40.1
+	## using wget because go get is not working for 1.40.1
+	wget -O- -nv https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | BINDIR=${GOPATH}/bin sh -s v1.40.1
 
 .PHONY: docker-start
 docker-start:

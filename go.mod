@@ -8,6 +8,8 @@ require (
 	github.com/jackc/pgx/v4 v4.11.0 // indirect
 	github.com/mitchellh/mapstructure v1.4.1
 	github.com/pkg/errors v0.9.1
+	github.com/sonatype-nexus-community/nancy v1.0.21 // indirect
 	github.com/streadway/amqp v1.0.0
 	github.com/stretchr/testify v1.7.0
+	github.com/vektra/mockery/v2 v2.8.0 // indirect
 )
