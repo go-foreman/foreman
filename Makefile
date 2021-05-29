@@ -1,7 +1,7 @@
 #! /usr/bin/make
 
 TOOLS=github.com/vektra/mockery/v2/.../@latest \
-       github.com/golangci/golangci-lint/cmd/golangci-lint@latest \
+       github.com/golangci/golangci-lint/cmd/golangci-lint@v1.40.1 \
        github.com/sonatype-nexus-community/nancy@latest
 
 
