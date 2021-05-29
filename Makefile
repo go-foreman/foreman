@@ -71,11 +71,11 @@ integration-test:
 
 .PHONY: lint
 lint:
-	${GOPATH}/bin/golangci-lint run -v
+	golangci-lint run -v
 
 .PHONY: lint-report
 lint-report: create_reports_dir
-	${GOPATH}/bin/golangci-lint run -v --issues-exit-code=0 --out-format checkstyle > $(CI_REPORTS_DIR)/report.xml
+	golangci-lintgolangci-lint run -v --issues-exit-code=0 --out-format checkstyle > $(CI_REPORTS_DIR)/report.xml
 
 .PHONY: create_reports_dir
 create_reports_dir:
