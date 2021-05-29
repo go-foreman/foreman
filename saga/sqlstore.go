@@ -142,7 +142,7 @@ func (s sqlStore) Update(ctx context.Context, sagaInstance Instance) error {
 
 	if len(eventsIDs) < len(sagaInstance.HistoryEvents()) {
 		for _, ev := range sagaInstance.HistoryEvents() {
-			if _, exists := eventsIDs[ev.UID]; !exists {
+			if _, exists := eventsIDs[ev.UID]; exists {
 				continue
 			}
 

@@ -144,10 +144,8 @@ func (s *sagaInstance) update() {
 
 func (s *sagaInstance) AddHistoryEvent(ev message.Object, opts ...AddEvOpt) {
 	attachOpts := &addEvOpts{}
-	if len(opts) > 0 {
-		for _, o := range opts {
-			o(attachOpts)
-		}
+	for _, o := range opts {
+		o(attachOpts)
 	}
 
 	historyEv := HistoryEvent{
