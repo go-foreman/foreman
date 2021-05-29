@@ -1,7 +1,6 @@
 #! /usr/bin/make
 
 TOOLS=github.com/vektra/mockery/v2/.../@latest \
-       github.com/golangci/golangci-lint/cmd/golangci-lint@v1.40.1 \
        github.com/sonatype-nexus-community/nancy@latest
 
 
@@ -26,6 +25,7 @@ CI_REPORTS_DIR ?= reports
 .PHONY: tools
 tools:
 	go get -v $(TOOLS)
+	wget -O- -nv https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.40.1
 
 .PHONY: docker-start
 docker-start:
