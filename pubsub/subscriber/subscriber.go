@@ -1,17 +1,19 @@
 package subscriber
 
 import (
-	"github.com/go-foreman/foreman/log"
-	"github.com/go-foreman/foreman/pubsub/transport/plugins/amqp"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/go-foreman/foreman/log"
+	"github.com/go-foreman/foreman/pubsub/transport/plugins/amqp"
+
 	"context"
+	"time"
+
 	"github.com/go-foreman/foreman/pubsub/transport"
 	"github.com/go-foreman/foreman/pubsub/transport/pkg"
 	"github.com/pkg/errors"
-	"time"
 )
 
 const (
@@ -64,13 +66,13 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 
 	for {
 		select {
-		case worker, open := <- s.workerDispatcher.queue():
+		case worker, open := <-s.workerDispatcher.queue():
 			if !open {
 				s.logger.Logf(log.InfoLevel, "worker's channel is closed")
 				return nil
 			}
 			select {
-			case <- scheduleTicker.C:
+			case <-scheduleTicker.C:
 				s.logger.Logf(log.DebugLevel, "worker was waiting %s for a job to start. returning him to the pool", scheduleTimeout.String())
 				s.workerDispatcher.queue() <- worker
 				break
@@ -121,10 +123,10 @@ func (s *subscriber) Stop(ctx context.Context) error {
 
 	for s.workerDispatcher.busyWorkers() > 0 {
 		select {
-		case <- ctx.Done():
+		case <-ctx.Done():
 			s.logger.Logf(log.WarnLevel, "Stopped subscriber because of canceled parent ctx")
 			return nil
-		case <- waitingTicker.C:
+		case <-waitingTicker.C:
 			s.logger.Logf(log.InfoLevel, "Waiting for processor to finish all remaining tasks in a queue. Tasks in progress: %d", s.workerDispatcher.busyWorkers())
 		}
 	}
@@ -138,7 +140,7 @@ type processPkg struct {
 	ctx        context.Context
 	pkg        pkg.IncomingPkg
 	subscriber *subscriber
-	logger log.Logger
+	logger     log.Logger
 }
 
 func newTaskProcessPkg(ctx context.Context, pkg pkg.IncomingPkg, subscriber *subscriber, logger log.Logger) *processPkg {
@@ -146,7 +148,7 @@ func newTaskProcessPkg(ctx context.Context, pkg pkg.IncomingPkg, subscriber *sub
 		ctx:        ctx,
 		pkg:        pkg,
 		subscriber: subscriber,
-		logger: logger,
+		logger:     logger,
 	}
 }
 

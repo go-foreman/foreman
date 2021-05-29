@@ -53,5 +53,6 @@ jobs:
             PG_CONNECTION:  postgres://foreman:foreman@127.0.0.1:5432/foreman?sslmode=disable
           command: |
             make test
+            integration-test
       - store_test_results:
           path: /tmp/test-reports
