@@ -1,4 +1,5 @@
 package errors
+
 //
 //type Status int
 //

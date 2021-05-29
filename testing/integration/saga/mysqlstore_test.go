@@ -4,6 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
+	"testing"
+	"time"
+
 	"github.com/go-foreman/foreman/pubsub/message"
 	"github.com/go-foreman/foreman/runtime/scheme"
 	"github.com/go-foreman/foreman/saga"
@@ -12,12 +16,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"strings"
-	"testing"
-	"time"
 )
 
-const(
+const (
 	testGroup scheme.Group = "testgroup"
 )
 
@@ -46,20 +47,20 @@ func (m *mysqlStoreTest) TestMysqlStore() {
 
 func testSQLStoreUseCases(t *testing.T, store saga.Store, schemeRegistry scheme.KnownTypesRegistry, dbConnection *sql.DB) {
 	t.Run("initialized store tables", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second * 30)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 		defer cancel()
 
-		res, err := dbConnection.QueryContext(ctx,"SELECT * from saga")
+		res, err := dbConnection.QueryContext(ctx, "SELECT * from saga")
 		require.NoError(t, err)
 		require.NotNil(t, res)
-		require.NoError(t, res.Close())
-		res, err = dbConnection.QueryContext(ctx,"SELECT * from saga_history")
+		require.NoError(t, res.Close()) //nolint:sqlclosecheck
+		res, err = dbConnection.QueryContext(ctx, "SELECT * from saga_history")
 		require.NoError(t, err)
-		require.NoError(t, res.Close())
+		require.NoError(t, res.Close()) //nolint:sqlclosecheck
 	})
 
 	t.Run("create saga instance", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second * 30)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 		defer cancel()
 		workflowSaga := &WorkflowSaga{Field: "field", Value: "value"}
 		sagaInstance := saga.NewSagaInstance(uuid.New().String(), "", workflowSaga)
@@ -73,7 +74,7 @@ func testSQLStoreUseCases(t *testing.T, store saga.Store, schemeRegistry scheme.
 	})
 
 	t.Run("delete saga instance", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second * 30)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 		defer cancel()
 		workflowSaga := &WorkflowSaga{Field: "field", Value: "value"}
 		sagaInstance := saga.NewSagaInstance(uuid.New().String(), "", workflowSaga)
@@ -86,7 +87,7 @@ func testSQLStoreUseCases(t *testing.T, store saga.Store, schemeRegistry scheme.
 
 	//this test copies "Create saga instance test" because we don't use fixtures for testing right now and need a way to put records into db
 	t.Run("find saga instance by id", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second * 30)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 		defer cancel()
 
 		workflowSaga := &WorkflowSaga{Field: "field", Value: "value"}
@@ -111,7 +112,7 @@ func testSQLStoreUseCases(t *testing.T, store saga.Store, schemeRegistry scheme.
 	})
 
 	t.Run("update saga instance", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second * 30)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 		defer cancel()
 
 		workflowSaga := &WorkflowSaga{Field: "field", Value: "value"}
@@ -164,7 +165,7 @@ func testSQLStoreUseCases(t *testing.T, store saga.Store, schemeRegistry scheme.
 	})
 
 	t.Run("find saga instance by filter", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second * 30)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 		defer cancel()
 
 		anotherSaga := &FilterSaga{WorkFlow: WorkflowSaga{

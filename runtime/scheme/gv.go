@@ -1,8 +1,9 @@
 package scheme
 
 import (
-	"github.com/pkg/errors"
 	"strings"
+
+	"github.com/pkg/errors"
 )
 
 type Group string

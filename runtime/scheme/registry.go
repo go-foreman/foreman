@@ -2,8 +2,9 @@ package scheme
 
 import (
 	"fmt"
-	"github.com/pkg/errors"
 	"reflect"
+
+	"github.com/pkg/errors"
 )
 
 var KnownTypesRegistryInstance = NewKnownTypesRegistry()
@@ -32,8 +33,8 @@ func (r *knownTypesRegistry) AddKnownTypes(g Group, types ...Object) {
 	for _, obj := range types {
 		structType := GetStructType(obj)
 		r.addKnownTypeWithName(GroupKind{
-			Group:   g,
-			Kind:    structType.Name(),
+			Group: g,
+			Kind:  structType.Name(),
 		}, obj, structType)
 	}
 }

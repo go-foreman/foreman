@@ -1,9 +1,10 @@
 package saga
 
 import (
+	"time"
+
 	"github.com/go-foreman/foreman/pubsub/message"
 	"github.com/google/uuid"
-	"time"
 )
 
 const (
@@ -28,7 +29,7 @@ type Instance interface {
 	Fail(ev message.Object)
 
 	HistoryEvents() []HistoryEvent
-	AddHistoryEvent(ev message.Object, opts...AddEvOpt)
+	AddHistoryEvent(ev message.Object, opts ...AddEvOpt)
 
 	StartedAt() *time.Time
 	UpdatedAt() *time.Time
@@ -51,7 +52,7 @@ func NewSagaInstance(id, parentId string, saga Saga) Instance {
 		parentID: parentId,
 		saga:     saga,
 		instanceStatus: instanceStatus{
-			status:        sagaStatusCreated,
+			status: sagaStatusCreated,
 		},
 		historyEvents: make([]HistoryEvent, 0),
 	}
@@ -141,40 +142,38 @@ func (s *sagaInstance) update() {
 	s.updatedAt = &currentTime
 }
 
-func (s *sagaInstance) AddHistoryEvent(ev message.Object, opts...AddEvOpt) {
+func (s *sagaInstance) AddHistoryEvent(ev message.Object, opts ...AddEvOpt) {
 	attachOpts := &addEvOpts{}
-	if len(opts) > 0 {
-		for _, o := range opts {
-			o(attachOpts)
-		}
+	for _, o := range opts {
+		o(attachOpts)
 	}
 
- 	historyEv := HistoryEvent{
+	historyEv := HistoryEvent{
 		UID:          uuid.New().String(),
 		CreatedAt:    time.Now().Round(time.Second).UTC(),
 		Payload:      ev,
 		OriginSource: attachOpts.origin,
 		SagaStatus:   s.instanceStatus.status.String(),
-		TraceUID: attachOpts.traceUID,
+		TraceUID:     attachOpts.traceUID,
 	}
 	s.historyEvents = append(s.historyEvents, historyEv)
 }
 
 type HistoryEvent struct {
-	UID          string      `json:"uid"`
-	CreatedAt    time.Time   `json:"created_at"`
+	UID          string         `json:"uid"`
+	CreatedAt    time.Time      `json:"created_at"`
 	Payload      message.Object `json:"payload"`
-	OriginSource string      `json:"origin"`
-	SagaStatus   string      `json:"saga_status"` //saga status at the moment
-	TraceUID     string      `json:"trace_uid"` //uid of received message, could be empty
+	OriginSource string         `json:"origin"`
+	SagaStatus   string         `json:"saga_status"` //saga status at the moment
+	TraceUID     string         `json:"trace_uid"`   //uid of received message, could be empty
 }
 
 type addEvOpts struct {
 	traceUID string
-	origin string
+	origin   string
 }
 
-type AddEvOpt func (o *addEvOpts)
+type AddEvOpt func(o *addEvOpts)
 
 func WithTraceUID(uid string) AddEvOpt {
 	return func(o *addEvOpts) {

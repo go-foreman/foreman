@@ -1,9 +1,10 @@
 package message
 
 import (
+	"time"
+
 	"github.com/go-foreman/foreman/runtime/scheme"
 	"github.com/google/uuid"
-	"time"
 )
 
 type Headers map[string]interface{}
@@ -44,16 +45,16 @@ type ObjectMeta struct {
 }
 
 type ReceivedMessage struct {
-	uid string
-	headers Headers
-	payload Object
+	uid        string
+	headers    Headers
+	payload    Object
 	receivedAt time.Time
-	origin string
+	origin     string
 }
 
 func NewReceivedMessage(uid string, payload Object, headers Headers, receivedAt time.Time, origin string) *ReceivedMessage {
 	return &ReceivedMessage{
-		uid: uid,
+		uid:        uid,
 		headers:    headers,
 		payload:    payload,
 		receivedAt: receivedAt,
@@ -82,8 +83,8 @@ func (m ReceivedMessage) Origin() string {
 }
 
 type OutcomingMessage struct {
-	obj Object
-	uid string
+	obj     Object
+	uid     string
 	headers Headers
 }
 
@@ -129,16 +130,15 @@ func NewOutcomingMessage(payload Object, passedOptions ...MsgOption) *OutcomingM
 func FromReceivedMsg(received *ReceivedMessage) *OutcomingMessage {
 	return &OutcomingMessage{
 		headers: received.Headers(),
-		uid: received.UID(),
-		obj: received.Payload(),
+		uid:     received.UID(),
+		obj:     received.Payload(),
 	}
 }
 
 type MsgOption func(attr *opts)
 
 type opts struct {
-	description string
-	headers     Headers
+	headers Headers
 }
 
 func WithHeaders(headers Headers) MsgOption {

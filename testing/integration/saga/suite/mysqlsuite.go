@@ -3,21 +3,22 @@ package suite
 import (
 	"database/sql"
 	"fmt"
+	"os"
+
 	driverSql "github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"os"
 )
 
 // MysqlSuite struct for MySQL Suite
 type MysqlSuite struct {
 	suite.Suite
-	dbConn        *sql.DB
+	dbConn *sql.DB
 }
 
 // SetupSuite setup at the beginning of test
 func (s *MysqlSuite) SetupSuite() {
-	disableLogging()
+	s.disableLogging()
 
 	connectionStr := fmt.Sprintf("%s:%s@tcp(%s)/%s?charset=utf8&parseTime=True", "foreman", "foreman", "127.0.0.1:3306", "foreman")
 
@@ -44,9 +45,9 @@ func (s *MysqlSuite) TearDownSuite() {
 	require.NoError(s.T(), s.dbConn.Close())
 }
 
-func disableLogging() {
+func (s *MysqlSuite) disableLogging() {
 	nopLogger := NopLogger{}
-	driverSql.SetLogger(nopLogger)
+	require.NoError(s.T(), driverSql.SetLogger(nopLogger))
 }
 
 type NopLogger struct {

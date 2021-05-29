@@ -190,7 +190,7 @@ func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, o
 			defer consumersWait.Done()
 
 			defer func() {
-				t.logger.Logf(log.InfoLevel,"canceling consumer %s", queue.Name())
+				t.logger.Logf(log.InfoLevel, "canceling consumer %s", queue.Name())
 				if err := t.consumingChannel.Cancel(queue.Name(), true); err != nil {
 					t.logger.Logf(log.ErrorLevel, "error canceling consumer %s", err)
 				}

@@ -2,6 +2,7 @@ package transport
 
 import (
 	"context"
+
 	"github.com/go-foreman/foreman/pubsub/transport/pkg"
 )
 

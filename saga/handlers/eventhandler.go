@@ -2,12 +2,14 @@ package handlers
 
 import (
 	"context"
+	"time"
+
 	log "github.com/go-foreman/foreman/log"
 	sagaPkg "github.com/go-foreman/foreman/saga"
 	sagaMutex "github.com/go-foreman/foreman/saga/mutex"
-	"time"
 
 	"fmt"
+
 	"github.com/go-foreman/foreman/pubsub/message"
 	"github.com/go-foreman/foreman/pubsub/message/execution"
 	"github.com/go-foreman/foreman/runtime/scheme"
@@ -44,7 +46,7 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 	}
 
 	defer func() {
-		releaseCtx, cancel := context.WithTimeout(context.Background(), time.Second * 30)
+		releaseCtx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 		defer cancel()
 
 		if err := e.mutex.Release(releaseCtx, sagaId); err != nil {

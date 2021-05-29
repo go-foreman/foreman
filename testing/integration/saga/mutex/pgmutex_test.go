@@ -2,13 +2,14 @@ package mutex
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	"github.com/go-foreman/foreman/saga"
 	"github.com/go-foreman/foreman/saga/mutex"
 	intSuite "github.com/go-foreman/foreman/testing/integration/saga/suite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	"testing"
-	"time"
 )
 
 type pgMutexTest struct {
@@ -28,7 +29,7 @@ func (m *pgMutexTest) TestMutexStore() {
 	testSQLMutexUseCases(t, m.createMutexService, m.Connection())
 
 	t.Run("manually fail to release already released lock", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second * 10)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 		defer cancel()
 
 		id := "555"

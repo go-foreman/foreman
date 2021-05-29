@@ -15,20 +15,24 @@ type defaultLogger struct {
 	internalLogger *log.Logger
 }
 
-func (l defaultLogger) Log(level Level, v... interface{}) {
+func (l defaultLogger) Log(level Level, v ...interface{}) {
 	if level == FatalLevel {
 		l.internalLogger.Fatal(v...)
 		return
 	}
-	l.internalLogger.Output(3, fmt.Sprint(v...))
-}
 
-func (l defaultLogger) Logf(level Level, template string, args... interface{}) {
-	if level == FatalLevel {
-		l.internalLogger.Fatalf(template, args...)
+	if level == PanicLevel {
+		l.internalLogger.Panic(v...)
 		return
 	}
-	l.internalLogger.Output(3, fmt.Sprintf(template, args...))
+
+	if err := l.internalLogger.Output(3, fmt.Sprint(v...)); err != nil {
+		l.internalLogger.Println(fmt.Sprintf("err logging an entry: %s. %s", err, v))
+	}
+}
+
+func (l defaultLogger) Logf(level Level, template string, args ...interface{}) {
+	l.Log(level, fmt.Sprintf(template, args...))
 }
 
 func (l defaultLogger) SetLevel(level Level) {

@@ -17,10 +17,6 @@ type worker struct {
 	myTasks         workerQueue
 }
 
-func (w *worker) workerQueue() workerQueue {
-	return w.myTasks
-}
-
 func newWorker(ctx context.Context, dispatcherQueue dispatcherQueue) worker {
 	return worker{
 		ctx:             ctx,
@@ -36,9 +32,9 @@ func (w *worker) start() {
 			//tell dispatcher that I'm ready to work
 			w.dispatcherQueue <- w.myTasks
 			select {
-			case <- w.ctx.Done():
+			case <-w.ctx.Done():
 				return
-			case task, open := <- w.myTasks:
+			case task, open := <-w.myTasks:
 				if !open {
 					return
 				}

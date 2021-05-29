@@ -2,9 +2,10 @@ package saga
 
 import (
 	"fmt"
+	"reflect"
+
 	"github.com/go-foreman/foreman/pubsub/message"
 	"github.com/go-foreman/foreman/runtime/scheme"
-	"reflect"
 )
 
 type Saga interface {
@@ -20,7 +21,7 @@ type Saga interface {
 type BaseSaga struct {
 	message.ObjectMeta
 	adjacencyMap map[scheme.GroupKind]Executor
-	scheme scheme.KnownTypesRegistry
+	scheme       scheme.KnownTypesRegistry
 }
 
 type Executor func(execCtx SagaContext) error

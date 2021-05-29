@@ -2,8 +2,9 @@ package transport
 
 import (
 	"context"
-	"github.com/go-foreman/foreman/pubsub/transport/pkg"
 	"time"
+
+	"github.com/go-foreman/foreman/pubsub/transport/pkg"
 )
 
 func NewStubTransport() *stubTransport {
@@ -41,8 +42,8 @@ func (m *stubTransport) CreateQueue(ctx context.Context, queue Queue, queueBind 
 func (m *stubTransport) Consume(ctx context.Context, queues []Queue, options ...ConsumeOpts) (<-chan pkg.IncomingPkg, error) {
 	income := make(chan pkg.IncomingPkg)
 
-	for _, q := range queues {
-		go func() {
+	for i := range queues {
+		go func(q Queue) {
 			for _, topic := range m.queueBinding[q.Name()] {
 				msgs := m.topics[topic]
 				for {
@@ -58,7 +59,7 @@ func (m *stubTransport) Consume(ctx context.Context, queues []Queue, options ...
 					}
 				}
 			}
-		}()
+		}(queues[i])
 	}
 
 	return income, nil

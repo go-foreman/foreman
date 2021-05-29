@@ -2,6 +2,7 @@ package message
 
 import (
 	"encoding/json"
+
 	"github.com/go-foreman/foreman/runtime/scheme"
 	"github.com/pkg/errors"
 )

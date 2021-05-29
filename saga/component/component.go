@@ -1,7 +1,9 @@
 package component
 
 import (
-	"github.com/go-foreman/foreman"
+	"net/http"
+
+	brigadier "github.com/go-foreman/foreman"
 	"github.com/go-foreman/foreman/log"
 	"github.com/go-foreman/foreman/pubsub/endpoint"
 	"github.com/go-foreman/foreman/pubsub/message"
@@ -11,7 +13,6 @@ import (
 	"github.com/go-foreman/foreman/saga/handlers"
 	"github.com/go-foreman/foreman/saga/mutex"
 	"github.com/pkg/errors"
-	"net/http"
 )
 
 type Component struct {

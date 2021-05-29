@@ -4,8 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/go-foreman/foreman/saga"
 	"sync"
+
+	"github.com/go-foreman/foreman/saga"
 
 	"github.com/pkg/errors"
 )
@@ -86,7 +87,7 @@ func (m *mysqlMutex) Release(ctx context.Context, sagaId string) error {
 }
 
 type pgsqlMutex struct {
-	db *sql.DB
+	db          *sql.DB
 	mapLock     sync.Mutex
 	connections map[string]*sql.Conn
 }
@@ -115,7 +116,7 @@ func (p *pgsqlMutex) Lock(ctx context.Context, sagaId string) error {
 		}
 
 		if err := conn.PingContext(ctx); err != nil {
-			if i < retries -1 {
+			if i < retries-1 {
 				continue
 			}
 		}

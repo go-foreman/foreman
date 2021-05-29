@@ -9,7 +9,7 @@ type Object interface {
 }
 
 type TypeMeta struct {
-	Kind string  `json:"kind,omitempty" protobuf:"bytes,1,opt,name=kind"`
+	Kind  string `json:"kind,omitempty" protobuf:"bytes,1,opt,name=kind"`
 	Group string `json:"group,omitempty" protobuf:"bytes,2,opt,name=group"`
 }
 

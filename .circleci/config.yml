@@ -22,15 +22,12 @@ jobs:
       - restore_cache:
           keys:
             - go-mod-v4-{{ checksum "go.sum" }}
-#      - run:
-#          name: Install Docker Compose
-#          command: |
-#            curl -L https://github.com/docker/compose/releases/download/1.25.3/docker-compose-`uname -s`-`uname -m` > ~/docker-compose
-#            chmod +x ~/docker-compose
-#            sudo mv ~/docker-compose /usr/local/bin/docker-compose
       - run:
           name: Install Dependencies
-          command: go mod download
+          command: |
+            make mod-download
+            make tools
+
       - save_cache:
           key: go-mod-v4-{{ checksum "go.sum" }}
           paths:
@@ -47,11 +44,26 @@ jobs:
             done
             echo Failed waiting for MySQL && exit 1
       - run:
+          name: Lint
+          command: |
+            make lint
+      - run:
+          name: Check dependencies for vulnaribilties
+          command: |
+            make check-mods || true
+      - run:
           name: Run tests
           environment:
             MYSQL_CONNECTION: foreman:foreman@tcp(127.0.0.1:3306)/foreman?charset=utf8&parseTime=True
             PG_CONNECTION:  postgres://foreman:foreman@127.0.0.1:5432/foreman?sslmode=disable
           command: |
-            make test
+            make test-report
+            make integration-test
+      - run:
+          name: Upload reports to codecov
+          environment:
+            CODECOV_TOKEN: bda85e20-4eff-4789-9e73-03201ba00833
+          command: |
+            bash <(curl -s https://codecov.io/bash)
       - store_test_results:
           path: /tmp/test-reports
