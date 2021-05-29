@@ -1,4 +1,4 @@
-version: "3"
+dockversion: "3"
 
 services:
   queue:
