@@ -85,3 +85,7 @@ create_reports_dir:
 .PHONY: mod-download
 mod-download:
 	go mod download
+
+.PHONY: check-mods
+check-mods:
+	go list -json -m all | nancy sleuth

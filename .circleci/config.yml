@@ -54,6 +54,10 @@ jobs:
           command: |
             make lint
       - run:
+          name: Check dependencies for vulnaribilties
+          command: |
+            make check-mods
+      - run:
           name: Run tests
           environment:
             MYSQL_CONNECTION: foreman:foreman@tcp(127.0.0.1:3306)/foreman?charset=utf8&parseTime=True
