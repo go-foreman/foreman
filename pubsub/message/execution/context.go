@@ -2,6 +2,7 @@ package execution
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/go-foreman/foreman/log"
 	"github.com/go-foreman/foreman/pubsub/endpoint"
@@ -59,7 +60,7 @@ func (m messageExecutionCtx) Return(options ...endpoint.DeliveryOption) error {
 	m.message.Headers().RegisterReturn()
 	if err := m.Send(outComingMsg, options...); err != nil {
 		m.logger.Logf(log.ErrorLevel, "error when returning a message %s", outComingMsg.UID())
-		return errors.Wrapf(err, "error when returning a message %s", outComingMsg.UID())
+		return errors.Wrapf(err, "returning message %s", outComingMsg.UID())
 	}
 
 	return nil
@@ -70,6 +71,11 @@ func (m messageExecutionCtx) Message() *message.ReceivedMessage {
 }
 
 func (m messageExecutionCtx) LogMessage(lvl log.Level, msg string) {
+	if traceID, exists := m.Message().Headers()["traceId"]; exists {
+		m.logger.Log(lvl, fmt.Sprintf("TraceID: %s. %s", traceID, msg))
+		return
+	}
+
 	m.logger.Log(lvl, msg)
 }
 
