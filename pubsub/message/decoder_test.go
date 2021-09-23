@@ -36,6 +36,24 @@ type ChildType struct {
 	Value int
 }
 
+type WithAnon struct {
+	ObjectMeta
+	SomeVal int
+	ChildType
+}
+
+type WithAnonAndJsonTag struct {
+	ObjectMeta
+	SomeVal   int
+	ChildType `json:"child"`
+}
+
+type WithAnonPointer struct {
+	ObjectMeta
+	SomeVal int
+	*ChildType
+}
+
 func TestJsonDecoder(t *testing.T) {
 	knownRegistry := scheme.NewKnownTypesRegistry()
 	decoder := NewJsonMarshaller(knownRegistry)
@@ -129,4 +147,44 @@ func TestJsonDecoder(t *testing.T) {
 		require.NoError(t, err)
 		assert.EqualValues(t, instance, decodedObj)
 	})
+
+	t.Run("squashing of an anonymous struct", func(t *testing.T) {
+		knownRegistry.AddKnownTypes(group, &WithAnon{})
+		instance := &WithAnon{SomeVal: 1, ChildType: ChildType{Value: 2}}
+
+		marshaled, err := decoder.Marshal(instance)
+		require.NoError(t, err)
+		assert.NotEmpty(t, marshaled)
+
+		decodedObj, err := decoder.Unmarshal(marshaled)
+		require.NoError(t, err)
+		assert.EqualValues(t, instance, decodedObj)
+	})
+
+	//@todo these 2 cases should work too
+	//t.Run("squashing of an anonymous struct with json tag", func(t *testing.T) {
+	//	knownRegistry.AddKnownTypes(group, &WithAnonAndJsonTag{})
+	//	instance := &WithAnonAndJsonTag{SomeVal: 1, ChildType: ChildType{Value: 2}}
+	//
+	//	marshaled, err := decoder.Marshal(instance)
+	//	require.NoError(t, err)
+	//	assert.NotEmpty(t, marshaled)
+	//
+	//	decodedObj, err := decoder.Unmarshal(marshaled)
+	//	require.NoError(t, err)
+	//	assert.EqualValues(t, instance, decodedObj)
+	//})
+
+	//t.Run("squashing of an anonymous struct as pointer", func(t *testing.T) {
+	//	knownRegistry.AddKnownTypes(group, &WithAnonPointer{})
+	//	instance := &WithAnonPointer{SomeVal: 1, ChildType: &ChildType{Value: 2}}
+	//
+	//	marshaled, err := decoder.Marshal(instance)
+	//	require.NoError(t, err)
+	//	assert.NotEmpty(t, marshaled)
+	//
+	//	decodedObj, err := decoder.Unmarshal(marshaled)
+	//	require.NoError(t, err)
+	//	assert.EqualValues(t, instance, decodedObj)
+	//})
 }

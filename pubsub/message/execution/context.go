@@ -71,8 +71,8 @@ func (m messageExecutionCtx) Message() *message.ReceivedMessage {
 }
 
 func (m messageExecutionCtx) LogMessage(lvl log.Level, msg string) {
-	if traceID, exists := m.Message().Headers()["traceId"]; exists {
-		m.logger.Log(lvl, fmt.Sprintf("TraceID: %s : %s", traceID, msg))
+	if m.Message().TraceID() != "" {
+		m.logger.Log(lvl, fmt.Sprintf("TraceID: %s : %s", m.Message().TraceID(), msg))
 		return
 	}
 

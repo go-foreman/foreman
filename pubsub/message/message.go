@@ -66,6 +66,20 @@ func (m ReceivedMessage) UID() string {
 	return m.uid
 }
 
+func (m ReceivedMessage) TraceID() string {
+	if m.headers == nil {
+		return ""
+	}
+
+	traceIdVal, ok := m.headers["traceId"]
+
+	if !ok {
+		return ""
+	}
+
+	return traceIdVal.(string)
+}
+
 func (m ReceivedMessage) Headers() Headers {
 	return m.headers
 }
@@ -124,6 +138,10 @@ func NewOutcomingMessage(payload Object, passedOptions ...MsgOption) *OutcomingM
 
 	msg.headers["uid"] = msg.UID()
 
+	if opts.traceID != "" {
+		msg.headers["traceId"] = opts.traceID
+	}
+
 	return msg
 }
 
@@ -139,10 +157,17 @@ type MsgOption func(attr *opts)
 
 type opts struct {
 	headers Headers
+	traceID string
 }
 
 func WithHeaders(headers Headers) MsgOption {
 	return func(attr *opts) {
 		attr.headers = headers
+	}
+}
+
+func WithTraceID(traceID string) MsgOption {
+	return func(attr *opts) {
+		attr.traceID = traceID
 	}
 }

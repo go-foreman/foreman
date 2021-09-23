@@ -108,7 +108,7 @@ func (j jsonDecoder) decodeUnstructured(unstructured *Unstructured) (Object, err
 	}
 
 	decoderConf := mapstructure.DecoderConfig{
-		//Squash:  true,
+		Squash:  true,
 		TagName: "json",
 		Result:  &nestedObj,
 	}
