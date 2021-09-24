@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-foreman/foreman/runtime/scheme"
 	"github.com/stretchr/testify/assert"
@@ -40,6 +41,11 @@ type WithAnon struct {
 	ObjectMeta
 	SomeVal int
 	ChildType
+}
+
+type WithTime struct {
+	ObjectMeta
+	CreatedAt time.Time
 }
 
 type WithAnonAndJsonTag struct {
@@ -159,6 +165,22 @@ func TestJsonDecoder(t *testing.T) {
 		decodedObj, err := decoder.Unmarshal(marshaled)
 		require.NoError(t, err)
 		assert.EqualValues(t, instance, decodedObj)
+	})
+
+	t.Run("encode and decode a struct with time", func(t *testing.T) {
+		knownRegistry.AddKnownTypes(group, &WithTime{})
+		instance := &WithTime{CreatedAt: time.Now()}
+
+		marshaled, err := decoder.Marshal(instance)
+		require.NoError(t, err)
+		assert.NotEmpty(t, marshaled)
+
+		decodedObj, err := decoder.Unmarshal(marshaled)
+		require.NoError(t, err)
+
+		decoded, _ := decodedObj.(*WithTime)
+
+		assert.True(t, instance.CreatedAt.Equal(decoded.CreatedAt))
 	})
 
 	//@todo these 2 cases should work too

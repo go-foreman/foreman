@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/go-foreman/foreman/runtime/scheme"
 	"github.com/mitchellh/mapstructure"
@@ -108,9 +109,10 @@ func (j jsonDecoder) decodeUnstructured(unstructured *Unstructured) (Object, err
 	}
 
 	decoderConf := mapstructure.DecoderConfig{
-		Squash:  true,
-		TagName: "json",
-		Result:  &nestedObj,
+		Squash:     true,
+		TagName:    "json",
+		DecodeHook: mapstructure.ComposeDecodeHookFunc(toTimeHookFunc()),
+		Result:     &nestedObj,
 	}
 
 	decoder, err := mapstructure.NewDecoder(&decoderConf)
@@ -188,4 +190,26 @@ func (j jsonDecoder) setGroupKind(obj Object) error {
 	}
 
 	return nil
+}
+
+func toTimeHookFunc() mapstructure.DecodeHookFunc {
+	return func(
+		f reflect.Type,
+		t reflect.Type,
+		data interface{}) (interface{}, error) {
+		if t != reflect.TypeOf(time.Time{}) {
+			return data, nil
+		}
+
+		switch f.Kind() {
+		case reflect.String:
+			return time.Parse(time.RFC3339, data.(string))
+		case reflect.Float64:
+			return time.Unix(0, int64(data.(float64))*int64(time.Millisecond)), nil
+		case reflect.Int64:
+			return time.Unix(0, data.(int64)*int64(time.Millisecond)), nil
+		default:
+			return data, nil
+		}
+	}
 }
