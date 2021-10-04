@@ -173,7 +173,7 @@ func (j jsonDecoder) setGroupKind(obj Object) error {
 		obj.SetGroupKind(gk)
 	}
 
-	//we not allow nested Object
+	//we do not allow nested Object
 	structVal := reflect.ValueOf(obj)
 	structType := structVal.Type().Elem()
 
