@@ -60,6 +60,16 @@ type WithAnonPointer struct {
 	*ChildType
 }
 
+type WithKindChild struct {
+	ObjectMeta
+	SomeVal        int
+	KindGroupChild KindChild `json:"kind_child"`
+}
+
+type KindChild struct {
+	Kind string `json:"kind"`
+}
+
 func TestJsonDecoder(t *testing.T) {
 	knownRegistry := scheme.NewKnownTypesRegistry()
 	decoder := NewJsonMarshaller(knownRegistry)
@@ -182,6 +192,20 @@ func TestJsonDecoder(t *testing.T) {
 
 		assert.True(t, instance.CreatedAt.Equal(decoded.CreatedAt))
 	})
+
+	// todo FAILING TEST, fix it
+	//t.Run("encode and decode a struct with child type that contains a field with name 'kind'", func(t *testing.T) {
+	//	knownRegistry.AddKnownTypes(group, &WithKindChild{})
+	//	instance := &WithKindChild{SomeVal: 1, KindGroupChild: KindChild{Kind: "some"}}
+	//
+	//	marshaled, err := decoder.Marshal(instance)
+	//	require.NoError(t, err)
+	//	assert.NotEmpty(t, marshaled)
+	//
+	//	decodedObj, err := decoder.Unmarshal(marshaled)
+	//	require.NoError(t, err)
+	//	assert.EqualValues(t, instance, decodedObj)
+	//})
 
 	//@todo these 2 cases should work too
 	//t.Run("squashing of an anonymous struct with json tag", func(t *testing.T) {
