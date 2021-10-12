@@ -6,7 +6,7 @@ import (
 	"syscall"
 
 	"github.com/go-foreman/foreman/log"
-	"github.com/go-foreman/foreman/pubsub/transport/plugins/amqp"
+	"github.com/go-foreman/foreman/pubsub/transport/amqp"
 
 	"context"
 	"time"
