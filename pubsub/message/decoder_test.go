@@ -194,18 +194,18 @@ func TestJsonDecoder(t *testing.T) {
 	})
 
 	// todo FAILING TEST, fix it
-	//t.Run("encode and decode a struct with child type that contains a field with name 'kind'", func(t *testing.T) {
-	//	knownRegistry.AddKnownTypes(group, &WithKindChild{})
-	//	instance := &WithKindChild{SomeVal: 1, KindGroupChild: KindChild{Kind: "some"}}
-	//
-	//	marshaled, err := decoder.Marshal(instance)
-	//	require.NoError(t, err)
-	//	assert.NotEmpty(t, marshaled)
-	//
-	//	decodedObj, err := decoder.Unmarshal(marshaled)
-	//	require.NoError(t, err)
-	//	assert.EqualValues(t, instance, decodedObj)
-	//})
+	t.Run("encode and decode a struct with child type that contains a field with name 'kind'", func(t *testing.T) {
+		knownRegistry.AddKnownTypes(group, &WithKindChild{})
+		instance := &WithKindChild{SomeVal: 1, KindGroupChild: KindChild{Kind: "some"}}
+
+		marshaled, err := decoder.Marshal(instance)
+		require.NoError(t, err)
+		assert.NotEmpty(t, marshaled)
+
+		decodedObj, err := decoder.Unmarshal(marshaled)
+		require.NoError(t, err)
+		assert.EqualValues(t, instance, decodedObj)
+	})
 
 	//@todo these 2 cases should work too
 	//t.Run("squashing of an anonymous struct with json tag", func(t *testing.T) {

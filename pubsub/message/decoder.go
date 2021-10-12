@@ -64,11 +64,6 @@ func (j jsonDecoder) decode(unstructured *Unstructured) (Object, error) {
 func (j jsonDecoder) walkUnstructured(parentObj Object, unstructured *Unstructured) error {
 	for key, value := range unstructured.Object {
 		if v, ok := value.(*Unstructured); ok {
-			nestedObj, err := j.decodeUnstructured(v)
-			if err != nil {
-				return errors.WithStack(err)
-			}
-
 			parentValue := reflect.ValueOf(parentObj).Elem()
 			fieldKey := findKeyByTag(parentValue.Type(), key)
 
@@ -77,6 +72,15 @@ func (j jsonDecoder) walkUnstructured(parentObj Object, unstructured *Unstructur
 			}
 
 			field := parentValue.FieldByName(fieldKey)
+
+			if !(field.Kind() == reflect.Interface && field.Type().Implements(objectType)) {
+				continue
+			}
+
+			nestedObj, err := j.decodeUnstructured(v)
+			if err != nil {
+				return errors.WithStack(err)
+			}
 
 			if field.CanSet() {
 				field.Set(reflect.ValueOf(nestedObj))

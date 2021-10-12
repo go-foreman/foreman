@@ -24,8 +24,9 @@ type GroupKind struct {
 	Kind  string
 }
 
+// Empty says whether GroupKind is empty or not valid. An empty group is allowed whole kind isn't.
 func (gk GroupKind) Empty() bool {
-	return gk.Group.Empty() && len(gk.Kind) == 0
+	return len(gk.Kind) == 0 || (gk.Group.Empty() && len(gk.Kind) == 0)
 }
 
 func (gk GroupKind) String() string {

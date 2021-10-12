@@ -41,6 +41,13 @@ func TestGroupKind(t *testing.T) {
 		assert.False(t, gk.Empty())
 		assert.Equal(t, "SomeTest", gk.String())
 	})
+
+	t.Run("GK has empty kind", func(t *testing.T) {
+		gk := GroupKind{
+			Group: "some",
+		}
+		assert.True(t, gk.Empty())
+	})
 }
 
 func TestFromString(t *testing.T) {

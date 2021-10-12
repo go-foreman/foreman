@@ -48,7 +48,7 @@ func (r *knownTypesRegistry) NewObject(gk GroupKind) (Object, error) {
 	t, exists := r.gvkToType[gk]
 
 	if !exists {
-		return nil, errors.Errorf("type %s is not registered in KnownTypes", gk.String())
+		return nil, withUnknownGKErr(gk)
 	}
 
 	obj := reflect.New(t).Interface().(Object)
@@ -119,3 +119,15 @@ func GetStructType(obj Object) reflect.Type {
 //
 //	return false
 //}
+
+type UnknownGKErr struct {
+	gk GroupKind
+}
+
+func withUnknownGKErr(gk GroupKind) error {
+	return &UnknownGKErr{gk: gk}
+}
+
+func (u UnknownGKErr) Error() string {
+	return fmt.Sprintf("type %s is not registered in KnownTypes", u.gk.String())
+}
