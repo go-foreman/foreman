@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	"github.com/go-foreman/foreman/pubsub/transport"
-	"github.com/go-foreman/foreman/pubsub/transport/pkg"
 	"github.com/pkg/errors"
 	"github.com/streadway/amqp"
 )
@@ -130,7 +129,7 @@ func (t *amqpTransport) CreateQueue(ctx context.Context, q transport.Queue, qbs 
 	return nil
 }
 
-func (t *amqpTransport) Send(ctx context.Context, outboundPkg pkg.OutboundPkg, options ...transport.SendOpts) error {
+func (t *amqpTransport) Send(ctx context.Context, outboundPkg transport.OutboundPkg, options ...transport.SendOpts) error {
 	if err := t.checkConnection(); err != nil {
 		return errors.WithStack(err)
 	}
@@ -161,7 +160,7 @@ func (t *amqpTransport) Send(ctx context.Context, outboundPkg pkg.OutboundPkg, o
 	return nil
 }
 
-func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, options ...transport.ConsumeOpts) (<-chan pkg.IncomingPkg, error) {
+func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, options ...transport.ConsumeOpts) (<-chan transport.IncomingPkg, error) {
 	if err := t.checkConnection(); err != nil {
 		return nil, errors.WithStack(err)
 	}
@@ -180,7 +179,7 @@ func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, o
 		}
 	}
 
-	income := make(chan pkg.IncomingPkg)
+	income := make(chan transport.IncomingPkg)
 
 	consumersWait := &sync.WaitGroup{}
 
@@ -220,7 +219,7 @@ func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, o
 						return
 					}
 
-					income <- pkg.NewAmqpIncomingPackage(msg, queue.Name())
+					income <- transport.NewAmqpIncomingPackage(msg, queue.Name())
 				case <-ctx.Done():
 					t.logger.Logf(log.WarnLevel, "Canceled context. Stopped consuming queue %s", queue.Name())
 					return

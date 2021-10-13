@@ -4,10 +4,11 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/go-foreman/foreman/pubsub/transport"
+
 	"github.com/go-foreman/foreman/log"
 	"github.com/go-foreman/foreman/pubsub/endpoint"
 	"github.com/go-foreman/foreman/pubsub/message"
-	"github.com/go-foreman/foreman/pubsub/transport/pkg"
 	"github.com/pkg/errors"
 )
 
@@ -23,7 +24,7 @@ type MessageExecutionCtx interface {
 type messageExecutionCtx struct {
 	isValid bool
 	ctx     context.Context
-	inPkg   pkg.IncomingPkg
+	inPkg   transport.IncomingPkg
 	message *message.ReceivedMessage
 	router  endpoint.Router
 	logger  log.Logger
@@ -80,7 +81,7 @@ func (m messageExecutionCtx) LogMessage(lvl log.Level, msg string) {
 }
 
 type MessageExecutionCtxFactory interface {
-	CreateCtx(ctx context.Context, inPkg pkg.IncomingPkg, message *message.ReceivedMessage) MessageExecutionCtx
+	CreateCtx(ctx context.Context, inPkg transport.IncomingPkg, message *message.ReceivedMessage) MessageExecutionCtx
 }
 
 type messageExecutionCtxFactory struct {
@@ -92,7 +93,7 @@ func NewMessageExecutionCtxFactory(router endpoint.Router, logger log.Logger) Me
 	return &messageExecutionCtxFactory{router: router, logger: logger}
 }
 
-func (m messageExecutionCtxFactory) CreateCtx(ctx context.Context, inPkg pkg.IncomingPkg, message *message.ReceivedMessage) MessageExecutionCtx {
+func (m messageExecutionCtxFactory) CreateCtx(ctx context.Context, inPkg transport.IncomingPkg, message *message.ReceivedMessage) MessageExecutionCtx {
 	return &messageExecutionCtx{ctx: ctx, inPkg: inPkg, message: message, router: m.router, logger: m.logger}
 }
 

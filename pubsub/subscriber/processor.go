@@ -5,16 +5,17 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/go-foreman/foreman/pubsub/transport"
+
 	"github.com/go-foreman/foreman/log"
 	msgDispatcher "github.com/go-foreman/foreman/pubsub/dispatcher"
 	"github.com/go-foreman/foreman/pubsub/message"
 	"github.com/go-foreman/foreman/pubsub/message/execution"
-	"github.com/go-foreman/foreman/pubsub/transport/pkg"
 	"github.com/pkg/errors"
 )
 
 type Processor interface {
-	Process(ctx context.Context, inPkg pkg.IncomingPkg) error
+	Process(ctx context.Context, inPkg transport.IncomingPkg) error
 }
 
 type processor struct {
@@ -28,7 +29,7 @@ func NewMessageProcessor(decoder message.Marshaller, msgExecCtxFactory execution
 	return &processor{decoder: decoder, msgExecCtxFactory: msgExecCtxFactory, dispatcher: msgDispatcher, logger: logger}
 }
 
-func (p *processor) Process(ctx context.Context, inPkg pkg.IncomingPkg) error {
+func (p *processor) Process(ctx context.Context, inPkg transport.IncomingPkg) error {
 	payload, err := p.decoder.Unmarshal(inPkg.Payload())
 	if err != nil {
 		p.logger.Logf(log.ErrorLevel, "Failed to decode IncomingPkg into Message. %s", err)

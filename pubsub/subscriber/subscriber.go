@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/go-foreman/foreman/pubsub/transport"
-	"github.com/go-foreman/foreman/pubsub/transport/pkg"
 	"github.com/pkg/errors"
 )
 
@@ -98,7 +97,7 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 	}
 }
 
-func (s *subscriber) processPackage(ctx context.Context, inPkg pkg.IncomingPkg) {
+func (s *subscriber) processPackage(ctx context.Context, inPkg transport.IncomingPkg) {
 	processorCtx, processorCancel := context.WithTimeout(ctx, packageProcessingMaxTime)
 	defer processorCancel()
 
@@ -138,12 +137,12 @@ func (s *subscriber) Stop(ctx context.Context) error {
 
 type processPkg struct {
 	ctx        context.Context
-	pkg        pkg.IncomingPkg
+	pkg        transport.IncomingPkg
 	subscriber *subscriber
 	logger     log.Logger
 }
 
-func newTaskProcessPkg(ctx context.Context, pkg pkg.IncomingPkg, subscriber *subscriber, logger log.Logger) *processPkg {
+func newTaskProcessPkg(ctx context.Context, pkg transport.IncomingPkg, subscriber *subscriber, logger log.Logger) *processPkg {
 	return &processPkg{
 		ctx:        ctx,
 		pkg:        pkg,

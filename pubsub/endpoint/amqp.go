@@ -6,18 +6,17 @@ import (
 
 	"github.com/go-foreman/foreman/pubsub/message"
 	"github.com/go-foreman/foreman/pubsub/transport"
-	"github.com/go-foreman/foreman/pubsub/transport/pkg"
 	"github.com/pkg/errors"
 )
 
 type AmqpEndpoint struct {
 	amqpTransport transport.Transport
-	destination   pkg.DeliveryDestination
+	destination   transport.DeliveryDestination
 	msgMarshaller message.Marshaller
 	name          string
 }
 
-func NewAmqpEndpoint(name string, amqpTransport transport.Transport, destination pkg.DeliveryDestination, msgMarshaller message.Marshaller) Endpoint {
+func NewAmqpEndpoint(name string, amqpTransport transport.Transport, destination transport.DeliveryDestination, msgMarshaller message.Marshaller) Endpoint {
 	return &AmqpEndpoint{name: name, amqpTransport: amqpTransport, destination: destination, msgMarshaller: msgMarshaller}
 }
 
@@ -40,7 +39,7 @@ func (a AmqpEndpoint) Send(ctx context.Context, msg *message.OutcomingMessage, o
 		return errors.Wrapf(err, "error serializing message %s to json ", msg.UID())
 	}
 
-	toSend := pkg.NewOutboundPkg(dataToSend, "application/json", a.destination, msg.Headers())
+	toSend := transport.NewOutboundPkg(dataToSend, "application/json", a.destination, msg.Headers())
 
 	if deliveryOpts.delay != nil {
 	waiter:

@@ -1,4 +1,4 @@
-package pkg
+package transport
 
 import (
 	"time"
@@ -97,6 +97,18 @@ func (i inAmqpPkg) PublishedAt() time.Time {
 
 func (i inAmqpPkg) ReceivedAt() time.Time {
 	return i.receivedAt
+}
+
+func WithRequeue() AcknowledgmentOption {
+	return func(options *ackOpts) {
+		options.requeue = true
+	}
+}
+
+func WithMultiple() AcknowledgmentOption {
+	return func(options *ackOpts) {
+		options.multiple = true
+	}
 }
 
 type OutboundPkg interface {

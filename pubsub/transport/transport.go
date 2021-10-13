@@ -2,15 +2,13 @@ package transport
 
 import (
 	"context"
-
-	"github.com/go-foreman/foreman/pubsub/transport/pkg"
 )
 
 type Transport interface {
 	CreateTopic(ctx context.Context, topic Topic) error
 	CreateQueue(ctx context.Context, queue Queue, queueBind ...QueueBind) error
-	Consume(ctx context.Context, queues []Queue, options ...ConsumeOpts) (<-chan pkg.IncomingPkg, error)
-	Send(ctx context.Context, outboundPkg pkg.OutboundPkg, options ...SendOpts) error
+	Consume(ctx context.Context, queues []Queue, options ...ConsumeOpts) (<-chan IncomingPkg, error)
+	Send(ctx context.Context, outboundPkg OutboundPkg, options ...SendOpts) error
 	Connect(context.Context) error
 	Disconnect(context.Context) error
 }
