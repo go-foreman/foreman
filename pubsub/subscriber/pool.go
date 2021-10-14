@@ -57,10 +57,12 @@ type dispatcher struct {
 	workersQueues dispatcherQueue
 }
 
+// busyWorkers return number of workers that are busy with processing a task and weren't returned to the dispatcher
 func (d *dispatcher) busyWorkers() int {
 	return int(d.workersCount) - len(d.workersQueues)
 }
 
+// start schedules defined number of workers
 func (d *dispatcher) start(ctx context.Context) {
 	d.ctx = ctx
 
@@ -72,7 +74,7 @@ func (d *dispatcher) start(ctx context.Context) {
 	}
 }
 
-// queue return worker's chan that is ready to accept a job to do
+// queue returns worker's chan that is ready to accept a job to do
 func (d dispatcher) queue() dispatcherQueue {
 	return d.workersQueues
 }
