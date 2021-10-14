@@ -12,7 +12,9 @@ import (
 )
 
 type Marshaller interface {
+	// Unmarshal decodes received bytes into original type that must be registered in scheme
 	Unmarshal(b []byte) (Object, error)
+	// Marshal encodes a type and automatically adds needed metadata to resulting bytes
 	Marshal(obj Object) ([]byte, error)
 }
 

@@ -53,6 +53,7 @@ func (t *amqpTransport) Connect(ctx context.Context) error {
 	return nil
 }
 
+// CreateTopic creates an exchange in amqp. Allows options are: durable, autoDelete, internal, noWait.
 func (t *amqpTransport) CreateTopic(ctx context.Context, topic transport.Topic) error {
 	if err := t.checkConnection(); err != nil {
 		return errors.WithStack(err)

@@ -23,7 +23,9 @@ const (
 )
 
 type Subscriber interface {
+	// Run listens queues for packages and processes them. Gracefully shuts down either on os.Signal or ctx.Done() or Stop()
 	Run(ctx context.Context, queues ...transport.Queue) error
+	// Stop gracefully stops subscriber and calls transport.Disconnect().
 	Stop(ctx context.Context) error
 }
 

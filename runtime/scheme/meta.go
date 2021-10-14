@@ -1,8 +1,8 @@
 package scheme
 
-// Object interface must be supported by all API types registered with Scheme. Since objects in a scheme are
-// expected to be serialized to the wire, the interface an Object must provide to the Scheme allows
-// serializers to set the kind, version, and group the object is represented as
+// Object interface must be supported by all message types registered with Scheme. Since objects in a scheme are
+// expected to be marshalled to the wire, the interface an Object must provide to the Scheme allows
+// marshallers to set the kind, and group the object is represented as
 type Object interface {
 	GroupKind() GroupKind
 	SetGroupKind(gk *GroupKind)

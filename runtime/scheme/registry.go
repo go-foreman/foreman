@@ -7,15 +7,21 @@ import (
 	"github.com/pkg/errors"
 )
 
+// KnownTypesRegistryInstance is a default global types registry
 var KnownTypesRegistryInstance = NewKnownTypesRegistry()
 
 type KnownTypesRegistry interface {
+	// AddKnownTypes registers list of types of objects to a Group. Kind of each type will be set as struct name using reflection
 	AddKnownTypes(gv Group, types ...Object)
+	// AddKnownTypeWithName registers a type an object to a Group and custom defined Kind
 	AddKnownTypeWithName(gk GroupKind, obj Object)
+	// NewObject instantiates new object instance of a type registered behind GroupKind
 	NewObject(gk GroupKind) (Object, error)
+	// ObjectKind returns GroupKind of an already registered type
 	ObjectKind(object Object) (*GroupKind, error)
 }
 
+// NewKnownTypesRegistry returns new empty registry of types
 func NewKnownTypesRegistry() KnownTypesRegistry {
 	return &knownTypesRegistry{gvkToType: map[GroupKind]reflect.Type{}, typeToGVK: map[reflect.Type]GroupKind{}}
 }
@@ -29,6 +35,7 @@ type knownTypesRegistry struct {
 	typeToGVK map[reflect.Type]GroupKind
 }
 
+// AddKnownTypes registers list of types of objects to a Group. Kind of each type will be set as struct name using reflection
 func (r *knownTypesRegistry) AddKnownTypes(g Group, types ...Object) {
 	for _, obj := range types {
 		structType := GetStructType(obj)
@@ -39,11 +46,13 @@ func (r *knownTypesRegistry) AddKnownTypes(g Group, types ...Object) {
 	}
 }
 
+// AddKnownTypeWithName registers a type an object to a Group and custom defined Kind
 func (r *knownTypesRegistry) AddKnownTypeWithName(gk GroupKind, obj Object) {
 	structType := GetStructType(obj)
 	r.addKnownTypeWithName(gk, obj, structType)
 }
 
+// NewObject instantiates new object instance of a type registered behind GroupKind
 func (r *knownTypesRegistry) NewObject(gk GroupKind) (Object, error) {
 	t, exists := r.gvkToType[gk]
 
@@ -57,6 +66,7 @@ func (r *knownTypesRegistry) NewObject(gk GroupKind) (Object, error) {
 	return obj, nil
 }
 
+// ObjectKind returns GroupKind of an already registered type
 func (r *knownTypesRegistry) ObjectKind(obj Object) (*GroupKind, error) {
 	structType := GetStructType(obj)
 	gk, ok := r.typeToGVK[structType]
@@ -85,6 +95,7 @@ func (r *knownTypesRegistry) addKnownTypeWithName(gk GroupKind, obj Object, stru
 	obj.SetGroupKind(&gk)
 }
 
+// GetStructType returns reflect.Type of the passed object
 func GetStructType(obj Object) reflect.Type {
 	structType := reflect.TypeOf(obj)
 

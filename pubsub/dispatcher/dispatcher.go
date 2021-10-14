@@ -10,9 +10,13 @@ import (
 )
 
 type Dispatcher interface {
+	// Match matches object type and returns list of registered executors for this type
 	Match(obj message.Object) []execution.Executor
+	// SubscribeForCmd subscribes given executor for a command
 	SubscribeForCmd(obj message.Object, executor execution.Executor) Dispatcher
+	// SubscribeForEvent subscribes given executor for an event
 	SubscribeForEvent(obj message.Object, executor execution.Executor) Dispatcher
+	// SubscribeForAllEvents subscribes executor type for all types
 	SubscribeForAllEvents(executor execution.Executor) Dispatcher
 }
 

@@ -13,11 +13,17 @@ import (
 )
 
 type MessageExecutionCtx interface {
+	// Message returns received message
 	Message() *message.ReceivedMessage
+	// Context returns parent execution context. Each message has own time limit in which it must be processed.
 	Context() context.Context
+	// Valid Deprecated
 	Valid() bool
+	// Send sends an out coming message to registered endpoints
 	Send(message *message.OutcomingMessage, options ...endpoint.DeliveryOption) error
+	// Return sends received message to registered endpoints and updates number of returns in headers
 	Return(options ...endpoint.DeliveryOption) error
+	// LogMessage allows to log message in handlers
 	LogMessage(level log.Level, msg string)
 }
 

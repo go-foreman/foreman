@@ -8,7 +8,9 @@ import (
 )
 
 type Endpoint interface {
+	// Name is a unique name of the endpoint
 	Name() string
+	// Send sends a message to specified implementation
 	Send(ctx context.Context, message *message.OutcomingMessage, options ...DeliveryOption) error
 }
 
