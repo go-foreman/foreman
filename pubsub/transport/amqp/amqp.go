@@ -1,6 +1,8 @@
 package amqp
 
 import (
+	"time"
+
 	"github.com/go-foreman/foreman/log"
 
 	"context"
@@ -219,7 +221,7 @@ func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, o
 						return
 					}
 
-					income <- transport.NewAmqpIncomingPackage(msg, queue.Name())
+					income <- &inAmqpPkg{origin: queue.Name(), receivedAt: time.Now(), delivery: msg}
 				case <-ctx.Done():
 					t.logger.Logf(log.WarnLevel, "Canceled context. Stopped consuming queue %s", queue.Name())
 					return
