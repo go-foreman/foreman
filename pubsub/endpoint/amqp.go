@@ -9,6 +9,7 @@ import (
 	"github.com/pkg/errors"
 )
 
+// AmqpEndpoint uses amqp transport to send out a message.
 type AmqpEndpoint struct {
 	amqpTransport transport.Transport
 	destination   transport.DeliveryDestination
@@ -16,6 +17,7 @@ type AmqpEndpoint struct {
 	name          string
 }
 
+// NewAmqpEndpoint creates new instance of AmqpEndpoint
 func NewAmqpEndpoint(name string, amqpTransport transport.Transport, destination transport.DeliveryDestination, msgMarshaller message.Marshaller) Endpoint {
 	return &AmqpEndpoint{name: name, amqpTransport: amqpTransport, destination: destination, msgMarshaller: msgMarshaller}
 }
@@ -42,14 +44,11 @@ func (a AmqpEndpoint) Send(ctx context.Context, msg *message.OutcomingMessage, o
 	toSend := transport.NewOutboundPkg(dataToSend, "application/json", a.destination, msg.Headers())
 
 	if deliveryOpts.delay != nil {
-	waiter:
-		for {
-			select {
-			case <-ctx.Done():
-				return errors.Errorf("Failed to send message %s. Was waiting for the delay and parent ctx closed.", msg.UID())
-			case <-time.After(*deliveryOpts.delay):
-				break waiter //break for statement
-			}
+		select {
+		case <-ctx.Done():
+			return errors.Errorf("Failed to send message %s. Was waiting for the delay and parent ctx closed.", msg.UID())
+		case <-time.After(*deliveryOpts.delay):
+			break
 		}
 	}
 
