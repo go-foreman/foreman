@@ -22,6 +22,7 @@ const (
 	scheduleTimeout          time.Duration = time.Second * 3
 )
 
+// Subscriber starts listening for queues and processes messages
 type Subscriber interface {
 	// Run listens queues for packages and processes them. Gracefully shuts down either on os.Signal or ctx.Done() or Stop()
 	Run(ctx context.Context, queues ...transport.Queue) error
@@ -36,6 +37,7 @@ type subscriber struct {
 	workerDispatcher *dispatcher
 }
 
+// NewSubscriber creates default subscriber implementation
 func NewSubscriber(transport transport.Transport, processor Processor, logger log.Logger) Subscriber {
 	return &subscriber{transport: transport, logger: logger, processor: processor, workerDispatcher: newDispatcher(maxTasksInProgress)}
 }

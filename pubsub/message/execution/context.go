@@ -12,6 +12,7 @@ import (
 	"github.com/pkg/errors"
 )
 
+// MessageExecutionCtx is passed to each executor and contains received message, ctx, knows how to send out or return a message.
 type MessageExecutionCtx interface {
 	// Message returns received message
 	Message() *message.ReceivedMessage

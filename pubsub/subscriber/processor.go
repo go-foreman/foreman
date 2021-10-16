@@ -14,6 +14,7 @@ import (
 	"github.com/pkg/errors"
 )
 
+// Processor knows how to process a message received by subscriber
 type Processor interface {
 	Process(ctx context.Context, inPkg transport.IncomingPkg) error
 }
@@ -25,6 +26,7 @@ type processor struct {
 	msgExecCtxFactory execution.MessageExecutionCtxFactory
 }
 
+// NewMessageProcessor returns default implementation of Processor
 func NewMessageProcessor(decoder message.Marshaller, msgExecCtxFactory execution.MessageExecutionCtxFactory, msgDispatcher msgDispatcher.Dispatcher, logger log.Logger) Processor {
 	return &processor{decoder: decoder, msgExecCtxFactory: msgExecCtxFactory, dispatcher: msgDispatcher, logger: logger}
 }
