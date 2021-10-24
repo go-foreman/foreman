@@ -89,12 +89,14 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 			s.logger.Logf(log.InfoLevel, "Subscriber's context was canceled")
 			if err := s.Stop(shutdownCtx); err != nil {
 				s.logger.Logf(log.ErrorLevel, "error stopping subscriber gracefully %s", err)
+				return errors.Wrapf(err, "stopping subscriber gracefully")
 			}
 			return nil
 		case <-signalChan:
 			s.logger.Logf(log.InfoLevel, "Received kill signal")
 			if err := s.Stop(shutdownCtx); err != nil {
 				s.logger.Logf(log.ErrorLevel, "error stopping subscriber gracefully %s", err)
+				return errors.Wrapf(err, "stopping subscriber gracefully")
 			}
 			return nil
 		}
