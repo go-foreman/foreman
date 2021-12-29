@@ -34,7 +34,7 @@ type SomeTestType struct {
 }
 
 type ChildType struct {
-	Value int
+	Value int `json:"value,omitempty"`
 }
 
 type WithAnon struct {
