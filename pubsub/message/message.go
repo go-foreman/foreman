@@ -77,7 +77,13 @@ func (m ReceivedMessage) TraceID() string {
 		return ""
 	}
 
-	return traceIdVal.(string)
+	traceID, ok := traceIdVal.(string)
+
+	if !ok {
+		return ""
+	}
+
+	return traceID
 }
 
 func (m ReceivedMessage) Headers() Headers {
