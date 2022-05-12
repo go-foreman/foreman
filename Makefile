@@ -1,8 +1,5 @@
 #! /usr/bin/make
 
-TOOLS=github.com/vektra/mockery/v2/.../@latest \
-       github.com/sonatype-nexus-community/nancy@latest
-
 
 UNIT_TEST_PKGS=`go list ./... | grep -v -E './testing'`
 INTEGRATION_TEST_PKGS=`go list ./... | grep "testing/integration"`
@@ -24,7 +21,8 @@ ENV_LOCAL_TEST=\
 
 .PHONY: tools
 tools:
-	go get -v $(TOOLS)
+	go install github.com/vektra/mockery/v2@latest
+	go install github.com/sonatype-nexus-community/nancy@latest
 	## using wget because go get is not working for 1.40.1
 	wget -O- -nv https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | BINDIR=${GOPATH}/bin sh -s v1.40.1
 
