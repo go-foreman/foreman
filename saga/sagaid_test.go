@@ -36,4 +36,11 @@ func TestNewSagaUIDService(t *testing.T) {
 		assert.EqualError(t, err, "Saga uid was found, but has wrong type, should be string")
 		assert.Empty(t, extractedUID)
 	})
+
+	t.Run("set saga id into headers", func(t *testing.T) {
+		headers := message.Headers{}
+		svc.AddSagaId(headers, "uid")
+
+		assert.Equal(t, headers[sagaUIDKey], "uid")
+	})
 }
