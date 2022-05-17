@@ -1,3 +1,4 @@
+[![go-foreman](https://circleci.com/gh/go-foreman/foreman.svg?style=shield)](https://app.circleci.com/pipelines/github/go-foreman)
 # Foreman
 
 ![Untitled](docs/logo.png)
