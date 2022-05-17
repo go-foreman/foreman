@@ -1,7 +1,7 @@
 [![go-foreman](https://circleci.com/gh/go-foreman/foreman.svg?style=shield)](https://app.circleci.com/pipelines/github/go-foreman)
 # Foreman
 
-![Untitled](docs/logo.png)
+<img src="docs/logo.png" width="25%" alt="logo"></img>
 
 What is Foreman?  A library that helps you build an event driven application by handling all the complexity of decoding, routing, dispatching and executing commands or subscribing for events. By having Publish/Subscribe and MessageBus patterns you could build different components on top for various architecture approaches like orchestrated sagas or workflows.
 
