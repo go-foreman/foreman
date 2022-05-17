@@ -13,11 +13,11 @@ What is Foreman?  A library that helps you build an event driven application by 
 - message dispatcher
 - transport interface: AMQP implementation
 
-[Architecture breakdown](docs/Architecture%20breakdown%2042f2a211e8794b16a4ca3ec264dbd7e0.md)
+[Architecture breakdown](docs/Architecture%20breakdown.md)
 
-[Getting started](docs/Getting%20started%204f831ac1b8124f198067b78fdfed2a2a.md)
+[Getting started](docs/Getting%20started.md)
 
-[Components](docs/Components%204ecd3c3eab7d4ed5ad43dc487c1036ac.md)
+[Components](docs/Components.md)
 
 ## Orchestrated sagas:
 
