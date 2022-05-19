@@ -102,7 +102,7 @@ graph TD
     URF --> |retries > 0| RUC
     URF --> |retries == 0| F(("Saga failed"))
     CIC --> |failed| INF{InvoiceCreationFailed}
-    INF --> |retries > 0| CI
+    INF --> |retries > 0| CIC
     INF --> |retries == 0| F
     F -->  Compensate[CompensateSagaCommand]
     F -->  Recover[RecoverSagaCommand]
