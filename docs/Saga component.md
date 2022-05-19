@@ -93,22 +93,22 @@ It’s important to know that after each handler is executed the saga is persist
 
 ```mermaid
 graph TD
-S(("StartSagaCommand")) --> |dispatch| RUC(RegisterUserCMD)
-RUC --> |success| UR[UserRegistered]
-UR --> |dispatch| CI[CreateInvoice]
-CI --> |success| IC[InvoiceCreated]
-IC --> C((saga Completed))
-RUC --> |failed| URF{UserRegistrationFailed}
-URF --> |retries > 0| RUC
-URF --> |retries == 0| F(("Saga failed"))
-CI --> |failed| INF{InvoiceCreationFailed}
-INF --> |retries > 0| CI
-INF --> |retries == 0| F
-F -->  Compensate[CompensateSagaCommand]
-F -->  Recover[RecoverSagaCommand]
-Recover --> |dispatch last failed event| R1>...]
-Compensate --> |dispatch| CancelInvoice[CancelInvoice]
-CancelInvoice --> R2>...]
+    S(("StartSagaCommand")) --> |dispatch| RUC(RegisterUserCMD)
+    RUC --> |success| UR[UserRegistered]
+    UR --> |dispatch| CIC[CreateInvoiceCMD]
+    CIC --> |success| IC[InvoiceCreated]
+    IC --> C((saga Completed))
+    RUC --> |failed| URF{UserRegistrationFailed}
+    URF --> |retries > 0| RUC
+    URF --> |retries == 0| F(("Saga failed"))
+    CIC --> |failed| INF{InvoiceCreationFailed}
+    INF --> |retries > 0| CI
+    INF --> |retries == 0| F
+    F -->  Compensate[CompensateSagaCommand]
+    F -->  Recover[RecoverSagaCommand]
+    Recover --> |dispatch the last failed event and set retries limit to 1| R1>...]
+    Compensate --> |dispatch| CancelInvoiceCMD[CancelInvoiceCMD]
+    CancelInvoiceCMD --> R2>...]
 ```
 
 ```go
