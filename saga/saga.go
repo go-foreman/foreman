@@ -9,12 +9,19 @@ import (
 )
 
 type Saga interface {
+	// include Object interface as any message type in MessageBus a saga should have metadata
 	message.Object
+	// Init function assigns a contract type to a handler
 	Init()
+	// Start will be triggered when StartSagaCommand received
 	Start(sagaCtx SagaContext) error
+	// Compensate will be triggered when CompensateSagaCommand received
 	Compensate(sagaCtx SagaContext) error
+	// Recover will be triggered when RecoverSagaCommand received
 	Recover(sagaCtx SagaContext) error
+	// EventHandlers returns a list of assigned executors per type in Init()
 	EventHandlers() map[scheme.GroupKind]Executor
+	// SetSchema allows to set schema instance during the saga runtime
 	SetSchema(scheme scheme.KnownTypesRegistry)
 }
 

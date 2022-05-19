@@ -1,4 +1,5 @@
 [![go-foreman](https://circleci.com/gh/go-foreman/foreman.svg?style=shield)](https://app.circleci.com/pipelines/github/go-foreman)
+
 # Foreman
 
 <img src="docs/logo.png" width="25%" alt="logo"></img>
@@ -17,7 +18,7 @@ What is Foreman?  A library that helps you build an event driven application by 
 
 [Getting started](docs/Getting%20started.md)
 
-[Components](docs/Components.md)
+[Saga Component](docs/Saga%20component.md)
 
 ## Orchestrated sagas:
 
