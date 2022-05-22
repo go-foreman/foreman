@@ -55,7 +55,7 @@ bus, err := foreman.NewMessageBus(
 defaultLogger,
 marshaller,
 schemeRegistry,
-foreman.DefaultWithTransport(amqpTransport), //this option tells the message bus to use default subscriber with this transport.
+foreman.DefaultSubscriber(amqpTransport), // create default subscriber 
 )
 ```
 
