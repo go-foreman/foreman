@@ -35,6 +35,13 @@ type Config struct {
 	GracefulShutdownTimeout time.Duration
 }
 
+var DefaultConfig = Config{
+	WorkersCount:                   10,
+	WorkerWaitingAssignmentTimeout: time.Second * 3,
+	PackageProcessingMaxTime:       time.Second * 60,
+	GracefulShutdownTimeout:        time.Second * 61,
+}
+
 type subscriberOpts struct {
 	config *Config
 }
@@ -60,12 +67,7 @@ func NewSubscriber(transport transport.Transport, processor Processor, logger lo
 	if sOpts.config != nil {
 		config = sOpts.config
 	} else {
-		config = &Config{
-			WorkersCount:                   10,
-			WorkerWaitingAssignmentTimeout: time.Second * 3,
-			PackageProcessingMaxTime:       time.Second * 60,
-			GracefulShutdownTimeout:        time.Second * 61,
-		}
+		config = &DefaultConfig
 	}
 
 	return &subscriber{
