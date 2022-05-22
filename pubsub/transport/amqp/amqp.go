@@ -177,7 +177,7 @@ func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, o
 	}
 
 	if consumeOptions.PrefetchCount > 0 {
-		if err := t.consumingChannel.Qos(consumeOptions.PrefetchCount, 0, false); err != nil {
+		if err := t.consumingChannel.Qos(int(consumeOptions.PrefetchCount), 0, false); err != nil {
 			return nil, errors.WithStack(err)
 		}
 	}

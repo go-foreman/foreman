@@ -23,6 +23,7 @@ type SubscriberOption func(subscriberOpts *subscriberOpts, c *subscriberContaine
 
 type subscriberOpts struct {
 	subscriber subscriber.Subscriber
+	opts       []subscriber.Opt
 	transport  transport.Transport
 }
 
@@ -38,10 +39,11 @@ func WithSubscriber(subscriber subscriber.Subscriber) SubscriberOption {
 	}
 }
 
-// DefaultWithTransport option allows to specify your own transport which will be used in the default subscriber
-func DefaultWithTransport(transport transport.Transport) SubscriberOption {
+// DefaultSubscriber option allows to specify your own transport which will be used in the default subscriber
+func DefaultSubscriber(transport transport.Transport, opts ...subscriber.Opt) SubscriberOption {
 	return func(subscriberOpts *subscriberOpts, c *subscriberContainer) {
 		subscriberOpts.transport = transport
+		subscriberOpts.opts = opts
 	}
 }
 
@@ -136,16 +138,16 @@ func NewMessageBus(logger log.Logger, msgMarshaller message.Marshaller, scheme s
 	mBus.router = container.router
 	mBus.scheme = scheme
 
-	subscriberOpt := &subscriberOpts{}
-	subscriberOption(subscriberOpt, &subscriberContainer{
+	subscriberCreationOpts := &subscriberOpts{}
+	subscriberOption(subscriberCreationOpts, &subscriberContainer{
 		msgMarshaller: msgMarshaller,
 		processor:     container.processor,
 	})
 
-	if subscriberOpt.subscriber != nil {
-		mBus.subscriber = subscriberOpt.subscriber
-	} else if subscriberOpt.transport != nil {
-		mBus.subscriber = subscriber.NewSubscriber(subscriberOpt.transport, container.processor, logger)
+	if subscriberCreationOpts.subscriber != nil {
+		mBus.subscriber = subscriberCreationOpts.subscriber
+	} else if subscriberCreationOpts.transport != nil {
+		mBus.subscriber = subscriber.NewSubscriber(subscriberCreationOpts.transport, container.processor, logger, subscriberCreationOpts.opts...)
 	} else {
 		return nil, errors.New("subscriber is nil")
 	}

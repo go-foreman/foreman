@@ -9,7 +9,7 @@ type ConsumeOptions struct {
 	Exclusive     bool
 	NoLocal       bool
 	NoWait        bool
-	PrefetchCount int
+	PrefetchCount uint
 }
 
 func convertConsumeOptsType(options interface{}) (*ConsumeOptions, error) {
@@ -32,7 +32,7 @@ func convertSendOptsType(options interface{}) (*SendOptions, error) {
 	return opts, nil
 }
 
-func WithQosPrefetchCount(limit int) transport.ConsumeOpts {
+func WithQosPrefetchCount(limit uint) transport.ConsumeOpts {
 	return func(options interface{}) error {
 		opts, err := convertConsumeOptsType(options)
 

@@ -15,13 +15,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-const (
-	maxTasksInProgress                     = 100
-	packageProcessingMaxTime time.Duration = time.Second * 60
-	gracefulShutdownTimeout  time.Duration = time.Second * 120
-	scheduleTimeout          time.Duration = time.Second * 3
-)
-
 // Subscriber starts listening for queues and processes messages
 type Subscriber interface {
 	// Run listens queues for packages and processes them. Gracefully shuts down either on os.Signal or ctx.Done() or Stop()
@@ -30,16 +23,66 @@ type Subscriber interface {
 	Stop(ctx context.Context) error
 }
 
+// Config allows to configure subscriber workflow
+type Config struct {
+	// WorkersCount specifies a number workers that process packages
+	WorkersCount uint
+	// WorkerWaitingAssignmentTimeout amount of time that a worker will wait for assigning a package
+	WorkerWaitingAssignmentTimeout time.Duration
+	// PackageProcessingMaxTime amount of time for a package to be processed
+	PackageProcessingMaxTime time.Duration
+	// GracefulShutdownTimeout amount of time for graceful shutdown
+	GracefulShutdownTimeout time.Duration
+}
+
+type subscriberOpts struct {
+	config *Config
+}
+
+type Opt func(o *subscriberOpts)
+
+func WithConfig(c *Config) Opt {
+	return func(o *subscriberOpts) {
+		o.config = c
+	}
+}
+
+// NewSubscriber creates default subscriber implementation
+func NewSubscriber(transport transport.Transport, processor Processor, logger log.Logger, opts ...Opt) Subscriber {
+	sOpts := &subscriberOpts{}
+
+	for _, o := range opts {
+		o(sOpts)
+	}
+
+	var config *Config
+
+	if sOpts.config != nil {
+		config = sOpts.config
+	} else {
+		config = &Config{
+			WorkersCount:                   10,
+			WorkerWaitingAssignmentTimeout: time.Second * 3,
+			PackageProcessingMaxTime:       time.Second * 60,
+			GracefulShutdownTimeout:        time.Second * 61,
+		}
+	}
+
+	return &subscriber{
+		transport:        transport,
+		logger:           logger,
+		processor:        processor,
+		workerDispatcher: newDispatcher(config.WorkersCount),
+		config:           config,
+	}
+}
+
 type subscriber struct {
 	transport        transport.Transport
 	logger           log.Logger
 	processor        Processor
 	workerDispatcher *dispatcher
-}
-
-// NewSubscriber creates default subscriber implementation
-func NewSubscriber(transport transport.Transport, processor Processor, logger log.Logger) Subscriber {
-	return &subscriber{transport: transport, logger: logger, processor: processor, workerDispatcher: newDispatcher(maxTasksInProgress)}
+	config           *Config
 }
 
 func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
@@ -51,11 +94,11 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
 
 	consumerCtx, cancelConsumerCtx := context.WithCancel(ctx)
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), gracefulShutdownTimeout)
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), s.config.GracefulShutdownTimeout)
 	defer shutdownCancel()
 	defer cancelConsumerCtx()
 
-	consumedPkgs, err := s.transport.Consume(consumerCtx, queues, amqp.WithQosPrefetchCount(maxTasksInProgress))
+	consumedPkgs, err := s.transport.Consume(consumerCtx, queues, amqp.WithQosPrefetchCount(s.config.WorkersCount))
 
 	if err != nil {
 		return errors.WithStack(err)
@@ -63,7 +106,7 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 
 	s.workerDispatcher.start(consumerCtx)
 
-	scheduleTicker := time.NewTicker(scheduleTimeout)
+	scheduleTicker := time.NewTicker(s.config.WorkerWaitingAssignmentTimeout)
 
 	defer scheduleTicker.Stop()
 
@@ -76,7 +119,7 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 			}
 			select {
 			case <-scheduleTicker.C:
-				s.logger.Logf(log.DebugLevel, "worker was waiting %s for a job to start. returning him to the pool", scheduleTimeout.String())
+				s.logger.Logf(log.DebugLevel, "worker was waiting %s for a job to start. returning him to the pool", s.config.WorkerWaitingAssignmentTimeout.String())
 				s.workerDispatcher.queue() <- worker
 				break
 			case incomingPkg, open := <-consumedPkgs:
@@ -104,7 +147,7 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 }
 
 func (s *subscriber) processPackage(ctx context.Context, inPkg transport.IncomingPkg) {
-	processorCtx, processorCancel := context.WithTimeout(ctx, packageProcessingMaxTime)
+	processorCtx, processorCancel := context.WithTimeout(ctx, s.config.PackageProcessingMaxTime)
 	defer processorCancel()
 
 	if err := s.processor.Process(processorCtx, inPkg); err != nil {
