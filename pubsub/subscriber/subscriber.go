@@ -112,13 +112,23 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 
 	defer scheduleTicker.Stop()
 
-	for {
+	stopProcessing := false
+
+	for !stopProcessing {
 		select {
+		case <-consumerCtx.Done():
+			s.logger.Logf(log.InfoLevel, "Subscriber's context was canceled")
+			stopProcessing = true
+		case <-signalChan:
+			s.logger.Logf(log.InfoLevel, "Received kill signal")
+			stopProcessing = true
 		case worker, open := <-s.workerDispatcher.queue():
 			if !open {
-				s.logger.Logf(log.InfoLevel, "worker's channel is closed")
-				return nil
+				s.logger.Logf(log.InfoLevel, "worker's channel is stopProcessing")
+				stopProcessing = true
+				break
 			}
+
 			select {
 			case <-scheduleTicker.C:
 				s.logger.Logf(log.DebugLevel, "worker was waiting %s for a job to start. returning him to the pool", s.config.WorkerWaitingAssignmentTimeout.String())
@@ -126,26 +136,20 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 				break
 			case incomingPkg, open := <-consumedPkgs:
 				if !open {
-					return nil
+					stopProcessing = true
+					break
 				}
 				worker <- newTaskProcessPkg(ctx, incomingPkg, s, s.logger)
 			}
-		case <-ctx.Done():
-			s.logger.Logf(log.InfoLevel, "Subscriber's context was canceled")
-			if err := s.Stop(shutdownCtx); err != nil {
-				s.logger.Logf(log.ErrorLevel, "error stopping subscriber gracefully %s", err)
-				return errors.Wrapf(err, "stopping subscriber gracefully")
-			}
-			return nil
-		case <-signalChan:
-			s.logger.Logf(log.InfoLevel, "Received kill signal")
-			if err := s.Stop(shutdownCtx); err != nil {
-				s.logger.Logf(log.ErrorLevel, "error stopping subscriber gracefully %s", err)
-				return errors.Wrapf(err, "stopping subscriber gracefully")
-			}
-			return nil
 		}
 	}
+
+	if err := s.Stop(shutdownCtx); err != nil {
+		s.logger.Logf(log.ErrorLevel, "error stopping subscriber gracefully %s", err)
+		return errors.Wrapf(err, "stopping subscriber gracefully")
+	}
+
+	return nil
 }
 
 func (s *subscriber) processPackage(ctx context.Context, inPkg transport.IncomingPkg) {
@@ -186,9 +190,9 @@ func (s *subscriber) Stop(ctx context.Context) error {
 		}
 	}
 
-	s.logger.Logf(log.InfoLevel, "All tasks are finished. Disconnecting from transport.")
+	s.logger.Logf(log.InfoLevel, "All tasks are finished.")
 
-	return s.transport.Disconnect(ctx)
+	return nil
 }
 
 type processPkg struct {

@@ -1,6 +1,7 @@
 package amqp
 
 import (
+	"context"
 	"sync/atomic"
 	"time"
 
@@ -86,7 +87,7 @@ func (ch *Channel) Close() error {
 }
 
 // Consume warp amqp.Channel.Consume, the returned delivery will end only when channel closed by developer
-func (ch *Channel) Consume(queue, consumer string, autoAck, exclusive, noLocal, noWait bool, args amqp.Table) (<-chan amqp.Delivery, error) {
+func (ch *Channel) Consume(ctx context.Context, queue, consumer string, autoAck, exclusive, noLocal, noWait bool, args amqp.Table) (<-chan amqp.Delivery, error) {
 	deliveries := make(chan amqp.Delivery)
 
 	var reconnectedCount uint
@@ -109,9 +110,20 @@ func (ch *Channel) Consume(queue, consumer string, autoAck, exclusive, noLocal, 
 			}
 
 			// sleep before IsClose call. closed flag may not set before sleep.
-			time.Sleep(delay * time.Second)
 
 			if ch.IsClosed() {
+				break
+			}
+
+			done := false
+			select {
+			case <-ctx.Done():
+				done = true
+			default:
+				time.Sleep(delay * time.Second)
+			}
+
+			if done {
 				break
 			}
 		}
