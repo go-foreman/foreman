@@ -14,6 +14,10 @@ import (
 	"github.com/pkg/errors"
 )
 
+const (
+	ContextTraceIDKey = "traceID"
+)
+
 // Processor knows how to process a message received by subscriber
 type Processor interface {
 	Process(ctx context.Context, inPkg transport.IncomingPkg) error
@@ -52,7 +56,9 @@ func (p *processor) Process(ctx context.Context, inPkg transport.IncomingPkg) er
 		return WithNoExecutorsDefinedErr(errors.New(errMsg))
 	}
 
-	execCtx := p.msgExecCtxFactory.CreateCtx(ctx, inPkg, receivedMsg)
+	childCtx := context.WithValue(ctx, ContextTraceIDKey, receivedMsg.TraceID())
+
+	execCtx := p.msgExecCtxFactory.CreateCtx(childCtx, inPkg, receivedMsg)
 
 	for _, exec := range executors {
 		if err := exec(execCtx); err != nil {

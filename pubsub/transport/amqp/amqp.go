@@ -197,6 +197,7 @@ func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, o
 			}()
 
 			msgs, err := t.consumingChannel.Consume(
+				ctx,
 				queue.Name(),
 				queue.Name(),
 				false,
