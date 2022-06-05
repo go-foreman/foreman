@@ -62,7 +62,7 @@ func (m *mysqlMutex) Lock(ctx context.Context, sagaId string) (Lock, error) {
 
 	closingErr := conn.Close(true)
 
-	return nil, WithMutexErr(errors.Errorf("Got 0 when acquiring lock for saga %s. %s", sagaId, closingErr))
+	return nil, WithMutexErr(errors.Errorf("Got error status %d when acquiring lock for saga %s. %s", r.Int64, sagaId, closingErr))
 }
 
 func (m *mysqlMutex) release(ctx context.Context, conn *sagaSql.Conn, sagaId string) error {
