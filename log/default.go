@@ -29,7 +29,7 @@ func (l defaultLogger) Log(level Level, v ...interface{}) {
 
 	if level <= l.level {
 		if err := l.internalLogger.Output(3, fmt.Sprint(v...)); err != nil {
-			l.internalLogger.Println(fmt.Sprintf("err logging an entry: %s. %s", err, v))
+			l.internalLogger.Printf("err logging an entry: %s. %s\n", err, v)
 		}
 	}
 }
