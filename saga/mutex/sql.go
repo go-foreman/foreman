@@ -66,13 +66,6 @@ func (m *mysqlMutex) Lock(ctx context.Context, sagaId string) (Lock, error) {
 }
 
 func (m *mysqlMutex) release(ctx context.Context, conn *sagaSql.Conn, sagaId string) error {
-	//m.mapLock.Lock()
-	//conn, exists := m.connections[sagaId]
-	//if !exists {
-	//	m.mapLock.Unlock()
-	//	return WithMutexErr(errors.Errorf("connection which acquiring lock is not found in runtime map. Was Release() called after processing a message?"))
-	//}
-
 	r := sql.NullInt64{}
 	if err := conn.QueryRowContext(ctx, "SELECT RELEASE_LOCK(?);", sagaId).Scan(&r); err != nil {
 		closingErr := conn.Close(true)
@@ -147,14 +140,6 @@ func (p *pgsqlMutex) Lock(ctx context.Context, sagaId string) (Lock, error) {
 }
 
 func (p *pgsqlMutex) release(ctx context.Context, conn *sagaSql.Conn, sagaId string) error {
-	//p.mapLock.Lock()
-	//defer p.mapLock.Unlock()
-	//
-	//conn, exists := p.connections[sagaId]
-	//if !exists {
-	//	return WithMutexErr(errors.Errorf("connection which acquiring lock is not found in runtime map. Was Release() called after processing a message?"))
-	//}
-
 	if _, err := conn.ExecContext(ctx, "SELECT pg_advisory_unlock(hashtext($1));", sagaId); err != nil {
 		closingErr := conn.Close(true)
 		return WithMutexErr(errors.Wrapf(err, "releasing lock for saga %s. %s", sagaId, closingErr))

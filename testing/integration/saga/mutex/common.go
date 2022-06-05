@@ -143,19 +143,20 @@ func testSQLMutexUseCases(t *testing.T, mutexFabric func() mutex.Mutex, dbConnec
 		assert.NoError(t, lock.Release(ctx))
 	})
 
-	//t.Run("release not existing lock", func(t *testing.T) {
-	//	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-	//	defer cancel()
-	//
-	//	id := "bbb"
-	//
-	//	lock, err := sqlMutex.Lock(ctx, id)
-	//	require.NoError(t, err)
-	//	assert.NoError(t, lock.Release(ctx))
-	//
-	//	assert.Error(t, lock.Release(ctx))
-	//	assert.Contains(t, err.Error(), "connection which acquiring lock is not found in runtime map. Was Release() called after processing a message?")
-	//})
+	t.Run("failed release lock twice", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		defer cancel()
+
+		id := "ggg"
+
+		lock, err := sqlMutex.Lock(ctx, id)
+		require.NoError(t, err)
+		assert.NoError(t, lock.Release(ctx))
+
+		err = lock.Release(ctx)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "called conn.Close(true) on connection that wasn't locked")
+	})
 
 	t.Run("acquire and release a lot of mutex", func(t *testing.T) {
 		rand.Seed(time.Now().UnixNano())
