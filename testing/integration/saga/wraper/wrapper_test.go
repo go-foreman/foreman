@@ -27,7 +27,7 @@ func (m *sqlWrapperTest) TestSqlWrapperConn() {
 	dbWrapper := sagaSql.NewDB(m.Connection())
 
 	t.Run("while mutex is held it's possible to use the very same connection for queries or execs", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 		defer cancel()
 
 		conn, err := dbWrapper.Conn(ctx, "xxx", true)
@@ -54,13 +54,17 @@ func (m *sqlWrapperTest) TestSqlWrapperConn() {
 		require.NotNil(t, againConn)
 		assert.NotSame(t, conn, againConn)
 
+		againConn.Close(true)
+
 	})
 
 	t.Run("wait until mutex is released", func(t *testing.T) {
-		conn, err := dbWrapper.Conn(context.Background(), "xxx", true)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		defer cancel()
+		conn, err := dbWrapper.Conn(ctx, "yyy", true)
 		require.NoError(t, err)
 		require.NotNil(t, conn)
-		waitingCtx, waitingCancel := context.WithTimeout(context.Background(), time.Millisecond*300)
+		waitingCtx, waitingCancel := context.WithTimeout(ctx, time.Millisecond*300)
 		defer waitingCancel()
 
 		go func() {
@@ -68,7 +72,7 @@ func (m *sqlWrapperTest) TestSqlWrapperConn() {
 			t.Log(conn.Close(true))
 		}()
 
-		shouldBeTheSameConn, err := dbWrapper.Conn(waitingCtx, "xxx", true)
+		shouldBeTheSameConn, err := dbWrapper.Conn(waitingCtx, "yyy", true)
 		require.NoError(t, err)
 		require.NotNil(t, shouldBeTheSameConn)
 		defer func() {
@@ -79,10 +83,13 @@ func (m *sqlWrapperTest) TestSqlWrapperConn() {
 	})
 
 	t.Run("context canceled when was waiting to obtain a mutex", func(t *testing.T) {
-		conn, err := dbWrapper.Conn(context.Background(), "xxx", true)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		defer cancel()
+		conn, err := dbWrapper.Conn(ctx, "zzz", true)
+
 		require.NoError(t, err)
 		require.NotNil(t, conn)
-		waitingCtx, waitingCancel := context.WithTimeout(context.Background(), time.Millisecond*100)
+		waitingCtx, waitingCancel := context.WithTimeout(ctx, time.Millisecond*100)
 		defer waitingCancel()
 
 		go func() {
@@ -90,7 +97,7 @@ func (m *sqlWrapperTest) TestSqlWrapperConn() {
 			t.Log(conn.Close(true))
 		}()
 
-		shouldBeTheSameConn, err := dbWrapper.Conn(waitingCtx, "xxx", true)
+		shouldBeTheSameConn, err := dbWrapper.Conn(waitingCtx, "zzz", true)
 		require.Error(t, err)
 		require.Nil(t, shouldBeTheSameConn)
 		assert.EqualError(t, err, "acquiring connection: context canceled while waiting for connection lock")
