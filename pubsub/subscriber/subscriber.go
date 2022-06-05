@@ -152,6 +152,8 @@ func (s *subscriber) processPackage(ctx context.Context, inPkg transport.Incomin
 	processorCtx, processorCancel := context.WithTimeout(ctx, s.config.PackageProcessingMaxTime)
 	defer processorCancel()
 
+	s.logger.Logf(log.DebugLevel, "started processing package id %s", inPkg.UID())
+
 	if err := s.processor.Process(processorCtx, inPkg); err != nil {
 		s.logger.Logf(log.ErrorLevel, "error happened while processing pkg %s from %s. %s\n", inPkg.UID(), inPkg.Origin(), err)
 
@@ -160,7 +162,10 @@ func (s *subscriber) processPackage(ctx context.Context, inPkg transport.Incomin
 
 	if err := inPkg.Ack(); err != nil {
 		s.logger.Logf(log.ErrorLevel, "error acking package %s. %s", inPkg.UID(), err)
+		return
 	}
+
+	s.logger.Logf(log.DebugLevel, "acked package id %s", inPkg.UID())
 }
 
 func (s *subscriber) Stop(ctx context.Context) error {

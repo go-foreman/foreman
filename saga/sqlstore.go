@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"time"
 
+	sagaSql "github.com/go-foreman/foreman/saga/sql"
+
 	"github.com/go-foreman/foreman/pubsub/message"
 	"github.com/pkg/errors"
 )
@@ -20,13 +22,13 @@ type SQLDriver string
 
 type sqlStore struct {
 	msgMarshaller message.Marshaller
-	db            *sql.DB
+	db            *sagaSql.DB
 	driver        SQLDriver
 }
 
 // NewSQLSagaStore creates sql saga store, it supports mysql and postgres drivers.
 // driver param is required because of https://github.com/golang/go/issues/3602. Better this than +1 dependency or copy pasting code
-func NewSQLSagaStore(db *sql.DB, driver SQLDriver, msgMarshaller message.Marshaller) (Store, error) {
+func NewSQLSagaStore(db *sagaSql.DB, driver SQLDriver, msgMarshaller message.Marshaller) (Store, error) {
 	s := &sqlStore{db: db, driver: driver, msgMarshaller: msgMarshaller}
 	if err := s.initTables(); err != nil {
 		return nil, errors.Wrapf(err, "initializing tables for SQLSagaStore, driver %s", driver)
@@ -43,7 +45,14 @@ func (s sqlStore) Create(ctx context.Context, sagaInstance Instance) error {
 		return errors.WithStack(err)
 	}
 
-	tx, err := s.db.Begin()
+	conn, err := s.db.Conn(ctx, sagaInstance.UID(), false)
+	if err != nil {
+		return errors.Wrap(err, "obtaining a connection")
+	}
+
+	defer conn.Close(false)
+
+	tx, err := conn.BeginTx(ctx, nil)
 
 	if err != nil {
 		return errors.Wrapf(err, "beginning a transaction for saga %s", sagaInstance.UID())
@@ -72,7 +81,7 @@ func (s sqlStore) Create(ctx context.Context, sagaInstance Instance) error {
 	return nil
 }
 
-func (s sqlStore) Update(ctx context.Context, sagaInstance Instance) error {
+func (s *sqlStore) Update(ctx context.Context, sagaInstance Instance) error {
 	payload, err := s.msgMarshaller.Marshal(sagaInstance.Saga())
 	sagaName := sagaInstance.Saga().GroupKind().String()
 
@@ -91,7 +100,14 @@ func (s sqlStore) Update(ctx context.Context, sagaInstance Instance) error {
 		}
 	}
 
-	tx, err := s.db.Begin()
+	conn, err := s.db.Conn(ctx, sagaInstance.UID(), false)
+	if err != nil {
+		return errors.Wrap(err, "obtaining a connection")
+	}
+
+	defer conn.Close(false)
+
+	tx, err := conn.BeginTx(ctx, nil)
 
 	if err != nil {
 		return errors.WithStack(err)
@@ -184,8 +200,15 @@ func (s sqlStore) Update(ctx context.Context, sagaInstance Instance) error {
 }
 
 func (s sqlStore) GetById(ctx context.Context, sagaId string) (Instance, error) {
+	conn, err := s.db.Conn(ctx, sagaId, false)
+	if err != nil {
+		return nil, errors.Wrap(err, "obtaining a connection")
+	}
+
+	defer conn.Close(false)
+
 	sagaData := sagaSqlModel{}
-	err := s.db.QueryRowContext(ctx, s.prepQuery(fmt.Sprintf("SELECT s.uid, s.parent_uid, s.name, s.payload, s.status, s.last_failed_ev, s.started_at, s.updated_at FROM %v s WHERE uid=?;", sagaTableName)), sagaId).
+	err = conn.QueryRowContext(ctx, s.prepQuery(fmt.Sprintf("SELECT s.uid, s.parent_uid, s.name, s.payload, s.status, s.last_failed_ev, s.started_at, s.updated_at FROM %v s WHERE uid=?;", sagaTableName)), sagaId).
 		Scan(
 			&sagaData.ID,
 			&sagaData.ParentID,
@@ -209,7 +232,7 @@ func (s sqlStore) GetById(ctx context.Context, sagaId string) (Instance, error) 
 		return nil, errors.WithStack(err)
 	}
 
-	messages, err := s.queryEvents(sagaId)
+	messages, err := s.queryEvents(conn.Conn, ctx, sagaId)
 
 	if err != nil {
 		return nil, errors.WithStack(err)
@@ -362,7 +385,14 @@ func (s sqlStore) GetByFilter(ctx context.Context, filters ...FilterOption) ([]I
 }
 
 func (s sqlStore) Delete(ctx context.Context, sagaId string) error {
-	res, err := s.db.ExecContext(ctx, s.prepQuery(fmt.Sprintf("DELETE FROM %v WHERE uid=?;", sagaTableName)), sagaId)
+	conn, err := s.db.Conn(ctx, sagaId, false)
+	if err != nil {
+		return errors.Wrap(err, "obtaining a connection")
+	}
+
+	defer conn.Close(false)
+
+	res, err := conn.ExecContext(ctx, s.prepQuery(fmt.Sprintf("DELETE FROM %v WHERE uid=?;", sagaTableName)), sagaId)
 	if err != nil {
 		return errors.Wrapf(err, "executing delete query for saga %s", sagaId)
 	}
@@ -380,8 +410,8 @@ func (s sqlStore) Delete(ctx context.Context, sagaId string) error {
 	return errors.Errorf("no saga instance %s found", sagaId)
 }
 
-func (s sqlStore) queryEvents(sagaId string) ([]HistoryEvent, error) {
-	rows, err := s.db.Query(s.prepQuery(fmt.Sprintf("SELECT uid, name, status, payload, origin, created_at, trace_uid FROM %v WHERE saga_uid=? ORDER BY created_at;", sagaHistoryTableName)), sagaId)
+func (s sqlStore) queryEvents(conn *sql.Conn, ctx context.Context, sagaId string) ([]HistoryEvent, error) {
+	rows, err := conn.QueryContext(ctx, s.prepQuery(fmt.Sprintf("SELECT uid, name, status, payload, origin, created_at, trace_uid FROM %v WHERE saga_uid=? ORDER BY created_at;", sagaHistoryTableName)), sagaId)
 
 	if err != nil {
 		return nil, errors.Wrapf(err, "querying events for saga %s", sagaId)

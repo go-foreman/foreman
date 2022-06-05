@@ -3,6 +3,8 @@ package saga
 import (
 	"testing"
 
+	sagaSql "github.com/go-foreman/foreman/saga/sql"
+
 	"github.com/go-foreman/foreman/pubsub/message"
 	"github.com/go-foreman/foreman/runtime/scheme"
 	"github.com/go-foreman/foreman/saga"
@@ -27,7 +29,7 @@ func (p *pgStoreTest) TestPGStore() {
 	schemeRegistry.AddKnownTypes(testGroup, &WorkflowSaga{})
 	schemeRegistry.AddKnownTypes(testGroup, &FilterSaga{})
 	marshaller := message.NewJsonMarshaller(schemeRegistry)
-	pgStore, err := saga.NewSQLSagaStore(p.Connection(), saga.PGDriver, marshaller)
+	pgStore, err := saga.NewSQLSagaStore(sagaSql.NewDB(p.Connection()), saga.PGDriver, marshaller)
 
 	require.NoError(t, err)
 	require.NotNil(t, pgStore)

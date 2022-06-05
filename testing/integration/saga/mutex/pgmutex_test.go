@@ -5,6 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-foreman/foreman/log"
+	sagaSql "github.com/go-foreman/foreman/saga/sql"
+
 	"github.com/go-foreman/foreman/saga"
 	"github.com/go-foreman/foreman/saga/mutex"
 	intSuite "github.com/go-foreman/foreman/testing/integration/saga/suite"
@@ -34,14 +37,15 @@ func (m *pgMutexTest) TestMutexStore() {
 
 		id := "555"
 
-		assert.NoError(t, pgMutex.Lock(ctx, id))
-		assert.NoError(t, pgMutex.Release(ctx, id))
+		lock, err := pgMutex.Lock(ctx, id)
+		assert.NoError(t, err)
+		assert.NoError(t, lock.Release(ctx))
 
-		_, err := m.Connection().ExecContext(ctx, "SELECT pg_advisory_unlock($1);", id)
+		_, err = m.Connection().ExecContext(ctx, "SELECT pg_advisory_unlock($1);", id)
 		assert.NoError(t, err)
 	})
 }
 
 func (m *pgMutexTest) createMutexService() mutex.Mutex {
-	return mutex.NewSqlMutex(m.Connection(), saga.PGDriver)
+	return mutex.NewSqlMutex(sagaSql.NewDB(m.Connection()), saga.PGDriver, log.NewNilLogger())
 }

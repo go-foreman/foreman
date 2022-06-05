@@ -4,37 +4,46 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"sync"
+
+	"github.com/go-foreman/foreman/log"
 
 	"github.com/go-foreman/foreman/saga"
+	sagaSql "github.com/go-foreman/foreman/saga/sql"
 
 	"github.com/pkg/errors"
 )
 
+type sqlLock struct {
+	releaseFunc func(context.Context) error
+}
+
+func (l *sqlLock) Release(ctx context.Context) error {
+	return l.releaseFunc(ctx)
+}
+
 type mysqlMutex struct {
-	db          *sql.DB
-	mapLock     sync.Mutex
-	connections map[string]*sql.Conn
+	db     *sagaSql.DB
+	logger log.Logger
 }
 
-func NewSqlMutex(db *sql.DB, driver saga.SQLDriver) Mutex {
+func NewSqlMutex(db *sagaSql.DB, driver saga.SQLDriver, logger log.Logger) Mutex {
 	if driver == saga.MYSQLDriver {
-		return &mysqlMutex{db: db, connections: make(map[string]*sql.Conn)}
+		return &mysqlMutex{db: db, logger: logger}
 	}
-	return &pgsqlMutex{db: db, connections: make(map[string]*sql.Conn)}
+	return &pgsqlMutex{db: db, logger: logger}
 }
 
-func (m *mysqlMutex) Lock(ctx context.Context, sagaId string) error {
-	conn, err := m.db.Conn(ctx)
+func (m *mysqlMutex) Lock(ctx context.Context, sagaId string) (Lock, error) {
+	conn, err := m.db.Conn(ctx, sagaId, true)
 
 	if err != nil {
-		return WithMutexErr(errors.Wrapf(err, "obtaining a connection from pool for saga %s", sagaId))
+		return nil, WithMutexErr(errors.Wrapf(err, "obtaining a connection from pool for saga %s", sagaId))
 	}
 
 	r := sql.NullInt64{}
 	if err := conn.QueryRowContext(ctx, "SELECT GET_LOCK(?, -1);", sagaId).Scan(&r); err != nil {
-		closingErr := conn.Close()
-		return WithMutexErr(errors.Wrapf(err, "acquiring lock for saga %s. %s", sagaId, closingErr))
+		closingErr := conn.Close(true)
+		return nil, WithMutexErr(errors.Wrapf(err, "acquiring lock for saga %s. %s", sagaId, closingErr))
 	}
 
 	/*
@@ -44,42 +53,33 @@ func (m *mysqlMutex) Lock(ctx context.Context, sagaId string) error {
 	*/
 	if r.Int64 == 1 {
 		//we lock map here because GET_LOCK allows us to acquire a lock, other clients won't be able to pass that point.
-		m.mapLock.Lock()
-		defer m.mapLock.Unlock()
-
-		m.connections[sagaId] = conn
-
-		return nil
+		return &sqlLock{
+			releaseFunc: func(ctx context.Context) error {
+				return m.release(ctx, conn, sagaId)
+			},
+		}, nil
 	}
 
-	closingErr := conn.Close()
+	closingErr := conn.Close(true)
 
-	return WithMutexErr(errors.Errorf("Got 0 when acquiring lock for saga %s. %s", sagaId, closingErr))
+	return nil, WithMutexErr(errors.Errorf("Got 0 when acquiring lock for saga %s. %s", sagaId, closingErr))
 }
 
-func (m *mysqlMutex) Release(ctx context.Context, sagaId string) error {
-	m.mapLock.Lock()
-	conn, exists := m.connections[sagaId]
-	if !exists {
-		m.mapLock.Unlock()
-		return WithMutexErr(errors.Errorf("connection which acquiring lock is not found in runtime map. Was Release() called after processing a message?"))
-	}
-
+func (m *mysqlMutex) release(ctx context.Context, conn *sagaSql.Conn, sagaId string) error {
 	r := sql.NullInt64{}
 	if err := conn.QueryRowContext(ctx, "SELECT RELEASE_LOCK(?);", sagaId).Scan(&r); err != nil {
-		closingErr := conn.Close()
+		closingErr := conn.Close(true)
 		return WithMutexErr(errors.Wrapf(err, "releasing lock for saga %s. %s", sagaId, closingErr))
 	}
 
-	if r.Int64 != 1 {
-		closingErr := conn.Close()
+	// Returns 1 if the lock was released, 0 if the lock was not established by this thread (in which case the lock is not released),
+	// and NULL if the named lock did not exist. The lock does not exist if it was never obtained by a call to GET_LOCK() or if it has previously been released.
+	if r.Int64 != 1 || !r.Valid {
+		closingErr := conn.Close(true)
 		return WithMutexErr(errors.Errorf("lock was not established by this thread for saga %s. %s", sagaId, closingErr))
 	}
 
-	delete(m.connections, sagaId)
-	m.mapLock.Unlock()
-
-	if err := conn.Close(); err != nil {
+	if err := conn.Close(true); err != nil {
 		return WithMutexErr(errors.Wrapf(err, "closing connection for saga's %s mutex", sagaId))
 	}
 
@@ -87,14 +87,13 @@ func (m *mysqlMutex) Release(ctx context.Context, sagaId string) error {
 }
 
 type pgsqlMutex struct {
-	db          *sql.DB
-	mapLock     sync.Mutex
-	connections map[string]*sql.Conn
+	db     *sagaSql.DB
+	logger log.Logger
 }
 
-func (p *pgsqlMutex) Lock(ctx context.Context, sagaId string) error {
+func (p *pgsqlMutex) Lock(ctx context.Context, sagaId string) (Lock, error) {
 	var (
-		conn *sql.Conn
+		conn *sagaSql.Conn
 		err  error
 	)
 
@@ -109,10 +108,10 @@ func (p *pgsqlMutex) Lock(ctx context.Context, sagaId string) error {
 
 	// I'll create an issue and try to investigate into this bug
 	for i := 0; i < retries; i++ {
-		conn, err = p.db.Conn(ctx)
+		conn, err = p.db.Conn(ctx, sagaId, true)
 
 		if err != nil {
-			return WithMutexErr(errors.Wrapf(err, "obtaining a connection from pool for saga %s", sagaId))
+			return nil, WithMutexErr(errors.Wrapf(err, "obtaining a connection from pool for saga %s", sagaId))
 		}
 
 		if err := conn.PingContext(ctx); err != nil {
@@ -127,37 +126,26 @@ func (p *pgsqlMutex) Lock(ctx context.Context, sagaId string) error {
 	if _, err := conn.ExecContext(ctx, `SELECT pg_advisory_lock(hashtext($1));`, sagaId); err != nil {
 		errMsg := fmt.Sprintf("acquiring lock for saga %s. %s", sagaId, err)
 
-		if closingErr := conn.Close(); closingErr != nil {
+		if closingErr := conn.Close(true); closingErr != nil {
 			errMsg = fmt.Sprintf("%s. also failed to close connection %s", errMsg, closingErr.Error())
 		}
-		return WithMutexErr(errors.New(errMsg))
+		return nil, WithMutexErr(errors.New(errMsg))
 	}
 
-	p.mapLock.Lock()
-	defer p.mapLock.Unlock()
-
-	p.connections[sagaId] = conn
-
-	return nil
+	return &sqlLock{
+		releaseFunc: func(ctx context.Context) error {
+			return p.release(ctx, conn, sagaId)
+		},
+	}, nil
 }
 
-func (p *pgsqlMutex) Release(ctx context.Context, sagaId string) error {
-	p.mapLock.Lock()
-	defer p.mapLock.Unlock()
-
-	conn, exists := p.connections[sagaId]
-	if !exists {
-		return WithMutexErr(errors.Errorf("connection which acquiring lock is not found in runtime map. Was Release() called after processing a message?"))
-	}
-
+func (p *pgsqlMutex) release(ctx context.Context, conn *sagaSql.Conn, sagaId string) error {
 	if _, err := conn.ExecContext(ctx, "SELECT pg_advisory_unlock(hashtext($1));", sagaId); err != nil {
-		closingErr := conn.Close()
+		closingErr := conn.Close(true)
 		return WithMutexErr(errors.Wrapf(err, "releasing lock for saga %s. %s", sagaId, closingErr))
 	}
 
-	delete(p.connections, sagaId)
-
-	if err := conn.Close(); err != nil {
+	if err := conn.Close(true); err != nil {
 		return WithMutexErr(errors.Wrapf(err, "closing mutex connection of saga %s", sagaId))
 	}
 

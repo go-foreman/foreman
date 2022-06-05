@@ -10,7 +10,7 @@ import (
 
 	"github.com/go-foreman/foreman/pubsub/transport"
 	"github.com/pkg/errors"
-	"github.com/streadway/amqp"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 func NewTransport(url string, logger log.Logger) transport.Transport {
@@ -65,7 +65,7 @@ func (t *amqpTransport) CreateTopic(ctx context.Context, topic transport.Topic) 
 		return errors.Errorf("Supplied topic is not an instance of amqp.Topic")
 	}
 
-	err := t.publishingChannel.ExchangeDeclare(
+	if err := t.publishingChannel.ExchangeDeclare(
 		amqpTopic.Name(),
 		"topic",
 		amqpTopic.durable,
@@ -73,8 +73,7 @@ func (t *amqpTransport) CreateTopic(ctx context.Context, topic transport.Topic) 
 		amqpTopic.internal,
 		amqpTopic.noWait,
 		nil,
-	)
-	if err != nil {
+	); err != nil {
 		return errors.WithStack(err)
 	}
 
@@ -104,27 +103,25 @@ func (t *amqpTransport) CreateQueue(ctx context.Context, q transport.Queue, qbs 
 		queueBinds = append(queueBinds, queueBind)
 	}
 
-	_, err := t.publishingChannel.QueueDeclare(
+	if _, err := t.publishingChannel.QueueDeclare(
 		queue.Name(),
 		queue.durable,
 		queue.autoDelete,
 		queue.exclusive,
 		queue.noWait,
 		nil,
-	)
-	if err != nil {
+	); err != nil {
 		return errors.WithStack(err)
 	}
 
 	for _, qb := range queueBinds {
-		err := t.publishingChannel.QueueBind(
+		if err := t.publishingChannel.QueueBind(
 			queue.Name(),
 			qb.BindingKey(),
 			qb.DestinationTopic(),
 			qb.noWait,
 			nil,
-		)
-		if err != nil {
+		); err != nil {
 			return errors.WithStack(err)
 		}
 	}

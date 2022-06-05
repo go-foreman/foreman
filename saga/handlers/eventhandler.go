@@ -41,20 +41,25 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 	}
 
 	//lock saga so nobody can process events for this saga in another consumer's replicas
-	if err := e.mutex.Lock(ctx, sagaId); err != nil {
+	lock, err := e.mutex.Lock(ctx, sagaId)
+	if err != nil {
 		return errors.WithStack(err)
 	}
+
+	e.logger.Logf(log.DebugLevel, "locked saga %s", sagaId)
 
 	defer func() {
 		releaseCtx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 		defer cancel()
 
-		if err := e.mutex.Release(releaseCtx, sagaId); err != nil {
+		if err := lock.Release(releaseCtx); err != nil {
 			e.logger.Log(log.ErrorLevel, err)
 		}
+		e.logger.Logf(log.DebugLevel, "released saga %s", sagaId)
 	}()
 
 	sagaInstance, err := e.sagaStore.GetById(ctx, sagaId)
+	e.logger.Logf(log.DebugLevel, "loaded saga %s", sagaId)
 
 	if err != nil {
 		return errors.Wrapf(err, "Error retrieving saga %s from store", sagaId)

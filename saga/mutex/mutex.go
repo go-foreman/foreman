@@ -12,7 +12,10 @@ func WithMutexErr(err error) error {
 	return MutexErr{err}
 }
 
+type Lock interface {
+	Release(ctx context.Context) error
+}
+
 type Mutex interface {
-	Lock(ctx context.Context, sagaId string) error
-	Release(ctx context.Context, sagaId string) error
+	Lock(ctx context.Context, sagaId string) (Lock, error)
 }

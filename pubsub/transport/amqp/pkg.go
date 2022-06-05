@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/go-foreman/foreman/pubsub/transport"
-	"github.com/streadway/amqp"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 type inAmqpPkg struct {
