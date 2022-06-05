@@ -13,6 +13,7 @@ func DefaultLogger() Logger {
 
 type defaultLogger struct {
 	internalLogger *log.Logger
+	level          Level
 }
 
 func (l defaultLogger) Log(level Level, v ...interface{}) {
@@ -26,8 +27,10 @@ func (l defaultLogger) Log(level Level, v ...interface{}) {
 		return
 	}
 
-	if err := l.internalLogger.Output(3, fmt.Sprint(v...)); err != nil {
-		l.internalLogger.Println(fmt.Sprintf("err logging an entry: %s. %s", err, v))
+	if level <= l.level {
+		if err := l.internalLogger.Output(3, fmt.Sprint(v...)); err != nil {
+			l.internalLogger.Println(fmt.Sprintf("err logging an entry: %s. %s", err, v))
+		}
 	}
 }
 
@@ -35,5 +38,18 @@ func (l defaultLogger) Logf(level Level, template string, args ...interface{}) {
 	l.Log(level, fmt.Sprintf(template, args...))
 }
 
-func (l defaultLogger) SetLevel(level Level) {
+func (l *defaultLogger) SetLevel(level Level) {
+	l.level = level
+
+	l.internalLogger.SetPrefix(fmt.Sprintf("[messagebus] %s ", levelNames[level]))
+}
+
+var levelNames = map[Level]string{
+	PanicLevel: "panic",
+	FatalLevel: "fatal",
+	ErrorLevel: "error",
+	WarnLevel:  "warn",
+	InfoLevel:  "info",
+	DebugLevel: "debug",
+	TraceLevel: "trace",
 }

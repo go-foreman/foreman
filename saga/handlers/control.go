@@ -30,7 +30,6 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 	var (
 		sagaInstance sagaPkg.Instance
 		sagaCtx      sagaPkg.SagaContext
-		err          error
 	)
 
 	ctx := execCtx.Context()
@@ -38,6 +37,19 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 
 	switch cmd := msg.Payload().(type) {
 	case *contracts.StartSagaCommand:
+		h.logger.Logf(log.DebugLevel, "creating saga %s", cmd.SagaUID)
+
+		lock, err := h.mutex.Lock(ctx, cmd.SagaUID)
+		if err != nil {
+			return errors.Wrap(err, "locking saga")
+		}
+
+		defer func() {
+			if err := lock.Release(ctx); err != nil {
+				h.logger.Log(log.ErrorLevel, err)
+			}
+		}()
+
 		sagaInstance, err = h.createSaga(cmd)
 		if err != nil {
 			return errors.WithStack(err)
@@ -47,6 +59,8 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 			return errors.Wrapf(err, "saving created saga `%s` with id %s to store", cmd.Saga.GroupKind().String(), cmd.SagaUID)
 		}
 
+		h.logger.Logf(log.DebugLevel, "saga %s created in store", cmd.SagaUID)
+
 		sagaCtx = sagaPkg.NewSagaCtx(execCtx, sagaInstance)
 
 		if err := sagaInstance.Start(sagaCtx); err != nil {
@@ -54,12 +68,13 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 		}
 
 	case *contracts.RecoverSagaCommand:
-		if err := h.mutex.Lock(ctx, cmd.SagaUID); err != nil {
-			return errors.WithStack(err)
+		lock, err := h.mutex.Lock(ctx, cmd.SagaUID)
+		if err != nil {
+			return errors.Wrap(err, "locking saga")
 		}
 
 		defer func() {
-			if err := h.mutex.Release(ctx, cmd.SagaUID); err != nil {
+			if err := lock.Release(ctx); err != nil {
 				h.logger.Log(log.ErrorLevel, err)
 			}
 		}()
@@ -82,12 +97,13 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 		}
 
 	case *contracts.CompensateSagaCommand:
-		if err := h.mutex.Lock(ctx, cmd.SagaUID); err != nil {
-			return errors.WithStack(err)
+		lock, err := h.mutex.Lock(ctx, cmd.SagaUID)
+		if err != nil {
+			return errors.Wrap(err, "locking saga")
 		}
 
 		defer func() {
-			if err := h.mutex.Release(ctx, cmd.SagaUID); err != nil {
+			if err := lock.Release(ctx); err != nil {
 				h.logger.Log(log.ErrorLevel, err)
 			}
 		}()

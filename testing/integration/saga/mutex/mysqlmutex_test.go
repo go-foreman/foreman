@@ -6,6 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-foreman/foreman/log"
+	sagaSql "github.com/go-foreman/foreman/saga/sql"
+
 	"github.com/go-foreman/foreman/saga"
 	"github.com/go-foreman/foreman/saga/mutex"
 	intSuite "github.com/go-foreman/foreman/testing/integration/saga/suite"
@@ -35,8 +38,9 @@ func (m *mysqlMutexTest) TestMysqlMutexStore() {
 
 		id := "555"
 
-		assert.NoError(t, mysqlMutex.Lock(ctx, id))
-		assert.NoError(t, mysqlMutex.Release(ctx, id))
+		lock, err := mysqlMutex.Lock(ctx, id)
+		assert.NoError(t, err)
+		assert.NoError(t, lock.Release(ctx))
 
 		r := sql.NullInt64{}
 		assert.NoError(t, m.Connection().QueryRowContext(ctx, "SELECT RELEASE_LOCK(?);", id).Scan(&r))
@@ -46,5 +50,5 @@ func (m *mysqlMutexTest) TestMysqlMutexStore() {
 }
 
 func (m *mysqlMutexTest) createMutexService() mutex.Mutex {
-	return mutex.NewSqlMutex(m.Connection(), saga.MYSQLDriver)
+	return mutex.NewSqlMutex(sagaSql.NewDB(m.Connection()), saga.MYSQLDriver, log.NewNilLogger())
 }

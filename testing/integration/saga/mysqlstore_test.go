@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	sagaSql "github.com/go-foreman/foreman/saga/sql"
+
 	"github.com/go-foreman/foreman/pubsub/message"
 	"github.com/go-foreman/foreman/runtime/scheme"
 	"github.com/go-foreman/foreman/saga"
@@ -37,7 +39,7 @@ func (m *mysqlStoreTest) TestMysqlStore() {
 	schemeRegistry := scheme.NewKnownTypesRegistry()
 	schemeRegistry.AddKnownTypes(testGroup, &WorkflowSaga{})
 	schemeRegistry.AddKnownTypes(testGroup, &FilterSaga{})
-	store, err := saga.NewSQLSagaStore(m.Connection(), saga.MYSQLDriver, message.NewJsonMarshaller(schemeRegistry))
+	store, err := saga.NewSQLSagaStore(sagaSql.NewDB(m.Connection()), saga.MYSQLDriver, message.NewJsonMarshaller(schemeRegistry))
 
 	require.NoError(t, err)
 	require.NotNil(t, store)
