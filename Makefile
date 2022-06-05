@@ -24,7 +24,7 @@ tools:
 	go install github.com/vektra/mockery/v2@latest
 	go install github.com/sonatype-nexus-community/nancy@latest
 	## using wget because go get is not working for 1.40.1
-	wget -O- -nv https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | BINDIR=${GOPATH}/bin sh -s v1.40.1
+	wget -O- -nv https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | BINDIR=${GOPATH}/bin sh -s v1.46.2
 
 .PHONY: docker-start
 docker-start:
