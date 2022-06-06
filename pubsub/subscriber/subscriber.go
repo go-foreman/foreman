@@ -111,21 +111,18 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 
 	defer scheduleTicker.Stop()
 
-	stopProcessing := false
-
-	for !stopProcessing {
+	for {
 		select {
 		case <-consumerCtx.Done():
 			s.logger.Logf(log.InfoLevel, "Subscriber's context was canceled")
-			stopProcessing = true
+			return nil
 		case <-signalChan:
 			s.logger.Logf(log.InfoLevel, "Received kill signal")
-			stopProcessing = true
+			return nil
 		case worker, open := <-s.workerDispatcher.queue():
 			if !open {
 				s.logger.Logf(log.InfoLevel, "worker's channel is stopProcessing")
-				stopProcessing = true
-				break
+				return nil
 			}
 
 			select {
@@ -135,15 +132,12 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 				break
 			case incomingPkg, open := <-consumedPkgs:
 				if !open {
-					stopProcessing = true
-					break
+					return nil
 				}
 				worker <- newTaskProcessPkg(ctx, incomingPkg, s, s.logger)
 			}
 		}
 	}
-
-	return nil
 }
 
 func (s *subscriber) processPackage(ctx context.Context, inPkg transport.IncomingPkg) {
