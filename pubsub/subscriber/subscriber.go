@@ -96,6 +96,7 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 	consumerCtx, cancelConsumerCtx := context.WithCancel(ctx)
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), s.config.GracefulShutdownTimeout)
 	defer shutdownCancel()
+	defer s.gracefulShutdown(shutdownCtx)
 	defer cancelConsumerCtx()
 
 	consumedPkgs, err := s.transport.Consume(consumerCtx, queues, amqp.WithQosPrefetchCount(s.config.WorkersCount))
@@ -142,11 +143,6 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 		}
 	}
 
-	if err := s.gracefulShutdown(shutdownCtx); err != nil {
-		s.logger.Logf(log.ErrorLevel, "error stopping subscriber gracefully %s", err)
-		return errors.Wrapf(err, "stopping subscriber gracefully")
-	}
-
 	return nil
 }
 
@@ -170,7 +166,7 @@ func (s *subscriber) processPackage(ctx context.Context, inPkg transport.Incomin
 	s.logger.Logf(log.DebugLevel, "acked package id %s", inPkg.UID())
 }
 
-func (s *subscriber) gracefulShutdown(ctx context.Context) error {
+func (s *subscriber) gracefulShutdown(ctx context.Context) {
 	if s.workerDispatcher.busyWorkers() > 0 {
 		s.logger.Logf(log.InfoLevel, "Graceful shutdown. Waiting subscriber for finishing %d tasks in progress", s.workerDispatcher.busyWorkers())
 	}
@@ -182,15 +178,13 @@ func (s *subscriber) gracefulShutdown(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			s.logger.Logf(log.WarnLevel, "Stopped subscriber because of canceled parent ctx")
-			return nil
+			return
 		case <-waitingTicker.C:
 			s.logger.Logf(log.InfoLevel, "Waiting for processor to finish all remaining tasks in a queue. Tasks in progress: %d", s.workerDispatcher.busyWorkers())
 		}
 	}
 
 	s.logger.Logf(log.InfoLevel, "All tasks are finished.")
-
-	return nil
 }
 
 type processPkg struct {
