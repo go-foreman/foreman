@@ -10,7 +10,8 @@ import (
 )
 
 const (
-	delay          = 3 // reconnect after delay seconds
+	fetchDelay     = time.Millisecond * 500 // check if there are new messages in queue every fetchDelay period
+	reconnectDelay = time.Second * 3        // reconnect after reconnectDelay period
 	reconnectCount = 10
 )
 
@@ -45,7 +46,7 @@ func (c *Connection) Channel() (*Channel, error) {
 			// reconnect if not closed by developer
 			for {
 				// wait 1s for connection reconnect
-				time.Sleep(delay * time.Second)
+				time.Sleep(reconnectDelay)
 
 				ch, err := c.Connection.Channel()
 				if err == nil {
@@ -91,13 +92,14 @@ func (ch *Channel) Consume(ctx context.Context, queue, consumer string, autoAck,
 	deliveries := make(chan amqp.Delivery)
 
 	var reconnectedCount uint
+	var consumingStopped bool
 
 	go func() {
-		for {
+		for !consumingStopped {
 			d, err := ch.Channel.Consume(queue, consumer, autoAck, exclusive, noLocal, noWait, args)
 			if err != nil {
 				ch.logger.Logf(log.ErrorLevel, "consume failed, err: %v", err)
-				time.Sleep(delay * time.Second)
+				time.Sleep(reconnectDelay)
 				if reconnectedCount > reconnectCount {
 					ch.logger.Logf(log.FatalLevel, "Reached limit of reconnects %d", reconnectCount)
 				}
@@ -105,26 +107,26 @@ func (ch *Channel) Consume(ctx context.Context, queue, consumer string, autoAck,
 				continue
 			}
 
-			for msg := range d {
-				deliveries <- msg
-			}
-
-			// sleep before IsClose call. closed flag may not set before sleep.
-
-			if ch.IsClosed() {
-				break
-			}
-
-			done := false
-			select {
-			case <-ctx.Done():
-				done = true
-			default:
-				time.Sleep(delay * time.Second)
-			}
-
-			if done {
-				break
+			var fetchingStopped bool
+			for !fetchingStopped {
+				select {
+				case msg, closed := <-d:
+					if closed {
+						fetchingStopped = true
+						time.Sleep(reconnectDelay)
+						// sleep before IsClose call. closed flag may not set before sleep.
+						if ch.IsClosed() {
+							consumingStopped = true
+						}
+					} else {
+						deliveries <- msg
+					}
+				case <-ctx.Done():
+					fetchingStopped = true
+					consumingStopped = true
+				default:
+					time.Sleep(fetchDelay)
+				}
 			}
 		}
 	}()
@@ -159,7 +161,7 @@ func Dial(url string, logger log.Logger) (*Connection, error) {
 			// reconnect if not closed by developer
 			for {
 				// wait 1s for reconnect
-				time.Sleep(delay * time.Second)
+				time.Sleep(reconnectDelay * time.Second)
 
 				if reconnectedCount > reconnectCount {
 					logger.Logf(log.FatalLevel, "Reached limit of reconnects %d", reconnectCount)
