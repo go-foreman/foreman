@@ -121,7 +121,7 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 			return nil
 		case worker, open := <-s.workerDispatcher.queue():
 			if !open {
-				s.logger.Logf(log.InfoLevel, "worker's channel is stopProcessing")
+				s.logger.Logf(log.InfoLevel, "worker's channel is closed")
 				return nil
 			}
 
@@ -132,6 +132,7 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 				break
 			case incomingPkg, open := <-consumedPkgs:
 				if !open {
+					s.logger.Logf(log.InfoLevel, "consumed package is closed")
 					return nil
 				}
 				worker <- newTaskProcessPkg(ctx, incomingPkg, s, s.logger)
