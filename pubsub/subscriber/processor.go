@@ -56,9 +56,11 @@ func (p *processor) Process(ctx context.Context, inPkg transport.IncomingPkg) er
 		return WithNoExecutorsDefinedErr(errors.New(errMsg))
 	}
 
-	childCtx := context.WithValue(ctx, ContextTraceIDKey, receivedMsg.TraceID())
+	if traceID := receivedMsg.TraceID(); traceID != "" {
+		ctx = context.WithValue(ctx, ContextTraceIDKey, traceID)
+	}
 
-	execCtx := p.msgExecCtxFactory.CreateCtx(childCtx, inPkg, receivedMsg)
+	execCtx := p.msgExecCtxFactory.CreateCtx(ctx, inPkg, receivedMsg)
 
 	for _, exec := range executors {
 		if err := exec(execCtx); err != nil {
