@@ -17,10 +17,8 @@ import (
 
 // Subscriber starts listening for queues and processes messages
 type Subscriber interface {
-	// Run listens queues for packages and processes them. Gracefully shuts down either on os.Signal or ctx.Done() or Stop()
+	// Run listens queues for packages and processes them. Gracefully shuts down either on os.Signal or ctx.Done()
 	Run(ctx context.Context, queues ...transport.Queue) error
-	// Stop gracefully stops subscriber and calls transport.Disconnect().
-	Stop(ctx context.Context) error
 }
 
 // Config allows to configure subscriber workflow
@@ -144,7 +142,7 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 		}
 	}
 
-	if err := s.Stop(shutdownCtx); err != nil {
+	if err := s.gracefulShutdown(shutdownCtx); err != nil {
 		s.logger.Logf(log.ErrorLevel, "error stopping subscriber gracefully %s", err)
 		return errors.Wrapf(err, "stopping subscriber gracefully")
 	}
@@ -172,7 +170,7 @@ func (s *subscriber) processPackage(ctx context.Context, inPkg transport.Incomin
 	s.logger.Logf(log.DebugLevel, "acked package id %s", inPkg.UID())
 }
 
-func (s *subscriber) Stop(ctx context.Context) error {
+func (s *subscriber) gracefulShutdown(ctx context.Context) error {
 	if s.workerDispatcher.busyWorkers() > 0 {
 		s.logger.Logf(log.InfoLevel, "Graceful shutdown. Waiting subscriber for finishing %d tasks in progress", s.workerDispatcher.busyWorkers())
 	}
