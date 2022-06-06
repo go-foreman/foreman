@@ -1,7 +1,6 @@
 package amqp
 
 import (
-	"context"
 	"sync/atomic"
 	"time"
 
@@ -10,8 +9,7 @@ import (
 )
 
 const (
-	fetchDelay     = time.Millisecond * 500 // check if there are new messages in queue every fetchDelay period
-	reconnectDelay = time.Second * 3        // reconnect after reconnectDelay period
+	delay          = 3 // reconnect after delay seconds
 	reconnectCount = 10
 )
 
@@ -46,7 +44,7 @@ func (c *Connection) Channel() (*Channel, error) {
 			// reconnect if not closed by developer
 			for {
 				// wait 1s for connection reconnect
-				time.Sleep(reconnectDelay)
+				time.Sleep(delay * time.Second)
 
 				ch, err := c.Connection.Channel()
 				if err == nil {
@@ -88,18 +86,17 @@ func (ch *Channel) Close() error {
 }
 
 // Consume warp amqp.Channel.Consume, the returned delivery will end only when channel closed by developer
-func (ch *Channel) Consume(ctx context.Context, queue, consumer string, autoAck, exclusive, noLocal, noWait bool, args amqp.Table) (<-chan amqp.Delivery, error) {
+func (ch *Channel) Consume(queue, consumer string, autoAck, exclusive, noLocal, noWait bool, args amqp.Table) (<-chan amqp.Delivery, error) {
 	deliveries := make(chan amqp.Delivery)
 
 	var reconnectedCount uint
-	var consumingStopped bool
 
 	go func() {
-		for !consumingStopped {
+		for {
 			d, err := ch.Channel.Consume(queue, consumer, autoAck, exclusive, noLocal, noWait, args)
 			if err != nil {
 				ch.logger.Logf(log.ErrorLevel, "consume failed, err: %v", err)
-				time.Sleep(reconnectDelay)
+				time.Sleep(delay * time.Second)
 				if reconnectedCount > reconnectCount {
 					ch.logger.Logf(log.FatalLevel, "Reached limit of reconnects %d", reconnectCount)
 				}
@@ -107,26 +104,15 @@ func (ch *Channel) Consume(ctx context.Context, queue, consumer string, autoAck,
 				continue
 			}
 
-			var fetchingStopped bool
-			for !fetchingStopped {
-				select {
-				case msg, closed := <-d:
-					if closed {
-						fetchingStopped = true
-						time.Sleep(reconnectDelay)
-						// sleep before IsClose call. closed flag may not set before sleep.
-						if ch.IsClosed() {
-							consumingStopped = true
-						}
-					} else {
-						deliveries <- msg
-					}
-				case <-ctx.Done():
-					fetchingStopped = true
-					consumingStopped = true
-				default:
-					time.Sleep(fetchDelay)
-				}
+			for msg := range d {
+				deliveries <- msg
+			}
+
+			// sleep before IsClose call. closed flag may not set before sleep.
+			time.Sleep(delay * time.Second)
+
+			if ch.IsClosed() {
+				break
 			}
 		}
 	}()
@@ -161,7 +147,7 @@ func Dial(url string, logger log.Logger) (*Connection, error) {
 			// reconnect if not closed by developer
 			for {
 				// wait 1s for reconnect
-				time.Sleep(reconnectDelay * time.Second)
+				time.Sleep(delay * time.Second)
 
 				if reconnectedCount > reconnectCount {
 					logger.Logf(log.FatalLevel, "Reached limit of reconnects %d", reconnectCount)

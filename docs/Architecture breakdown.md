@@ -55,17 +55,15 @@ This package is a main running process of the Foreman. Interface is fairly simpl
 
 ```go
 type Subscriber interface {
-   // Run listens queues for packages and processes them. Gracefully shuts down either on os.Signal or ctx.Done() or Stop()
+   // Run listens queues for packages and processes them. Gracefully shuts down either on os.Signal or ctx.Done()
 	Run(ctx context.Context, queues ...transport.Queue) error
-	// Stop gracefully stops subscriber and calls transport.Disconnect().
-	Stop(ctx context.Context) error
 }
 ```
 
 In default implementation `Run` method uses transport to consume packages from queues, then schedules one of concurrent workers from a pool to work on a received package. Each worker is a goroutine that is managed by pool's dispatcher. `Subscriber` blocks and waits for a free worker If all of them are busy. 
 
 <aside>
-💡 Interesting moment here: a worker waits for a message, not backwards. There could be a case when the message received, but no workers were available till `Stop`.  So this message couldn't have been processed, but was received, not processed and not acknowledged.
+💡 Interesting moment here: a worker waits for a message, not backwards. There could be a case when the message received, but no workers were available till subscriber is stopped.  So this message couldn't have been processed, but was received, not processed and not acknowledged.
 
 </aside>
 
