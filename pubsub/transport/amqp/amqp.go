@@ -25,7 +25,6 @@ type amqpTransport struct {
 	connection        *Connection
 	publishingChannel *Channel
 	logger            log.Logger
-	consumingChannel  *Channel
 }
 
 func (t *amqpTransport) Connect(ctx context.Context) error {
@@ -40,15 +39,8 @@ func (t *amqpTransport) Connect(ctx context.Context) error {
 		return errors.WithStack(err)
 	}
 
-	consumingChannel, err := conn.Channel()
-
-	if err != nil {
-		return errors.WithStack(err)
-	}
-
 	t.connection = conn
 	t.publishingChannel = publishingChannel
-	t.consumingChannel = consumingChannel
 
 	return nil
 }
@@ -165,6 +157,11 @@ func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, o
 		return nil, errors.WithStack(err)
 	}
 
+	consumingChannel, err := t.connection.Channel()
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
 	consumeOptions := &ConsumeOptions{}
 
 	for _, opt := range options {
@@ -174,7 +171,7 @@ func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, o
 	}
 
 	if consumeOptions.PrefetchCount > 0 {
-		if err := t.consumingChannel.Qos(int(consumeOptions.PrefetchCount), 0, false); err != nil {
+		if err := consumingChannel.Qos(int(consumeOptions.PrefetchCount), 0, false); err != nil {
 			return nil, errors.WithStack(err)
 		}
 	}
@@ -190,13 +187,16 @@ func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, o
 
 			defer func() {
 				t.logger.Logf(log.InfoLevel, "canceling consumer %s", queue.Name())
-				if err := t.consumingChannel.Cancel(queue.Name(), true); err != nil {
+				if err := consumingChannel.Cancel(queue.Name(), true); err != nil {
 					t.logger.Logf(log.ErrorLevel, "error canceling consumer %s", err)
+				}
+				if err := consumingChannel.Close(); err != nil {
+					t.logger.Logf(log.ErrorLevel, "error closing amqp channel", err)
 				}
 				t.logger.Logf(log.InfoLevel, "canceled consumer %s", queue.Name())
 			}()
 
-			msgs, err := t.consumingChannel.Consume(
+			msgs, err := consumingChannel.Consume(
 				queue.Name(),
 				queue.Name(),
 				false,
@@ -238,16 +238,12 @@ func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, o
 }
 
 func (t *amqpTransport) Disconnect(ctx context.Context) error {
-	if t.connection == nil || t.publishingChannel == nil || t.consumingChannel == nil {
+	if t.connection == nil || t.publishingChannel == nil {
 		return nil
 	}
 
 	if err := t.publishingChannel.Close(); err != nil {
 		return errors.Wrap(err, "error closing publishing channel")
-	}
-
-	if err := t.consumingChannel.Close(); err != nil {
-		return errors.Wrap(err, "error closing consuming channel")
 	}
 
 	if err := t.connection.Close(); err != nil {
