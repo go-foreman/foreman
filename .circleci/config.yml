@@ -61,8 +61,6 @@ jobs:
             make integration-test
       - run:
           name: Upload reports to codecov
-          environment:
-            CODECOV_TOKEN: bda85e20-4eff-4789-9e73-03201ba00833
           command: |
             bash <(curl -s https://codecov.io/bash)
       - store_test_results:
