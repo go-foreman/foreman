@@ -14,6 +14,10 @@ import (
 	"github.com/pkg/errors"
 )
 
+const (
+	ContextTraceIDKey = "traceID"
+)
+
 // Processor knows how to process a message received by subscriber
 type Processor interface {
 	Process(ctx context.Context, inPkg transport.IncomingPkg) error
@@ -50,6 +54,10 @@ func (p *processor) Process(ctx context.Context, inPkg transport.IncomingPkg) er
 		errMsg := fmt.Sprintf("No executors defined for message %s %s", receivedMsg.UID(), payload.GroupKind())
 		p.logger.Log(log.ErrorLevel, errMsg)
 		return WithNoExecutorsDefinedErr(errors.New(errMsg))
+	}
+
+	if traceID := receivedMsg.TraceID(); traceID != "" {
+		ctx = context.WithValue(ctx, ContextTraceIDKey, traceID)
 	}
 
 	execCtx := p.msgExecCtxFactory.CreateCtx(ctx, inPkg, receivedMsg)
