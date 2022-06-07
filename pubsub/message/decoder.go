@@ -11,6 +11,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+//go:generate mockgen --build_flags=--mod=mod -destination ../../testing/mocks/pubsub/message/decode.go -package message . Marshaller
+
 type Marshaller interface {
 	// Unmarshal decodes received bytes into original type that must be registered in scheme
 	Unmarshal(b []byte) (Object, error)
@@ -151,7 +153,7 @@ func (j jsonDecoder) Marshal(obj Object) ([]byte, error) {
 	encodingTo := obj
 
 	//todo what if obj has embedded obj with already filled GroupKind? this obj will be marshalled with wrong GK
-	if err := j.setGroupKind(obj); err != nil {
+	if err := j.setGroupKindRecursively(obj); err != nil {
 		return nil, errors.Wrapf(err, "setting GK recursively for %v", obj)
 	}
 
@@ -166,7 +168,7 @@ func (j jsonDecoder) Marshal(obj Object) ([]byte, error) {
 
 var objectType = reflect.TypeOf((*Object)(nil)).Elem()
 
-func (j jsonDecoder) setGroupKind(obj Object) error {
+func (j jsonDecoder) setGroupKindRecursively(obj Object) error {
 	if gk := obj.GroupKind(); gk.Empty() {
 		gk, err := j.knownTypes.ObjectKind(obj)
 		if err != nil {
@@ -186,7 +188,7 @@ func (j jsonDecoder) setGroupKind(obj Object) error {
 				if !ok {
 					return WithDecoderErr(errors.Errorf("converting %s to Object interface", structType.String()))
 				}
-				return j.setGroupKind(next)
+				return j.setGroupKindRecursively(next)
 			}
 		}
 	}

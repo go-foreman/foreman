@@ -24,9 +24,17 @@ const (
 // Level is a type of logs levels
 type Level uint32
 
+//go:generate mockgen --build_flags=--mod=mod -destination ../testing/mocks/log/logger.go -package log . Logger
+
 // Logger interface allows to fit any logger pkg for usage in MessageBus
 type Logger interface {
 	Log(level Level, v ...interface{})
 	Logf(level Level, template string, args ...interface{})
+	WithFields(fields []Field) Logger
 	SetLevel(level Level)
+}
+
+type Field struct {
+	Name string
+	Val  interface{}
 }

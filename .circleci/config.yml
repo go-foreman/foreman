@@ -48,7 +48,7 @@ jobs:
           command: |
             make lint
       - run:
-          name: Check dependencies for vulnaribilties
+          name: Check dependencies for vulnerabilities
           command: |
             make check-mods || true
       - run:
@@ -57,12 +57,10 @@ jobs:
             MYSQL_CONNECTION: foreman:foreman@tcp(127.0.0.1:3306)/foreman?charset=utf8&parseTime=True
             PG_CONNECTION:  postgres://foreman:foreman@127.0.0.1:5432/foreman?sslmode=disable
           command: |
-            make test-report
+            make unit-test
             make integration-test
       - run:
           name: Upload reports to codecov
-          environment:
-            CODECOV_TOKEN: bda85e20-4eff-4789-9e73-03201ba00833
           command: |
             bash <(curl -s https://codecov.io/bash)
       - store_test_results:

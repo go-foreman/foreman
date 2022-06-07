@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"fmt"
 
 	log "github.com/go-foreman/foreman/log"
 	"github.com/go-foreman/foreman/pubsub/message"
@@ -14,15 +13,14 @@ import (
 	"github.com/pkg/errors"
 )
 
-func NewSagaControlHandler(sagaStore sagaPkg.Store, mutex mutex.Mutex, sagaRegistry scheme.KnownTypesRegistry, sagaUIDSvc sagaPkg.SagaUIDService, logger log.Logger) *SagaControlHandler {
-	return &SagaControlHandler{typesRegistry: sagaRegistry, store: sagaStore, mutex: mutex, sagaUIDSvc: sagaUIDSvc, logger: logger}
+func NewSagaControlHandler(sagaStore sagaPkg.Store, mutex mutex.Mutex, sagaRegistry scheme.KnownTypesRegistry, sagaUIDSvc sagaPkg.SagaUIDService) *SagaControlHandler {
+	return &SagaControlHandler{typesRegistry: sagaRegistry, store: sagaStore, mutex: mutex, sagaUIDSvc: sagaUIDSvc}
 }
 
 type SagaControlHandler struct {
 	typesRegistry scheme.KnownTypesRegistry
 	store         sagaPkg.Store
 	mutex         mutex.Mutex
-	logger        log.Logger
 	sagaUIDSvc    sagaPkg.SagaUIDService
 }
 
@@ -34,10 +32,11 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 
 	ctx := execCtx.Context()
 	msg := execCtx.Message()
+	logger := execCtx.Logger()
 
 	switch cmd := msg.Payload().(type) {
 	case *contracts.StartSagaCommand:
-		h.logger.Logf(log.DebugLevel, "creating saga %s", cmd.SagaUID)
+		logger.Logf(log.DebugLevel, "creating saga %s", cmd.SagaUID)
 
 		lock, err := h.mutex.Lock(ctx, cmd.SagaUID)
 		if err != nil {
@@ -46,7 +45,7 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 
 		defer func() {
 			if err := lock.Release(ctx); err != nil {
-				h.logger.Log(log.ErrorLevel, err)
+				execCtx.Logger().Log(log.ErrorLevel, err.Error())
 			}
 		}()
 
@@ -59,7 +58,7 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 			return errors.Wrapf(err, "saving created saga `%s` with id %s to store", cmd.Saga.GroupKind().String(), cmd.SagaUID)
 		}
 
-		h.logger.Logf(log.DebugLevel, "saga %s created in store", cmd.SagaUID)
+		logger.Logf(log.DebugLevel, "saga %s created in store", cmd.SagaUID)
 
 		sagaCtx = sagaPkg.NewSagaCtx(execCtx, sagaInstance)
 
@@ -75,7 +74,7 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 
 		defer func() {
 			if err := lock.Release(ctx); err != nil {
-				h.logger.Log(log.ErrorLevel, err)
+				logger.Log(log.ErrorLevel, err.Error())
 			}
 		}()
 
@@ -86,7 +85,7 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 		}
 
 		if !sagaInstance.Status().Failed() || sagaInstance.Status().Completed() || sagaInstance.Status().Recovering() || sagaInstance.Status().Compensating() {
-			h.logger.Logf(log.InfoLevel, "Saga %s has status %s, you can't start recovering the process", sagaInstance.UID(), sagaInstance.Status())
+			logger.Logf(log.InfoLevel, "Saga %s has status %s, you can't start recovering the process", sagaInstance.UID(), sagaInstance.Status())
 			return nil
 		}
 
@@ -104,7 +103,7 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 
 		defer func() {
 			if err := lock.Release(ctx); err != nil {
-				h.logger.Log(log.ErrorLevel, err)
+				logger.Log(log.ErrorLevel, err.Error())
 			}
 		}()
 
@@ -115,7 +114,7 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 		}
 
 		if !sagaInstance.Status().Failed() || sagaInstance.Status().Compensating() {
-			h.logger.Logf(log.InfoLevel, "Saga `%s` has status `%s`, you can't compensate the process", sagaInstance.UID(), sagaInstance.Status())
+			logger.Logf(log.InfoLevel, "Saga `%s` has status `%s`, you can't compensate the process", sagaInstance.UID(), sagaInstance.Status())
 			return nil
 		}
 
@@ -136,7 +135,7 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 		outcomingMessage := message.NewOutcomingMessage(delivery.Payload, message.WithHeaders(msg.Headers()))
 
 		if err := execCtx.Send(outcomingMessage, delivery.Options...); err != nil {
-			execCtx.LogMessage(log.ErrorLevel, fmt.Sprintf("sending delivery for saga %s. Delivery: (%v). %s", sagaCtx.SagaInstance().UID(), delivery, err))
+			logger.Logf(log.ErrorLevel, "sending delivery for saga %s. Delivery: (%v). %s", sagaCtx.SagaInstance().UID(), delivery, err)
 			return errors.Wrapf(err, "sending delivery for saga %s. Delivery: (%v)", sagaCtx.SagaInstance().UID(), delivery)
 		}
 		sagaCtx.SagaInstance().AddHistoryEvent(delivery.Payload)

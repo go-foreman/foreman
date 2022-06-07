@@ -15,4 +15,4 @@ coverage:
         only_pulls: true
 
 ignore:
-  - "testing/integration/**/*"
+  - "testing/**/*"

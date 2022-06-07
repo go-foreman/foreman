@@ -15,8 +15,10 @@ import (
 )
 
 const (
-	ContextTraceIDKey PackageProperty = "traceID"
+	ContextTraceIDKey PackageProperty = "traceId"
 )
+
+//go:generate mockgen --build_flags=--mod=mod -destination ../../testing/mocks/pubsub/subscriber/processor.go -package subscriber . Processor
 
 // Processor knows how to process a message received by subscriber
 type Processor interface {
@@ -39,7 +41,7 @@ func (p *processor) Process(ctx context.Context, inPkg transport.IncomingPkg) er
 	payload, err := p.decoder.Unmarshal(inPkg.Payload())
 	if err != nil {
 		p.logger.Logf(log.ErrorLevel, "Failed to decode IncomingPkg into Message. %s", err)
-		return errors.WithStack(err)
+		return errors.Wrap(err, "unmarshalling pkg payload")
 	}
 
 	if inPkg.UID() == "" {
@@ -51,7 +53,7 @@ func (p *processor) Process(ctx context.Context, inPkg transport.IncomingPkg) er
 	executors := p.dispatcher.Match(payload)
 
 	if len(executors) == 0 {
-		errMsg := fmt.Sprintf("No executors defined for message %s %s", receivedMsg.UID(), payload.GroupKind())
+		errMsg := fmt.Sprintf("No executors defined for message uid %s %s", receivedMsg.UID(), payload.GroupKind())
 		p.logger.Log(log.ErrorLevel, errMsg)
 		return WithNoExecutorsDefinedErr(errors.New(errMsg))
 	}
@@ -60,7 +62,7 @@ func (p *processor) Process(ctx context.Context, inPkg transport.IncomingPkg) er
 		ctx = context.WithValue(ctx, ContextTraceIDKey, traceID)
 	}
 
-	execCtx := p.msgExecCtxFactory.CreateCtx(ctx, inPkg, receivedMsg)
+	execCtx := p.msgExecCtxFactory.CreateCtx(ctx, receivedMsg)
 
 	for _, exec := range executors {
 		if err := exec(execCtx); err != nil {

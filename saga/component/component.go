@@ -3,7 +3,7 @@ package component
 import (
 	"net/http"
 
-	brigadier "github.com/go-foreman/foreman"
+	foreman "github.com/go-foreman/foreman"
 	"github.com/go-foreman/foreman/log"
 	"github.com/go-foreman/foreman/pubsub/endpoint"
 	"github.com/go-foreman/foreman/pubsub/message"
@@ -35,7 +35,7 @@ func NewSagaComponent(sagaStoreFactory StoreFactory, sagaMutex mutex.Mutex, opts
 	return &Component{sagaStoreFactory: sagaStoreFactory, sagaMutex: sagaMutex, configOpts: opts}
 }
 
-func (c Component) Init(mBus *brigadier.MessageBus) error {
+func (c Component) Init(mBus *foreman.MessageBus) error {
 	opts := &opts{}
 	for _, config := range c.configOpts {
 		config(opts)
@@ -55,8 +55,8 @@ func (c Component) Init(mBus *brigadier.MessageBus) error {
 		initApiServer(opts.apiServerMux, store, mBus.Logger())
 	}
 
-	eventHandler := handlers.NewEventsHandler(store, c.sagaMutex, mBus.SchemeRegistry(), opts.uidService, mBus.Logger())
-	sagaControlHandler := handlers.NewSagaControlHandler(store, c.sagaMutex, mBus.SchemeRegistry(), opts.uidService, mBus.Logger())
+	eventHandler := handlers.NewEventsHandler(store, c.sagaMutex, mBus.SchemeRegistry(), opts.uidService)
+	sagaControlHandler := handlers.NewSagaControlHandler(store, c.sagaMutex, mBus.SchemeRegistry(), opts.uidService)
 
 	contracts.RegisterSagaContracts(mBus.SchemeRegistry())
 

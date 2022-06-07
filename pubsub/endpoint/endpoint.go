@@ -7,6 +7,8 @@ import (
 	"github.com/go-foreman/foreman/pubsub/message"
 )
 
+//go:generate mockgen --build_flags=--mod=mod -destination ../../testing/mocks/pubsub/endpoint/endpoint.go -package endpoint . Endpoint
+
 // Endpoint knows where to deliver a message
 type Endpoint interface {
 	// Name is a unique name of the endpoint
@@ -21,10 +23,9 @@ type deliveryOptions struct {
 
 // WithDelay option waits specified duration before delivering a message
 func WithDelay(delay time.Duration) DeliveryOption {
-	return func(o *deliveryOptions) error {
+	return func(o *deliveryOptions) {
 		o.delay = &delay
-		return nil
 	}
 }
 
-type DeliveryOption func(o *deliveryOptions) error
+type DeliveryOption func(o *deliveryOptions)
