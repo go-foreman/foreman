@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	ContextTraceIDKey = "traceID"
+	ContextTraceIDKey PackageProperty = "traceID"
 )
 
 // Processor knows how to process a message received by subscriber
@@ -78,3 +78,5 @@ type NoExecutorsDefinedErr struct {
 func WithNoExecutorsDefinedErr(err error) error {
 	return &NoExecutorsDefinedErr{err}
 }
+
+type PackageProperty string
