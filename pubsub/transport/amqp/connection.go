@@ -99,6 +99,7 @@ func (ch *Channel) Consume(queue, consumer string, autoAck, exclusive, noLocal, 
 				time.Sleep(delay * time.Second)
 				if reconnectedCount > reconnectCount {
 					ch.logger.Logf(log.FatalLevel, "Reached limit of reconnects %d", reconnectCount)
+					break
 				}
 				reconnectedCount++
 				continue
