@@ -179,7 +179,7 @@ func (s *subscriber) gracefulShutdown(ctx context.Context) {
 		}
 	}
 
-	s.logger.Logf(log.InfoLevel, "All tasks are finished.")
+	s.logger.Log(log.InfoLevel, "All tasks are finished.")
 }
 
 type processPkg struct {
