@@ -68,9 +68,11 @@ func TestMessageExecutionCtx_Send(t *testing.T) {
 		receivedMessage := message.NewReceivedMessage("123", &someTestType{}, message.Headers{}, time.Now(), "bus")
 		outcomingMsg := message.NewOutcomingMessage(&someTestType{})
 
+		sendingOpt := endpoint.WithDelay(time.Second)
+
 		testEndpoint.
 			EXPECT().
-			Send(ctx, outcomingMsg).
+			Send(ctx, outcomingMsg, gomock.Any()).
 			Return(nil).
 			Times(1)
 
@@ -81,7 +83,7 @@ func TestMessageExecutionCtx_Send(t *testing.T) {
 			Times(1)
 
 		execCtx := factory.CreateCtx(ctx, receivedMessage)
-		err := execCtx.Send(outcomingMsg)
+		err := execCtx.Send(outcomingMsg, sendingOpt)
 		assert.NoError(t, err)
 		assert.Empty(t, testLogger.Messages())
 	})
@@ -117,3 +119,15 @@ func TestMessageExecutionCtx_Send(t *testing.T) {
 		assert.Equal(t, logEntry.Level, log.ErrorLevel)
 	})
 }
+
+//func TestMessageExecutionCtx_Return(t *testing.T) {
+//	ctrl := gomock.NewController(t)
+//	defer ctrl.Finish()
+//
+//	testLogger := testingLog.NewNilLogger()
+//	testEndpoint := endpointMock.NewMockEndpoint(ctrl)
+//	testRouter := endpointMock.NewMockRouter(ctrl)
+//
+//	factory := NewMessageExecutionCtxFactory(testRouter, testLogger)
+//
+//}
