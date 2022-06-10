@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/go-foreman/foreman/pubsub/transport"
-
 	"github.com/go-foreman/foreman/log"
 	"github.com/go-foreman/foreman/pubsub/endpoint"
 	"github.com/go-foreman/foreman/pubsub/message"
 	"github.com/pkg/errors"
 )
+
+//go:generate mockgen --build_flags=--mod=mod -destination ../../../testing/mocks/pubsub/message/context.go -package execution . MessageExecutionCtx,MessageExecutionCtxFactory
 
 // MessageExecutionCtx is passed to each executor and contains received message, ctx, knows how to send out or return a message.
 type MessageExecutionCtx interface {
@@ -31,7 +31,6 @@ type MessageExecutionCtx interface {
 type messageExecutionCtx struct {
 	isValid bool
 	ctx     context.Context
-	inPkg   transport.IncomingPkg
 	message *message.ReceivedMessage
 	router  endpoint.Router
 	logger  log.Logger
@@ -55,7 +54,7 @@ func (m messageExecutionCtx) Send(msg *message.OutcomingMessage, options ...endp
 
 	for _, endp := range endpoints {
 		if err := endp.Send(m.ctx, msg, options...); err != nil {
-			m.logger.Logf(log.ErrorLevel, "error sending message id %s", msg.UID())
+			m.logger.Logf(log.ErrorLevel, "error sending message id %s. %s", msg.UID(), err)
 			return errors.WithStack(err)
 		}
 	}
@@ -88,7 +87,7 @@ func (m messageExecutionCtx) LogMessage(lvl log.Level, msg string) {
 }
 
 type MessageExecutionCtxFactory interface {
-	CreateCtx(ctx context.Context, inPkg transport.IncomingPkg, message *message.ReceivedMessage) MessageExecutionCtx
+	CreateCtx(ctx context.Context, message *message.ReceivedMessage) MessageExecutionCtx
 }
 
 type messageExecutionCtxFactory struct {
@@ -100,8 +99,8 @@ func NewMessageExecutionCtxFactory(router endpoint.Router, logger log.Logger) Me
 	return &messageExecutionCtxFactory{router: router, logger: logger}
 }
 
-func (m messageExecutionCtxFactory) CreateCtx(ctx context.Context, inPkg transport.IncomingPkg, message *message.ReceivedMessage) MessageExecutionCtx {
-	return &messageExecutionCtx{ctx: ctx, inPkg: inPkg, message: message, router: m.router, logger: m.logger}
+func (m messageExecutionCtxFactory) CreateCtx(ctx context.Context, message *message.ReceivedMessage) MessageExecutionCtx {
+	return &messageExecutionCtx{ctx: ctx, message: message, router: m.router, logger: m.logger}
 }
 
 type NoDefinedEndpoints struct {

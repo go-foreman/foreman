@@ -7,6 +7,8 @@ import (
 	"github.com/go-foreman/foreman/pubsub/message"
 )
 
+//go:generate mockgen --build_flags=--mod=mod -destination ../../testing/mocks/pubsub/endpoint/endpoint.go -package endpoint . Endpoint
+
 // Endpoint knows where to deliver a message
 type Endpoint interface {
 	// Name is a unique name of the endpoint

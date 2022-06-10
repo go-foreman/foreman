@@ -60,7 +60,7 @@ func (p *processor) Process(ctx context.Context, inPkg transport.IncomingPkg) er
 		ctx = context.WithValue(ctx, ContextTraceIDKey, traceID)
 	}
 
-	execCtx := p.msgExecCtxFactory.CreateCtx(ctx, inPkg, receivedMsg)
+	execCtx := p.msgExecCtxFactory.CreateCtx(ctx, receivedMsg)
 
 	for _, exec := range executors {
 		if err := exec(execCtx); err != nil {
