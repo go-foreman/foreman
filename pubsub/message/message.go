@@ -152,8 +152,13 @@ func NewOutcomingMessage(payload Object, passedOptions ...MsgOption) *OutcomingM
 }
 
 func FromReceivedMsg(received *ReceivedMessage) *OutcomingMessage {
+	headers := make(Headers, len(received.Headers()))
+	for k, v := range received.Headers() {
+		headers[k] = v
+	}
+
 	return &OutcomingMessage{
-		headers: received.Headers(),
+		headers: headers,
 		uid:     received.UID(),
 		obj:     received.Payload(),
 	}

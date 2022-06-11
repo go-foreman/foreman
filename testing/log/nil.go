@@ -46,6 +46,14 @@ func (n nilLogger) Messages() []string {
 	return r
 }
 
+func (n nilLogger) LastMessage() string {
+	if len(n.entries) > 0 {
+		return n.entries[len(n.entries)-1].Msg
+	}
+
+	return ""
+}
+
 func (n *nilLogger) Clear() {
 	n.entries = make([]entry, 0)
 	n.level = log.InfoLevel

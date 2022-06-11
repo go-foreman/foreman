@@ -64,9 +64,9 @@ func (m messageExecutionCtx) Send(msg *message.OutcomingMessage, options ...endp
 
 func (m messageExecutionCtx) Return(options ...endpoint.DeliveryOption) error {
 	outComingMsg := message.FromReceivedMsg(m.message)
-	m.message.Headers().RegisterReturn()
+	outComingMsg.Headers().RegisterReturn()
 	if err := m.Send(outComingMsg, options...); err != nil {
-		m.logger.Logf(log.ErrorLevel, "error when returning a message %s", outComingMsg.UID())
+		m.logger.Logf(log.ErrorLevel, "error when returning a message %s. %s", outComingMsg.UID(), err)
 		return errors.Wrapf(err, "returning message %s", outComingMsg.UID())
 	}
 

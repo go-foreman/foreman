@@ -72,7 +72,7 @@ func TestMessageExecutionCtx_Send(t *testing.T) {
 
 		testEndpoint.
 			EXPECT().
-			Send(ctx, outcomingMsg, gomock.Any()).
+			Send(ctx, outcomingMsg, gomock.AssignableToTypeOf(sendingOpt)).
 			Return(nil).
 			Times(1)
 
@@ -120,14 +120,70 @@ func TestMessageExecutionCtx_Send(t *testing.T) {
 	})
 }
 
-//func TestMessageExecutionCtx_Return(t *testing.T) {
-//	ctrl := gomock.NewController(t)
-//	defer ctrl.Finish()
-//
-//	testLogger := testingLog.NewNilLogger()
-//	testEndpoint := endpointMock.NewMockEndpoint(ctrl)
-//	testRouter := endpointMock.NewMockRouter(ctrl)
-//
-//	factory := NewMessageExecutionCtxFactory(testRouter, testLogger)
-//
-//}
+func TestMessageExecutionCtx_Return(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testLogger := testingLog.NewNilLogger()
+	testEndpoint := endpointMock.NewMockEndpoint(ctrl)
+	testRouter := endpointMock.NewMockRouter(ctrl)
+
+	factory := NewMessageExecutionCtxFactory(testRouter, testLogger)
+
+	testRouter.
+		EXPECT().
+		Route(&someTestType{}).
+		Return([]endpoint.Endpoint{testEndpoint})
+
+	t.Run("successfully returning a message", func(t *testing.T) {
+		defer testLogger.Clear()
+
+		ctx := context.Background()
+		sendingOpt := endpoint.WithDelay(time.Second)
+
+		receivedMessage := message.NewReceivedMessage("123", &someTestType{}, message.Headers{}, time.Now(), "bus")
+
+		outcomingMsg := message.FromReceivedMsg(receivedMessage)
+		outcomingMsg.Headers().RegisterReturn()
+
+		testEndpoint.
+			EXPECT().
+			Send(ctx, outcomingMsg, gomock.AssignableToTypeOf(sendingOpt)).
+			Return(nil).
+			Times(1)
+
+		execCtx := factory.CreateCtx(ctx, receivedMessage)
+		err := execCtx.Return(sendingOpt)
+		assert.NoError(t, err)
+
+		assert.Equal(t, 1, outcomingMsg.Headers().ReturnsCount())
+	})
+
+	t.Run("error returning a message", func(t *testing.T) {
+		defer testLogger.Clear()
+
+		ctx := context.Background()
+		sendingOpt := endpoint.WithDelay(time.Second)
+
+		receivedMessage := message.NewReceivedMessage("123", &someTestType{}, message.Headers{}, time.Now(), "bus")
+
+		outcomingMsg := message.FromReceivedMsg(receivedMessage)
+		outcomingMsg.Headers().RegisterReturn()
+
+		testEndpoint.
+			EXPECT().
+			Send(ctx, outcomingMsg, gomock.AssignableToTypeOf(sendingOpt)).
+			Return(errors.New("some error")).
+			Times(1)
+
+		execCtx := factory.CreateCtx(ctx, receivedMessage)
+		err := execCtx.Return(sendingOpt)
+		assert.Error(t, err)
+		assert.EqualError(t, err, "returning message 123: some error")
+
+		//make sure that headers of original message weren't modified
+		assert.Equal(t, 0, receivedMessage.Headers().ReturnsCount())
+		assert.Contains(t, testLogger.LastMessage(), "error when returning a message")
+
+	})
+}
