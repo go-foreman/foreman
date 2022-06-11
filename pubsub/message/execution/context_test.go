@@ -133,7 +133,8 @@ func TestMessageExecutionCtx_Return(t *testing.T) {
 	testRouter.
 		EXPECT().
 		Route(&someTestType{}).
-		Return([]endpoint.Endpoint{testEndpoint})
+		Return([]endpoint.Endpoint{testEndpoint}).
+		AnyTimes()
 
 	t.Run("successfully returning a message", func(t *testing.T) {
 		defer testLogger.Clear()
