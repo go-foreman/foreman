@@ -90,5 +90,6 @@ mod-download:
 check-mods:
 	go list -json -m all | nancy sleuth
 
+.PHONY: generate
 generate:
 	go generate ./...
