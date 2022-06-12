@@ -16,7 +16,6 @@ func DefaultLogger() Logger {
 type defaultLogger struct {
 	internalLogger *log.Logger
 	level          Level
-	fields         map[string]interface{}
 }
 
 func (l defaultLogger) createInternalLogger() *log.Logger {
