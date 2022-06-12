@@ -4,18 +4,21 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sync"
 )
 
 //DefaultLogger returns an implementation of logger for MessageBus, used by default if other isn't specified
 func DefaultLogger() Logger {
-	l := &defaultLogger{}
+	l := &defaultLogger{mutex: &sync.Mutex{}}
 	l.internalLogger = l.createInternalLogger()
 	return l
 }
 
 type defaultLogger struct {
+	mutex          *sync.Mutex
 	internalLogger *log.Logger
 	level          Level
+	fields         Fields
 }
 
 func (l defaultLogger) createInternalLogger() *log.Logger {
@@ -41,16 +44,10 @@ func (l defaultLogger) Log(level Level, v ...interface{}) {
 }
 
 func (l *defaultLogger) WithFields(fields Fields) Logger {
-	newLogger := &defaultLogger{}
+	newLogger := &defaultLogger{fields: fields, mutex: &sync.Mutex{}}
 	newLogger.internalLogger = newLogger.createInternalLogger()
 
-	prefix := ""
-
-	for k, v := range fields {
-		prefix += fmt.Sprintf("[%s=%s] ", k, v)
-	}
-
-	newLogger.internalLogger.SetPrefix(prefix)
+	newLogger.internalLogger.SetPrefix(newLogger.generatePrefix())
 
 	return newLogger
 }
@@ -60,9 +57,21 @@ func (l defaultLogger) Logf(level Level, template string, args ...interface{}) {
 }
 
 func (l *defaultLogger) SetLevel(level Level) {
-	l.level = level
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
 
-	l.internalLogger.SetPrefix(fmt.Sprintf("[messagebus] %s ", levelNames[level]))
+	l.level = level
+	l.internalLogger.SetPrefix(l.generatePrefix())
+}
+
+func (l *defaultLogger) generatePrefix() string {
+	prefix := levelNames[l.level] + " "
+
+	for k, v := range l.fields {
+		prefix += fmt.Sprintf("[%s=%s] ", k, v)
+	}
+
+	return prefix
 }
 
 var levelNames = map[Level]string{
