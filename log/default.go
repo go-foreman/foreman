@@ -18,7 +18,7 @@ type defaultLogger struct {
 	mutex          *sync.Mutex
 	internalLogger *log.Logger
 	level          Level
-	fields         Fields
+	fields         []Field
 }
 
 func (l defaultLogger) createInternalLogger() *log.Logger {
@@ -43,8 +43,8 @@ func (l defaultLogger) Log(level Level, v ...interface{}) {
 	}
 }
 
-func (l *defaultLogger) WithFields(fields Fields) Logger {
-	newLogger := &defaultLogger{fields: fields, mutex: &sync.Mutex{}}
+func (l *defaultLogger) WithFields(fields []Field) Logger {
+	newLogger := &defaultLogger{fields: append(l.fields, fields...), mutex: &sync.Mutex{}, level: l.level}
 	newLogger.internalLogger = newLogger.createInternalLogger()
 
 	newLogger.internalLogger.SetPrefix(newLogger.generatePrefix())
@@ -67,8 +67,8 @@ func (l *defaultLogger) SetLevel(level Level) {
 func (l *defaultLogger) generatePrefix() string {
 	prefix := levelNames[l.level] + " "
 
-	for k, v := range l.fields {
-		prefix += fmt.Sprintf("[%s=%s] ", k, v)
+	for _, f := range l.fields {
+		prefix += fmt.Sprintf("[%s=%s] ", f.Name, f.Val)
 	}
 
 	return prefix

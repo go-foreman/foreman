@@ -94,10 +94,11 @@ func NewMessageExecutionCtxFactory(router endpoint.Router, logger log.Logger) Me
 }
 
 func (m messageExecutionCtxFactory) CreateCtx(ctx context.Context, message *message.ReceivedMessage) MessageExecutionCtx {
-	fields := log.Fields{"uid": message.UID()}
+	fields := make([]log.Field, 1, 2)
+	fields[0] = log.Field{Name: "uid", Val: message.UID()}
 
 	if traceID := message.TraceID(); traceID != "" {
-		fields["traceId"] = traceID
+		fields = append(fields, log.Field{Name: "traceId", Val: traceID})
 	}
 
 	return &messageExecutionCtx{ctx: ctx, message: message, router: m.router, logger: m.logger.WithFields(fields)}

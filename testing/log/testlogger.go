@@ -17,7 +17,7 @@ type entriesStore struct {
 
 type testLogger struct {
 	level        log.Level
-	fields       log.Fields
+	fields       []log.Field
 	entriesStore *entriesStore
 }
 
@@ -38,21 +38,11 @@ func (n *testLogger) SetLevel(level log.Level) {
 	n.level = level
 }
 
-func (n *testLogger) WithFields(fields log.Fields) log.Logger {
-	mergedFields := make(log.Fields)
-
-	for k, v := range n.fields {
-		mergedFields[k] = v
-	}
-
-	for k, v := range fields {
-		mergedFields[k] = v
-	}
-
+func (n *testLogger) WithFields(fields []log.Field) log.Logger {
 	return &testLogger{
 		entriesStore: n.entriesStore,
 		level:        n.level,
-		fields:       mergedFields,
+		fields:       append(n.fields, fields...),
 	}
 }
 

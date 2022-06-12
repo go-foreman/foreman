@@ -25,7 +25,7 @@ type SagaContext interface {
 }
 
 func NewSagaCtx(execCtx execution.MessageExecutionCtx, sagaInstance Instance) SagaContext {
-	return &sagaCtx{execCtx: execCtx, sagaInstance: sagaInstance, logger: execCtx.Logger().WithFields(log.Fields{sagaUIDKey: sagaInstance.UID()})}
+	return &sagaCtx{execCtx: execCtx, sagaInstance: sagaInstance, logger: execCtx.Logger().WithFields([]log.Field{{Name: sagaUIDKey, Val: sagaInstance.UID()}})}
 }
 
 type sagaCtx struct {
