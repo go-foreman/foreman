@@ -44,10 +44,13 @@ func (a AmqpEndpoint) Send(ctx context.Context, msg *message.OutcomingMessage, o
 	toSend := transport.NewOutboundPkg(dataToSend, "application/json", a.destination, msg.Headers())
 
 	if deliveryOpts.delay != nil {
+		timer := time.NewTimer(*deliveryOpts.delay)
+		defer timer.Stop()
+
 		select {
 		case <-ctx.Done():
 			return errors.Errorf("Failed to send message %s. Was waiting for the delay and parent ctx closed.", msg.UID())
-		case <-time.After(*deliveryOpts.delay):
+		case <-timer.C:
 			break
 		}
 	}
