@@ -42,7 +42,7 @@ func (l defaultLogger) Log(level Level, v ...interface{}) {
 
 func (l *defaultLogger) WithFields(fields Fields) Logger {
 	newLogger := &defaultLogger{}
-	newLogger.createInternalLogger()
+	newLogger.internalLogger = newLogger.createInternalLogger()
 
 	prefix := ""
 
