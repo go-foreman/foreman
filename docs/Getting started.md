@@ -113,7 +113,7 @@ type Handler struct {
 func (h Handler) handleSomeCommand(execCtx execution.MessageExecutionCtx) error {
    someCmd, _ := execCtx.Message().Payload().(*SomeCommand)
 
-   execCtx.LogMessage(log.InfoLevel, fmt.Sprintf("Just received and handled command with MyID %s", someCmd.MyID))
+   execCtx.Logger().Logf(log.InfoLevel, "Just received and handled command with MyID %s", someCmd.MyID)
 
    return execCtx.Send(message.NewOutcomingMessage(&SomeEvent{MyID: someCmd.MyID, HandledAt: time.Now()})) //reply with an event
 }
@@ -121,7 +121,7 @@ func (h Handler) handleSomeCommand(execCtx execution.MessageExecutionCtx) error 
 func (h Handler) handleSomeEvent(execCtx execution.MessageExecutionCtx) error {
    ev, _ := execCtx.Message().Payload().(*SomeEvent)
 
-   execCtx.LogMessage(log.InfoLevel, fmt.Sprintf("Received event that was a response to a handled command %s at %s", ev.MyID, ev.HandledAt))
+   execCtx.Logger().Logf(log.InfoLevel, "Received event that was a response to a handled command %s at %s", ev.MyID, ev.HandledAt)
 
    return nil
 }

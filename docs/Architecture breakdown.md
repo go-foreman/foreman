@@ -169,8 +169,8 @@ type MessageExecutionCtx interface {
 	Send(message *message.OutcomingMessage, options ...endpoint.DeliveryOption) error
 	// Return sends received message to registered endpoints and updates number of returns in headers
 	Return(options ...endpoint.DeliveryOption) error
-	// LogMessage allows to log message in handlers
-	LogMessage(level log.Level, msg string)
+	// Logger returns logger instance with traceId and message uid included as fields
+	Logger() log.Logger
 }
 
 // Executor is a callback that will be called on received message with context.

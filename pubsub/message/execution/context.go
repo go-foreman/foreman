@@ -23,8 +23,8 @@ type MessageExecutionCtx interface {
 	Send(message *message.OutcomingMessage, options ...endpoint.DeliveryOption) error
 	// Return sends received message to registered endpoints and updates number of returns in headers
 	Return(options ...endpoint.DeliveryOption) error
-	// LogMessage allows to log message in handlers
-	Log(level log.Level, msg string)
+	// Logger returns logger instance with traceId and message uid included as fields
+	Logger() log.Logger
 }
 
 type messageExecutionCtx struct {
@@ -53,7 +53,7 @@ func (m messageExecutionCtx) Send(msg *message.OutcomingMessage, options ...endp
 
 	for _, endp := range endpoints {
 		if err := endp.Send(m.ctx, msg, options...); err != nil {
-			m.Logf(log.ErrorLevel, "error sending message. %s", err)
+			m.logger.Logf(log.ErrorLevel, "error sending message. %s", err)
 			return errors.WithStack(err)
 		}
 	}
@@ -76,12 +76,8 @@ func (m messageExecutionCtx) Message() *message.ReceivedMessage {
 	return m.message
 }
 
-func (m messageExecutionCtx) Log(lvl log.Level, msg string) {
-	m.logger.Log(lvl, msg)
-}
-
-func (m messageExecutionCtx) Logf(lvl log.Level, template string, args ...interface{}) {
-	m.logger.Logf(lvl, template, args)
+func (m messageExecutionCtx) Logger() log.Logger {
+	return m.logger
 }
 
 type MessageExecutionCtxFactory interface {

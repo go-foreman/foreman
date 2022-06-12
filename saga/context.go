@@ -2,7 +2,6 @@ package saga
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/go-foreman/foreman/log"
 	"github.com/go-foreman/foreman/pubsub/endpoint"
@@ -16,19 +15,21 @@ type SagaContext interface {
 	//execution.MessageExecutionCtx
 	Message() *message.ReceivedMessage
 	Context() context.Context
+	// Valid Deprecated
 	Valid() bool
 	Dispatch(payload message.Object, options ...endpoint.DeliveryOption)
 	Deliveries() []*Delivery
 	Return(options ...endpoint.DeliveryOption) error
-	LogMessage(level log.Level, msg string)
+	Logger() log.Logger
 	SagaInstance() Instance
 }
 
 func NewSagaCtx(execCtx execution.MessageExecutionCtx, sagaInstance Instance) SagaContext {
-	return &sagaCtx{execCtx: execCtx, sagaInstance: sagaInstance}
+	return &sagaCtx{execCtx: execCtx, sagaInstance: sagaInstance, logger: execCtx.Logger().WithFields(log.Fields{sagaUIDKey: sagaInstance.UID()})}
 }
 
 type sagaCtx struct {
+	logger       log.Logger
 	execCtx      execution.MessageExecutionCtx
 	sagaInstance Instance
 	deliveries   []*Delivery
@@ -47,12 +48,12 @@ func (s sagaCtx) Valid() bool {
 }
 
 func (s sagaCtx) Return(options ...endpoint.DeliveryOption) error {
-	s.LogMessage(log.InfoLevel, fmt.Sprintf("returning saga event %s", s.Message().UID()))
+	s.Logger().Log(log.InfoLevel, "returning saga event")
 	return s.execCtx.Return(options...)
 }
 
-func (s sagaCtx) LogMessage(lvl log.Level, msg string) {
-	s.execCtx.Log(lvl, fmt.Sprintf("SagaUID: %s %s", s.sagaInstance.UID(), msg))
+func (s sagaCtx) Logger() log.Logger {
+	return s.logger
 }
 
 func (s sagaCtx) SagaInstance() Instance {
