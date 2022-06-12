@@ -8,12 +8,19 @@ import (
 
 //DefaultLogger returns an implementation of logger for MessageBus, used by default if other isn't specified
 func DefaultLogger() Logger {
-	return &defaultLogger{internalLogger: log.New(os.Stdout, "[messagebus] ", log.Ldate|log.Ltime|log.Lmicroseconds|log.Lshortfile)}
+	l := &defaultLogger{}
+	l.internalLogger = l.createInternalLogger()
+	return l
 }
 
 type defaultLogger struct {
 	internalLogger *log.Logger
 	level          Level
+	fields         map[string]interface{}
+}
+
+func (l defaultLogger) createInternalLogger() *log.Logger {
+	return log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lmicroseconds|log.Lshortfile)
 }
 
 func (l defaultLogger) Log(level Level, v ...interface{}) {
@@ -32,6 +39,21 @@ func (l defaultLogger) Log(level Level, v ...interface{}) {
 			l.internalLogger.Printf("err logging an entry: %s. %s\n", err, v)
 		}
 	}
+}
+
+func (l *defaultLogger) WithFields(fields Fields) Logger {
+	newLogger := &defaultLogger{}
+	newLogger.createInternalLogger()
+
+	prefix := ""
+
+	for k, v := range fields {
+		prefix += fmt.Sprintf("[%s=%s] ", k, v)
+	}
+
+	newLogger.internalLogger.SetPrefix(prefix)
+
+	return newLogger
 }
 
 func (l defaultLogger) Logf(level Level, template string, args ...interface{}) {

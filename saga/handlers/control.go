@@ -136,7 +136,7 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 		outcomingMessage := message.NewOutcomingMessage(delivery.Payload, message.WithHeaders(msg.Headers()))
 
 		if err := execCtx.Send(outcomingMessage, delivery.Options...); err != nil {
-			execCtx.LogMessage(log.ErrorLevel, fmt.Sprintf("sending delivery for saga %s. Delivery: (%v). %s", sagaCtx.SagaInstance().UID(), delivery, err))
+			execCtx.Log(log.ErrorLevel, fmt.Sprintf("sending delivery for saga %s. Delivery: (%v). %s", sagaCtx.SagaInstance().UID(), delivery, err))
 			return errors.Wrapf(err, "sending delivery for saga %s. Delivery: (%v)", sagaCtx.SagaInstance().UID(), delivery)
 		}
 		sagaCtx.SagaInstance().AddHistoryEvent(delivery.Payload)

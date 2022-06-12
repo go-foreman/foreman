@@ -54,7 +54,7 @@ func (mr *MockMessageExecutionCtxMockRecorder) Context() *gomock.Call {
 }
 
 // LogMessage mocks base method.
-func (m *MockMessageExecutionCtx) LogMessage(arg0 log.Level, arg1 string) {
+func (m *MockMessageExecutionCtx) Log(arg0 log.Level, arg1 string) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "LogMessage", arg0, arg1)
 }
@@ -62,7 +62,7 @@ func (m *MockMessageExecutionCtx) LogMessage(arg0 log.Level, arg1 string) {
 // LogMessage indicates an expected call of LogMessage.
 func (mr *MockMessageExecutionCtxMockRecorder) LogMessage(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LogMessage", reflect.TypeOf((*MockMessageExecutionCtx)(nil).LogMessage), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LogMessage", reflect.TypeOf((*MockMessageExecutionCtx)(nil).Log), arg0, arg1)
 }
 
 // Message mocks base method.

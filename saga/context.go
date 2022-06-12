@@ -52,7 +52,7 @@ func (s sagaCtx) Return(options ...endpoint.DeliveryOption) error {
 }
 
 func (s sagaCtx) LogMessage(lvl log.Level, msg string) {
-	s.execCtx.LogMessage(lvl, fmt.Sprintf("SagaUID: %s %s", s.sagaInstance.UID(), msg))
+	s.execCtx.Log(lvl, fmt.Sprintf("SagaUID: %s %s", s.sagaInstance.UID(), msg))
 }
 
 func (s sagaCtx) SagaInstance() Instance {

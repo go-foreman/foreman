@@ -92,7 +92,7 @@ func TestMessageExecutionCtx_Send(t *testing.T) {
 		defer testLogger.Clear()
 
 		ctx := context.Background()
-		receivedMessage := message.NewReceivedMessage("123", &someTestType{}, message.Headers{}, time.Now(), "bus")
+		receivedMessage := message.NewReceivedMessage("123", &someTestType{}, message.Headers{"traceId": "111"}, time.Now(), "bus")
 		outcomingMsg := message.NewOutcomingMessage(&someTestType{})
 
 		testEndpoint.

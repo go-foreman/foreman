@@ -28,5 +28,8 @@ type Level uint32
 type Logger interface {
 	Log(level Level, v ...interface{})
 	Logf(level Level, template string, args ...interface{})
+	WithFields(fields Fields) Logger
 	SetLevel(level Level)
 }
+
+type Fields map[string]interface{}
