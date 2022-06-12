@@ -55,8 +55,8 @@ func (c Component) Init(mBus *brigadier.MessageBus) error {
 		initApiServer(opts.apiServerMux, store, mBus.Logger())
 	}
 
-	eventHandler := handlers.NewEventsHandler(store, c.sagaMutex, mBus.SchemeRegistry(), opts.uidService, mBus.Logger())
-	sagaControlHandler := handlers.NewSagaControlHandler(store, c.sagaMutex, mBus.SchemeRegistry(), opts.uidService, mBus.Logger())
+	eventHandler := handlers.NewEventsHandler(store, c.sagaMutex, mBus.SchemeRegistry(), opts.uidService)
+	sagaControlHandler := handlers.NewSagaControlHandler(store, c.sagaMutex, mBus.SchemeRegistry(), opts.uidService)
 
 	contracts.RegisterSagaContracts(mBus.SchemeRegistry())
 

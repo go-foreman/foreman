@@ -22,16 +22,16 @@ type SagaEventsHandler struct {
 	sagaUIDSvc sagaPkg.SagaUIDService
 	scheme     scheme.KnownTypesRegistry
 	mutex      sagaMutex.Mutex
-	logger     log.Logger
 }
 
-func NewEventsHandler(sagaStore sagaPkg.Store, mutex sagaMutex.Mutex, scheme scheme.KnownTypesRegistry, extractor sagaPkg.SagaUIDService, logger log.Logger) *SagaEventsHandler {
-	return &SagaEventsHandler{sagaStore: sagaStore, sagaUIDSvc: extractor, scheme: scheme, mutex: mutex, logger: logger}
+func NewEventsHandler(sagaStore sagaPkg.Store, mutex sagaMutex.Mutex, scheme scheme.KnownTypesRegistry, extractor sagaPkg.SagaUIDService) *SagaEventsHandler {
+	return &SagaEventsHandler{sagaStore: sagaStore, sagaUIDSvc: extractor, scheme: scheme, mutex: mutex}
 }
 
 func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 	msg := execCtx.Message()
 	ctx := execCtx.Context()
+	logger := execCtx.Logger()
 	msgGK := msg.Payload().GroupKind().String()
 
 	sagaId, err := e.sagaUIDSvc.ExtractSagaUID(msg.Headers())
@@ -46,20 +46,20 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 		return errors.WithStack(err)
 	}
 
-	e.logger.Logf(log.DebugLevel, "locked saga %s", sagaId)
+	logger.Logf(log.DebugLevel, "locked saga %s", sagaId)
 
 	defer func() {
 		releaseCtx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 		defer cancel()
 
 		if err := lock.Release(releaseCtx); err != nil {
-			e.logger.Log(log.ErrorLevel, err)
+			logger.Log(log.ErrorLevel, err.Error())
 		}
-		e.logger.Logf(log.DebugLevel, "released saga %s", sagaId)
+		logger.Logf(log.DebugLevel, "released saga %s", sagaId)
 	}()
 
 	sagaInstance, err := e.sagaStore.GetById(ctx, sagaId)
-	e.logger.Logf(log.DebugLevel, "loaded saga %s", sagaId)
+	logger.Logf(log.DebugLevel, "loaded saga %s", sagaId)
 
 	if err != nil {
 		return errors.Wrapf(err, "Error retrieving saga %s from store", sagaId)
@@ -83,7 +83,7 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 	if handler, exists := saga.EventHandlers()[msg.Payload().GroupKind()]; exists {
 
 		if err := handler(sagaCtx); err != nil {
-			execCtx.LogMessage(log.ErrorLevel, fmt.Sprintf("error handling saga event %s from message %s: %s", msgGK, msg.UID(), err))
+			logger.Log(log.ErrorLevel, fmt.Sprintf("error handling saga event %s from message %s: %s", msgGK, msg.UID(), err))
 			return errors.Wrapf(err, "handling event %s from message %s", msgGK, msg.UID())
 		}
 
@@ -92,12 +92,12 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 			outcomingMsg := message.NewOutcomingMessage(delivery.Payload, message.WithHeaders(execCtx.Message().Headers()))
 
 			if err := execCtx.Send(outcomingMsg, delivery.Options...); err != nil {
-				execCtx.LogMessage(log.ErrorLevel, fmt.Sprintf("error sending delivery for saga %s. Delivery: (%v). %s", sagaCtx.SagaInstance().UID(), delivery, err))
+				logger.Log(log.ErrorLevel, fmt.Sprintf("error sending delivery for saga %s. Delivery: (%v). %s", sagaCtx.SagaInstance().UID(), delivery, err))
 				return errors.Wrapf(err, "sending delivery for saga %s. Delivery: (%v)", sagaCtx.SagaInstance().UID(), delivery)
 			}
 		}
 	} else {
-		e.logger.Logf(log.WarnLevel, "no handler defined for event %s from message %s", msgGK, msg.UID())
+		logger.Logf(log.WarnLevel, "no handler defined for event %s from message %s", msgGK, msg.UID())
 	}
 
 	//write received event into history

@@ -23,6 +23,7 @@ ENV_LOCAL_TEST=\
 tools:
 	go install github.com/vektra/mockery/v2@latest
 	go install github.com/sonatype-nexus-community/nancy@latest
+	go install github.com/golang/mock/mockgen@v1.6.0
 	## using wget because go get is not working for 1.40.1
 	wget -O- -nv https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | BINDIR=${GOPATH}/bin sh -s v1.46.2
 
@@ -64,7 +65,7 @@ test:
 .PHONY: test-report
 test-report:
 	#go test -coverprofile=$(CI_REPORTS_DIR)/coverage.txt -covermode=atomic -json $(UNIT_TEST_PKGS) > $(CI_REPORTS_DIR)/report.json
-	go test -coverprofile=coverage.txt -covermode=atomic $(UNIT_TEST_PKGS)
+	go test -coverprofile=coverage.txt -covermode=atomic -coverpkg=./... $(UNIT_TEST_PKGS)
 
 integration-test:
 	go test $(INTEGRATION_TEST_PKGS)
@@ -88,3 +89,7 @@ mod-download:
 .PHONY: check-mods
 check-mods:
 	go list -json -m all | nancy sleuth
+
+.PHONY: generate
+generate:
+	go generate ./...

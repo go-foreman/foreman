@@ -2,15 +2,14 @@ package execution
 
 import (
 	"context"
-	"fmt"
-
-	"github.com/go-foreman/foreman/pubsub/transport"
 
 	"github.com/go-foreman/foreman/log"
 	"github.com/go-foreman/foreman/pubsub/endpoint"
 	"github.com/go-foreman/foreman/pubsub/message"
 	"github.com/pkg/errors"
 )
+
+//go:generate mockgen --build_flags=--mod=mod -destination ../../../testing/mocks/pubsub/message/context.go -package execution . MessageExecutionCtx,MessageExecutionCtxFactory
 
 // MessageExecutionCtx is passed to each executor and contains received message, ctx, knows how to send out or return a message.
 type MessageExecutionCtx interface {
@@ -24,14 +23,13 @@ type MessageExecutionCtx interface {
 	Send(message *message.OutcomingMessage, options ...endpoint.DeliveryOption) error
 	// Return sends received message to registered endpoints and updates number of returns in headers
 	Return(options ...endpoint.DeliveryOption) error
-	// LogMessage allows to log message in handlers
-	LogMessage(level log.Level, msg string)
+	// Logger returns logger instance with traceId and message uid included as fields
+	Logger() log.Logger
 }
 
 type messageExecutionCtx struct {
 	isValid bool
 	ctx     context.Context
-	inPkg   transport.IncomingPkg
 	message *message.ReceivedMessage
 	router  endpoint.Router
 	logger  log.Logger
@@ -49,13 +47,13 @@ func (m messageExecutionCtx) Send(msg *message.OutcomingMessage, options ...endp
 	endpoints := m.router.Route(msg.Payload())
 
 	if len(endpoints) == 0 {
-		m.logger.Logf(log.WarnLevel, "no endpoints defined for message %s", msg.UID())
+		m.logger.Log(log.WarnLevel, "no endpoints defined for message")
 		return nil
 	}
 
 	for _, endp := range endpoints {
 		if err := endp.Send(m.ctx, msg, options...); err != nil {
-			m.logger.Logf(log.ErrorLevel, "error sending message id %s", msg.UID())
+			m.logger.Logf(log.ErrorLevel, "error sending message. %s", err)
 			return errors.WithStack(err)
 		}
 	}
@@ -65,9 +63,9 @@ func (m messageExecutionCtx) Send(msg *message.OutcomingMessage, options ...endp
 
 func (m messageExecutionCtx) Return(options ...endpoint.DeliveryOption) error {
 	outComingMsg := message.FromReceivedMsg(m.message)
-	m.message.Headers().RegisterReturn()
+	outComingMsg.Headers().RegisterReturn()
 	if err := m.Send(outComingMsg, options...); err != nil {
-		m.logger.Logf(log.ErrorLevel, "error when returning a message %s", outComingMsg.UID())
+		m.logger.Logf(log.ErrorLevel, "error when returning a message. %s", err)
 		return errors.Wrapf(err, "returning message %s", outComingMsg.UID())
 	}
 
@@ -78,17 +76,12 @@ func (m messageExecutionCtx) Message() *message.ReceivedMessage {
 	return m.message
 }
 
-func (m messageExecutionCtx) LogMessage(lvl log.Level, msg string) {
-	if m.Message().TraceID() != "" {
-		m.logger.Log(lvl, fmt.Sprintf("TraceID: %s : %s", m.Message().TraceID(), msg))
-		return
-	}
-
-	m.logger.Log(lvl, msg)
+func (m messageExecutionCtx) Logger() log.Logger {
+	return m.logger
 }
 
 type MessageExecutionCtxFactory interface {
-	CreateCtx(ctx context.Context, inPkg transport.IncomingPkg, message *message.ReceivedMessage) MessageExecutionCtx
+	CreateCtx(ctx context.Context, message *message.ReceivedMessage) MessageExecutionCtx
 }
 
 type messageExecutionCtxFactory struct {
@@ -100,8 +93,15 @@ func NewMessageExecutionCtxFactory(router endpoint.Router, logger log.Logger) Me
 	return &messageExecutionCtxFactory{router: router, logger: logger}
 }
 
-func (m messageExecutionCtxFactory) CreateCtx(ctx context.Context, inPkg transport.IncomingPkg, message *message.ReceivedMessage) MessageExecutionCtx {
-	return &messageExecutionCtx{ctx: ctx, inPkg: inPkg, message: message, router: m.router, logger: m.logger}
+func (m messageExecutionCtxFactory) CreateCtx(ctx context.Context, message *message.ReceivedMessage) MessageExecutionCtx {
+	fields := make([]log.Field, 1, 2)
+	fields[0] = log.Field{Name: "uid", Val: message.UID()}
+
+	if traceID := message.TraceID(); traceID != "" {
+		fields = append(fields, log.Field{Name: "traceId", Val: traceID})
+	}
+
+	return &messageExecutionCtx{ctx: ctx, message: message, router: m.router, logger: m.logger.WithFields(fields)}
 }
 
 type NoDefinedEndpoints struct {

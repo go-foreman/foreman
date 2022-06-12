@@ -7,6 +7,8 @@ import (
 	"github.com/go-foreman/foreman/runtime/scheme"
 )
 
+//go:generate mockgen --build_flags=--mod=mod -destination ../../testing/mocks/pubsub/endpoint/router.go -package endpoint . Router
+
 // Router is a registry of Endpoints and types. Each type can have multiple endpoints assigned.
 type Router interface {
 	// RegisterEndpoint assigns types of objects to an endpoint

@@ -6,7 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-foreman/foreman/log"
+	"github.com/go-foreman/foreman/testing/log"
+
 	sagaSql "github.com/go-foreman/foreman/saga/sql"
 
 	"github.com/go-foreman/foreman/saga"
