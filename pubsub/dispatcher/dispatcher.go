@@ -9,6 +9,8 @@ import (
 	"github.com/go-foreman/foreman/runtime/scheme"
 )
 
+//go:generate mockgen --build_flags=--mod=mod -destination ../../testing/mocks/pubsub/dispatcher/dispatcher.go -package dispatcher . Dispatcher
+
 type Dispatcher interface {
 	// Match matches object type and returns list of registered executors for this type
 	Match(obj message.Object) []execution.Executor
