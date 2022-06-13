@@ -2,6 +2,7 @@ package subscriber
 
 import (
 	"context"
+	"sync"
 )
 
 type task interface {
@@ -25,18 +26,20 @@ func newWorker(ctx context.Context, dispatcherQueue dispatcherQueue) worker {
 	}
 }
 
-func (w *worker) start() {
+func (w *worker) start(wGroup *sync.WaitGroup) {
 	go func() {
+		defer wGroup.Done()
 		defer close(w.myTasks)
 		for {
-			//tell dispatcher that I'm ready to work
+
 			w.dispatcherQueue <- w.myTasks
+
 			select {
 			case <-w.ctx.Done():
 				return
 			case task, open := <-w.myTasks:
 				if !open {
-					return
+					panic("someone explicitly closed the channel of this worker")
 				}
 				task.do()
 			}
@@ -52,26 +55,43 @@ func newDispatcher(workersCount uint) *dispatcher {
 }
 
 type dispatcher struct {
-	ctx           context.Context
+	stopped       bool
 	workersCount  uint
 	workersQueues dispatcherQueue
 }
 
 // busyWorkers return number of workers that are busy with processing a task and weren't returned to the dispatcher
 func (d *dispatcher) busyWorkers() int {
+	if d.stopped {
+		return 0
+	}
+
 	return int(d.workersCount) - len(d.workersQueues)
 }
 
 // start schedules defined number of workers
 func (d *dispatcher) start(ctx context.Context) {
-	d.ctx = ctx
-
+	wGroup := &sync.WaitGroup{}
 	var i uint
 
 	for i = 0; i < d.workersCount; i++ {
 		worker := newWorker(ctx, d.workersQueues)
-		worker.start()
+		wGroup.Add(1)
+		worker.start(wGroup)
 	}
+
+	go func() {
+		// wait for all workers to stop
+		wGroup.Wait()
+
+		// dry out all workers from pool
+		for len(d.workersQueues) > 0 {
+			<-d.workersQueues
+		}
+		// close the pool
+		close(d.workersQueues)
+		d.stopped = true
+	}()
 }
 
 // queue returns worker's chan that is ready to accept a job to do
