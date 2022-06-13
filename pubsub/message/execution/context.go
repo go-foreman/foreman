@@ -103,11 +103,3 @@ func (m messageExecutionCtxFactory) CreateCtx(ctx context.Context, message *mess
 
 	return &messageExecutionCtx{ctx: ctx, message: message, router: m.router, logger: m.logger.WithFields(fields), isValid: true}
 }
-
-type NoDefinedEndpoints struct {
-	error
-}
-
-func WithNoDefinedEndpoints(err error) error {
-	return NoDefinedEndpoints{err}
-}
