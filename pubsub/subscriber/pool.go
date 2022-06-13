@@ -104,6 +104,7 @@ func (d *dispatcher) start(ctx context.Context) {
 }
 
 // queue returns worker's chan that is ready to accept a job to do
-func (d dispatcher) queue() dispatcherQueue {
+// @todo making this method access by value (without *) causes race detector to detect a race at writing d.stopped = true in .start() method. waaaaaat? Go 1.18.3
+func (d *dispatcher) queue() dispatcherQueue {
 	return d.workersQueues
 }
