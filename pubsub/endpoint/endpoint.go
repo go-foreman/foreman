@@ -23,10 +23,9 @@ type deliveryOptions struct {
 
 // WithDelay option waits specified duration before delivering a message
 func WithDelay(delay time.Duration) DeliveryOption {
-	return func(o *deliveryOptions) error {
+	return func(o *deliveryOptions) {
 		o.delay = &delay
-		return nil
 	}
 }
 
-type DeliveryOption func(o *deliveryOptions) error
+type DeliveryOption func(o *deliveryOptions)
