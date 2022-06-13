@@ -101,7 +101,7 @@ func (m messageExecutionCtxFactory) CreateCtx(ctx context.Context, message *mess
 		fields = append(fields, log.Field{Name: "traceId", Val: traceID})
 	}
 
-	return &messageExecutionCtx{ctx: ctx, message: message, router: m.router, logger: m.logger.WithFields(fields)}
+	return &messageExecutionCtx{ctx: ctx, message: message, router: m.router, logger: m.logger.WithFields(fields), isValid: true}
 }
 
 type NoDefinedEndpoints struct {

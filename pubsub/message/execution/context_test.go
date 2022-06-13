@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	mockLogger "github.com/go-foreman/foreman/testing/mocks/log"
+
 	"github.com/pkg/errors"
 
 	"github.com/go-foreman/foreman/pubsub/endpoint"
@@ -187,4 +189,41 @@ func TestMessageExecutionCtx_Return(t *testing.T) {
 		assert.Contains(t, testLogger.LastMessage(), "error when returning a message")
 
 	})
+}
+
+func TestMessageExecutionCtx(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testLogger := mockLogger.NewMockLogger(ctrl)
+	testRouter := endpointMock.NewMockRouter(ctrl)
+
+	factory := NewMessageExecutionCtxFactory(testRouter, testLogger)
+
+	receivedMessage := message.NewReceivedMessage("123", &someTestType{}, message.Headers{"traceId": "111"}, time.Now(), "bus")
+	ctx := context.Background()
+
+	fields := []log.Field{
+		{
+			Name: "uid",
+			Val:  receivedMessage.UID(),
+		},
+		{
+			Name: "traceId",
+			Val:  "111",
+		},
+	}
+
+	testLogger.
+		EXPECT().
+		WithFields(fields).
+		Return(testLogger)
+
+	execCtx := factory.CreateCtx(ctx, receivedMessage)
+
+	assert.Same(t, execCtx.Context(), ctx)
+	assert.Same(t, execCtx.Logger(), testLogger)
+	assert.True(t, execCtx.Valid())
+	assert.Same(t, execCtx.Message(), receivedMessage)
+
 }
