@@ -4,6 +4,8 @@ import (
 	"context"
 )
 
+//go:generate mockgen --build_flags=--mod=mod -destination ../../testing/mocks/pubsub/transport/transport.go -package transport . Transport
+
 type Transport interface {
 	// CreateTopic creates a topic(exchange) in message broker
 	CreateTopic(ctx context.Context, topic Topic) error

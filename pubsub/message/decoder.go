@@ -11,6 +11,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+//go:generate mockgen --build_flags=--mod=mod -destination ../../testing/mocks/pubsub/message/decode.go -package message . Marshaller
+
 type Marshaller interface {
 	// Unmarshal decodes received bytes into original type that must be registered in scheme
 	Unmarshal(b []byte) (Object, error)
