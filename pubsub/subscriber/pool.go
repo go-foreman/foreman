@@ -51,10 +51,12 @@ func newDispatcher(workersCount uint) *dispatcher {
 	return &dispatcher{
 		workersCount:  workersCount,
 		workersQueues: make(dispatcherQueue, workersCount),
+		mutex:         &sync.RWMutex{},
 	}
 }
 
 type dispatcher struct {
+	mutex         *sync.RWMutex
 	stopped       bool
 	workersCount  uint
 	workersQueues dispatcherQueue
@@ -62,6 +64,9 @@ type dispatcher struct {
 
 // busyWorkers return number of workers that are busy with processing a task and weren't returned to the dispatcher
 func (d *dispatcher) busyWorkers() int {
+	d.mutex.RLock()
+	defer d.mutex.RUnlock()
+
 	if d.stopped {
 		return 0
 	}
@@ -81,6 +86,9 @@ func (d *dispatcher) start(ctx context.Context) {
 	}
 
 	go func() {
+		d.mutex.Lock()
+		defer d.mutex.Unlock()
+
 		// wait for all workers to stop
 		wGroup.Wait()
 

@@ -60,15 +60,14 @@ testsuite-clean: docker-clean
 
 .PHONY: test
 test:
-	go test ./... -cover
+	go test ./... -cover -race
 
 .PHONY: test-report
 test-report:
-	#go test -coverprofile=$(CI_REPORTS_DIR)/coverage.txt -covermode=atomic -json $(UNIT_TEST_PKGS) > $(CI_REPORTS_DIR)/report.json
-	go test -coverprofile=coverage.txt -covermode=atomic -coverpkg=./... $(UNIT_TEST_PKGS)
+	go test -race -coverprofile=coverage.txt -covermode=atomic -coverpkg=./... $(UNIT_TEST_PKGS)
 
 integration-test:
-	go test $(INTEGRATION_TEST_PKGS)
+	go test -race $(INTEGRATION_TEST_PKGS)
 
 .PHONY: lint
 lint:
