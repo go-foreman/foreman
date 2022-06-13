@@ -9,7 +9,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-//go:generate mockgen --build_flags=--mod=mod -destination ../../../testing/mocks/pubsub/message/context.go -package execution . MessageExecutionCtx,MessageExecutionCtxFactory
+//go:generate mockgen --build_flags=--mod=mod -destination ../../../testing/mocks/pubsub/message/execution/context.go -package execution . MessageExecutionCtx,MessageExecutionCtxFactory
 
 // MessageExecutionCtx is passed to each executor and contains received message, ctx, knows how to send out or return a message.
 type MessageExecutionCtx interface {

@@ -12,7 +12,6 @@ import (
 	endpoint "github.com/go-foreman/foreman/pubsub/endpoint"
 	message "github.com/go-foreman/foreman/pubsub/message"
 	execution "github.com/go-foreman/foreman/pubsub/message/execution"
-	transport "github.com/go-foreman/foreman/pubsub/transport"
 	gomock "github.com/golang/mock/gomock"
 )
 
@@ -53,16 +52,18 @@ func (mr *MockMessageExecutionCtxMockRecorder) Context() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Context", reflect.TypeOf((*MockMessageExecutionCtx)(nil).Context))
 }
 
-// LogMessage mocks base method.
-func (m *MockMessageExecutionCtx) Log(arg0 log.Level, arg1 string) {
+// Logger mocks base method.
+func (m *MockMessageExecutionCtx) Logger() log.Logger {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "LogMessage", arg0, arg1)
+	ret := m.ctrl.Call(m, "Logger")
+	ret0, _ := ret[0].(log.Logger)
+	return ret0
 }
 
-// LogMessage indicates an expected call of LogMessage.
-func (mr *MockMessageExecutionCtxMockRecorder) LogMessage(arg0, arg1 interface{}) *gomock.Call {
+// Logger indicates an expected call of Logger.
+func (mr *MockMessageExecutionCtxMockRecorder) Logger() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LogMessage", reflect.TypeOf((*MockMessageExecutionCtx)(nil).Log), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Logger", reflect.TypeOf((*MockMessageExecutionCtx)(nil).Logger))
 }
 
 // Message mocks base method.
@@ -154,15 +155,15 @@ func (m *MockMessageExecutionCtxFactory) EXPECT() *MockMessageExecutionCtxFactor
 }
 
 // CreateCtx mocks base method.
-func (m *MockMessageExecutionCtxFactory) CreateCtx(arg0 context.Context, arg1 transport.IncomingPkg, arg2 *message.ReceivedMessage) execution.MessageExecutionCtx {
+func (m *MockMessageExecutionCtxFactory) CreateCtx(arg0 context.Context, arg1 *message.ReceivedMessage) execution.MessageExecutionCtx {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateCtx", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "CreateCtx", arg0, arg1)
 	ret0, _ := ret[0].(execution.MessageExecutionCtx)
 	return ret0
 }
 
 // CreateCtx indicates an expected call of CreateCtx.
-func (mr *MockMessageExecutionCtxFactoryMockRecorder) CreateCtx(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockMessageExecutionCtxFactoryMockRecorder) CreateCtx(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateCtx", reflect.TypeOf((*MockMessageExecutionCtxFactory)(nil).CreateCtx), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateCtx", reflect.TypeOf((*MockMessageExecutionCtxFactory)(nil).CreateCtx), arg0, arg1)
 }

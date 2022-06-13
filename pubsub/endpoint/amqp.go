@@ -49,7 +49,7 @@ func (a AmqpEndpoint) Send(ctx context.Context, msg *message.OutcomingMessage, o
 
 		select {
 		case <-ctx.Done():
-			return errors.Errorf("Failed to send message %s. Was waiting for the delay and parent ctx closed.", msg.UID())
+			return errors.Errorf("failed to send message %s. Was waiting for the delay and parent ctx closed.", msg.UID())
 		case <-timer.C:
 			break
 		}
