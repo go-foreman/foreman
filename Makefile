@@ -22,7 +22,6 @@ ENV_LOCAL_TEST=\
 
 .PHONY: tools
 tools:
-	go install github.com/vektra/mockery/v2@latest
 	go install github.com/sonatype-nexus-community/nancy@latest
 	go install github.com/golang/mock/mockgen@v1.6.0
 	## using wget because go get is not working for 1.40.1
