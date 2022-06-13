@@ -56,7 +56,8 @@ func newDispatcher(workersCount uint) *dispatcher {
 }
 
 type dispatcher struct {
-	mutex         *sync.RWMutex
+	mutex *sync.RWMutex
+
 	stopped       bool
 	workersCount  uint
 	workersQueues dispatcherQueue
@@ -86,19 +87,19 @@ func (d *dispatcher) start(ctx context.Context) {
 	}
 
 	go func() {
-		d.mutex.Lock()
-		defer d.mutex.Unlock()
-
 		// wait for all workers to stop
 		wGroup.Wait()
 
-		// dry out all workers from pool
+		// dry out all workers from the pool
 		for len(d.workersQueues) > 0 {
 			<-d.workersQueues
 		}
 		// close the pool
 		close(d.workersQueues)
+
+		d.mutex.Lock()
 		d.stopped = true
+		d.mutex.Unlock()
 	}()
 }
 

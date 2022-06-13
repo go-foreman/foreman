@@ -2,6 +2,7 @@
 
 
 UNIT_TEST_PKGS=`go list ./... | grep -v -E './testing'`
+COVERAGE_PKGS=`go list  ./... | tr "\n" ',' | grep -v -E './testing'`
 INTEGRATION_TEST_PKGS=`go list ./... | grep "testing/integration"`
 
 INTEGRATION_TEST_PATH?=./.../testing
@@ -64,7 +65,7 @@ test:
 
 .PHONY: test-report
 test-report:
-	go test -race -coverprofile=coverage.txt -covermode=atomic -coverpkg=./... $(UNIT_TEST_PKGS)
+	go test -race -coverprofile=coverage.txt -covermode=atomic -coverpkg=$(COVERAGE_PKGS) $(UNIT_TEST_PKGS)
 
 integration-test:
 	go test -race $(INTEGRATION_TEST_PKGS)
