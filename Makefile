@@ -2,7 +2,7 @@
 
 
 UNIT_TEST_PKGS=`go list ./... | grep -v -E './testing'`
-COVERAGE_PKGS=`go list  ./... | tr "\n" ',' | grep -v -E './testing'`
+COVERAGE_PKGS=`go list  ./... | grep -v -E './testing' | tr "\n" ',' | rev | cut -c 2- | rev`
 INTEGRATION_TEST_PKGS=`go list ./... | grep "testing/integration"`
 
 INTEGRATION_TEST_PATH?=./.../testing
