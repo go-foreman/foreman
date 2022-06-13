@@ -2,6 +2,7 @@
 
 
 UNIT_TEST_PKGS=`go list ./... | grep -v -E './testing'`
+COVERAGE_PKGS=`go list  ./... | tr "\n" ',' | grep -v -E './testing'`
 INTEGRATION_TEST_PKGS=`go list ./... | grep "testing/integration"`
 
 INTEGRATION_TEST_PATH?=./.../testing
@@ -21,7 +22,6 @@ ENV_LOCAL_TEST=\
 
 .PHONY: tools
 tools:
-	go install github.com/vektra/mockery/v2@latest
 	go install github.com/sonatype-nexus-community/nancy@latest
 	go install github.com/golang/mock/mockgen@v1.6.0
 	## using wget because go get is not working for 1.40.1
@@ -60,15 +60,14 @@ testsuite-clean: docker-clean
 
 .PHONY: test
 test:
-	go test ./... -cover
+	go test ./... -cover -race
 
 .PHONY: test-report
 test-report:
-	#go test -coverprofile=$(CI_REPORTS_DIR)/coverage.txt -covermode=atomic -json $(UNIT_TEST_PKGS) > $(CI_REPORTS_DIR)/report.json
-	go test -coverprofile=coverage.txt -covermode=atomic -coverpkg=./... $(UNIT_TEST_PKGS)
+	go test -race -coverprofile=coverage.txt -covermode=atomic -coverpkg=$(COVERAGE_PKGS) $(UNIT_TEST_PKGS)
 
 integration-test:
-	go test $(INTEGRATION_TEST_PKGS)
+	go test -race $(INTEGRATION_TEST_PKGS)
 
 .PHONY: lint
 lint:

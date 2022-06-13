@@ -59,6 +59,10 @@ func (n testLogger) Messages() []string {
 	return r
 }
 
+func (n testLogger) Fields() []log.Field {
+	return n.fields
+}
+
 func (n testLogger) LastMessage() string {
 	if len(n.entriesStore.entries) > 0 {
 		return n.entriesStore.entries[len(n.entriesStore.entries)-1].Msg

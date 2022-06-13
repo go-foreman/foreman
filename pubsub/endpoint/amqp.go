@@ -30,9 +30,7 @@ func (a AmqpEndpoint) Send(ctx context.Context, msg *message.OutcomingMessage, o
 	deliveryOpts := &deliveryOptions{}
 
 	for _, opt := range opts {
-		if err := opt(deliveryOpts); err != nil {
-			return errors.Wrapf(err, "error compiling delivery options for message %s", msg.UID())
-		}
+		opt(deliveryOpts)
 	}
 
 	dataToSend, err := a.msgMarshaller.Marshal(msg.Payload())

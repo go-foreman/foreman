@@ -4,6 +4,8 @@ import (
 	"time"
 )
 
+//go:generate mockgen --build_flags=--mod=mod -destination ../../testing/mocks/pubsub/transport/pkg.go -package transport . IncomingPkg
+
 type IncomingPkg interface {
 	UID() string
 	Origin() string
