@@ -79,7 +79,7 @@ func (d *dispatcher) start(ctx context.Context) {
 	wGroup := &sync.WaitGroup{}
 	var i uint
 
-	workersCtx, stopWorkers := context.WithCancel(ctx)
+	workersCtx, stopWorkers := context.WithCancel(context.Background())
 
 	for i = 0; i < d.workersCount; i++ {
 		worker := newWorker(workersCtx, d.workersQueues)
