@@ -56,7 +56,14 @@ func TestWorkerPool(t *testing.T) {
 		//cancel dispatcher's context, all workers finish their jobs and stop
 		cancel()
 
-		time.Sleep(time.Millisecond * 500)
+		for i := 1; i < 1000; i++ {
+			worker, opened := <-workersDispatcher.queue()
+			if !opened {
+				t.Logf("%d jobs processed after ctx was cancelled", i)
+				break
+			}
+			worker <- &job{id: i}
+		}
 
 		_, opened := <-workersDispatcher.queue()
 		assert.False(t, opened)
