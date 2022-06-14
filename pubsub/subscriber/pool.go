@@ -31,7 +31,6 @@ func (w *worker) start(wGroup *sync.WaitGroup) {
 		defer wGroup.Done()
 		defer close(w.myTasks)
 		for {
-
 			w.dispatcherQueue <- w.myTasks
 
 			select {
@@ -80,22 +79,31 @@ func (d *dispatcher) start(ctx context.Context) {
 	wGroup := &sync.WaitGroup{}
 	var i uint
 
+	workersCtx, stopWorkers := context.WithCancel(ctx)
+
 	for i = 0; i < d.workersCount; i++ {
-		worker := newWorker(ctx, d.workersQueues)
+		worker := newWorker(workersCtx, d.workersQueues)
 		wGroup.Add(1)
 		worker.start(wGroup)
 	}
 
 	go func() {
-		// wait for all workers to stop
-		wGroup.Wait()
+		<-ctx.Done()
 
-		// dry out all workers from the pool
-		for len(d.workersQueues) > 0 {
+		// Dry out all workers from the pool. The loop over workersCount is used very much intentionally.
+		// After each worker finishes it's job it places itself into the pool again and that's where we have a chance to catch it and remove from the pool.
+		// Eventually all d.workersCount must be removed from the pool before we can close the pool and cancel workers ctx
+		for i := 0; i < int(d.workersCount); i++ {
 			<-d.workersQueues
 		}
+
 		// close the pool
 		close(d.workersQueues)
+
+		stopWorkers()
+
+		// wait for all workers to stop
+		wGroup.Wait()
 
 		d.mutex.Lock()
 		d.stopped = true
@@ -104,7 +112,7 @@ func (d *dispatcher) start(ctx context.Context) {
 }
 
 // queue returns worker's chan that is ready to accept a job to do
-// @todo making this method access by value (without *) causes race detector to detect a race at writing d.stopped = true in .start() method. waaaaaat? Go 1.18.3
+// @todo making this method's access by value (without *) causes race detector to detect a race at writing d.stopped = true in .start() method. waaaaaat? Go 1.18.3
 func (d *dispatcher) queue() dispatcherQueue {
 	return d.workersQueues
 }
