@@ -62,8 +62,8 @@ testsuite-clean: docker-clean
 test:
 	go test ./... -cover -race
 
-.PHONY: test-report
-test-report:
+.PHONY: unit-test
+unit-test:
 	go test -race -coverprofile=coverage.txt -covermode=atomic -coverpkg=$(COVERAGE_PKGS) $(UNIT_TEST_PKGS)
 
 integration-test:

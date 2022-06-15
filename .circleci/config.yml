@@ -57,7 +57,7 @@ jobs:
             MYSQL_CONNECTION: foreman:foreman@tcp(127.0.0.1:3306)/foreman?charset=utf8&parseTime=True
             PG_CONNECTION:  postgres://foreman:foreman@127.0.0.1:5432/foreman?sslmode=disable
           command: |
-            make test-report
+            make unit-test
             make integration-test
       - run:
           name: Upload reports to codecov
