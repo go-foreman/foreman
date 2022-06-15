@@ -65,6 +65,8 @@ func TestWorkerPool(t *testing.T) {
 			worker <- &job{id: i}
 		}
 
+		time.Sleep(time.Millisecond * 200)
+
 		_, opened := <-workersDispatcher.queue()
 		assert.False(t, opened)
 
