@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -36,7 +37,7 @@ func TestSubscriber(t *testing.T) {
 
 		doneCh := make(chan struct{})
 
-		pkgsChan := producePackages(ctrl, testProcessor, 10000, doneCh)
+		pkgsChan := producePackages(ctrl, testProcessor, 1000, doneCh)
 
 		testTransport.
 			EXPECT().
@@ -52,6 +53,8 @@ func TestSubscriber(t *testing.T) {
 		<-doneCh
 
 		cancel()
+
+		time.Sleep(time.Second)
 
 		assert.Len(t, pkgsChan, 0)
 		close(pkgsChan)
