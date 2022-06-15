@@ -5,11 +5,10 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/go-foreman/foreman/log"
-	"github.com/go-foreman/foreman/pubsub/transport/amqp"
-
 	"context"
 	"time"
+
+	"github.com/go-foreman/foreman/log"
 
 	"github.com/go-foreman/foreman/pubsub/transport"
 	"github.com/pkg/errors"
@@ -41,7 +40,8 @@ var DefaultConfig = Config{
 }
 
 type subscriberOpts struct {
-	config *Config
+	config      *Config
+	consumeOpts []transport.ConsumeOpts
 }
 
 type Opt func(o *subscriberOpts)
@@ -49,6 +49,12 @@ type Opt func(o *subscriberOpts)
 func WithConfig(c *Config) Opt {
 	return func(o *subscriberOpts) {
 		o.config = c
+	}
+}
+
+func WithConsumeOpts(opts ...transport.ConsumeOpts) Opt {
+	return func(o *subscriberOpts) {
+		o.consumeOpts = opts
 	}
 }
 
@@ -60,20 +66,16 @@ func NewSubscriber(transport transport.Transport, processor Processor, logger lo
 		o(sOpts)
 	}
 
-	var config *Config
-
-	if sOpts.config != nil {
-		config = sOpts.config
-	} else {
-		config = &DefaultConfig
+	if sOpts.config == nil {
+		sOpts.config = &DefaultConfig
 	}
 
 	return &subscriber{
 		transport:        transport,
 		logger:           logger,
 		processor:        processor,
-		workerDispatcher: newDispatcher(config.WorkersCount),
-		config:           config,
+		workerDispatcher: newDispatcher(sOpts.config.WorkersCount),
+		opts:             sOpts,
 	}
 }
 
@@ -82,7 +84,7 @@ type subscriber struct {
 	logger           log.Logger
 	processor        Processor
 	workerDispatcher *dispatcher
-	config           *Config
+	opts             *subscriberOpts
 }
 
 func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
@@ -93,13 +95,15 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 
 	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
 
+	config := s.opts.config
+
 	consumerCtx, cancelConsumerCtx := context.WithCancel(ctx)
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), s.config.GracefulShutdownTimeout)
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), config.GracefulShutdownTimeout)
 	defer shutdownCancel()
 	defer s.gracefulShutdown(shutdownCtx)
 	defer cancelConsumerCtx()
 
-	consumedPkgs, err := s.transport.Consume(consumerCtx, queues, amqp.WithQosPrefetchCount(s.config.WorkersCount))
+	consumedPkgs, err := s.transport.Consume(consumerCtx, queues, s.opts.consumeOpts...)
 
 	if err != nil {
 		return errors.WithStack(err)
@@ -107,7 +111,7 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 
 	s.workerDispatcher.start(consumerCtx)
 
-	scheduleTicker := time.NewTicker(s.config.WorkerWaitingAssignmentTimeout)
+	scheduleTicker := time.NewTicker(config.WorkerWaitingAssignmentTimeout)
 
 	defer scheduleTicker.Stop()
 
@@ -127,7 +131,7 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 
 			select {
 			case <-scheduleTicker.C:
-				s.logger.Logf(log.DebugLevel, "worker was waiting %s for a job to start. returning him to the pool", s.config.WorkerWaitingAssignmentTimeout.String())
+				s.logger.Logf(log.DebugLevel, "worker was waiting %s for a job to start. returning him to the pool", config.WorkerWaitingAssignmentTimeout.String())
 				s.workerDispatcher.queue() <- worker
 				break
 			case incomingPkg, open := <-consumedPkgs:
@@ -142,7 +146,7 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 }
 
 func (s *subscriber) processPackage(ctx context.Context, inPkg transport.IncomingPkg) {
-	processorCtx, processorCancel := context.WithTimeout(ctx, s.config.PackageProcessingMaxTime)
+	processorCtx, processorCancel := context.WithTimeout(ctx, s.opts.config.PackageProcessingMaxTime)
 	defer processorCancel()
 
 	s.logger.Logf(log.DebugLevel, "started processing package id %s", inPkg.UID())

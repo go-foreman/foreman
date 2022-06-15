@@ -18,6 +18,8 @@ const (
 	ContextTraceIDKey PackageProperty = "traceId"
 )
 
+//go:generate mockgen --build_flags=--mod=mod -destination ../../testing/mocks/pubsub/subscriber/processor.go -package subscriber . Processor
+
 // Processor knows how to process a message received by subscriber
 type Processor interface {
 	Process(ctx context.Context, inPkg transport.IncomingPkg) error
