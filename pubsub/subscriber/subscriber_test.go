@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/stretchr/testify/assert"
 
 	"github.com/go-foreman/foreman/pubsub/transport"
@@ -26,6 +28,24 @@ func TestSubscriber(t *testing.T) {
 	testProcessor := subscriberMock.NewMockProcessor(ctrl)
 
 	testLogger := log.NewNilLogger()
+
+	t.Run("error consume", func(t *testing.T) {
+		ctx := context.Background()
+		queues := []transport.Queue{
+			amqp.Queue("first", false, false, false, false),
+			amqp.Queue("second", false, false, false, false),
+		}
+		testTransport.
+			EXPECT().
+			Consume(gomock.Any(), queues).
+			Return(nil, errors.New("consume err"))
+
+		subscriber := NewSubscriber(testTransport, testProcessor, testLogger)
+		err := subscriber.Run(ctx, queues...)
+		assert.Error(t, err)
+		assert.EqualError(t, err, "consume err")
+
+	})
 
 	t.Run("process packages and exit by cancelling the ctx", func(t *testing.T) {
 		queues := []transport.Queue{

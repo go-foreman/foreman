@@ -98,16 +98,19 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 	config := s.opts.config
 
 	consumerCtx, cancelConsumerCtx := context.WithCancel(ctx)
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), config.GracefulShutdownTimeout)
-	defer shutdownCancel()
-	defer s.gracefulShutdown(shutdownCtx)
-	defer cancelConsumerCtx()
 
 	consumedPkgs, err := s.transport.Consume(consumerCtx, queues, s.opts.consumeOpts...)
 
 	if err != nil {
+		cancelConsumerCtx()
 		return errors.WithStack(err)
 	}
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), config.GracefulShutdownTimeout)
+	defer shutdownCancel()
+
+	defer s.gracefulShutdown(shutdownCtx)
+	defer cancelConsumerCtx()
 
 	s.workerDispatcher.start(consumerCtx)
 
