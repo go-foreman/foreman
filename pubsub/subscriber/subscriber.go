@@ -90,10 +90,13 @@ type subscriber struct {
 func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 	s.logger.Logf(log.InfoLevel, "Started subscriber. Listening to queues: %v", queues)
 
-	signalChan := make(chan os.Signal, 1)
-	defer close(signalChan)
+	//signalChan := make(chan os.Signal, 1)
+	//defer close(signalChan)
+	//
+	//signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
 
-	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
+	ctx, cancelSignal := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer cancelSignal()
 
 	config := s.opts.config
 
@@ -123,9 +126,9 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 		case <-consumerCtx.Done():
 			s.logger.Logf(log.InfoLevel, "Subscriber's context was canceled")
 			return nil
-		case <-signalChan:
-			s.logger.Logf(log.InfoLevel, "Received kill signal")
-			return nil
+		//case <-signalChan:
+		//	s.logger.Logf(log.InfoLevel, "Received kill signal")
+		//	return nil
 		case worker, open := <-s.workerDispatcher.queue():
 			if !open {
 				s.logger.Logf(log.InfoLevel, "worker's channel is closed")

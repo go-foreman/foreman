@@ -3,8 +3,8 @@ package subscriber
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
-	"time"
 
 	"github.com/pkg/errors"
 
@@ -30,10 +30,11 @@ func TestSubscriber(t *testing.T) {
 	testLogger := log.NewNilLogger()
 
 	t.Run("error consume", func(t *testing.T) {
+		defer testLogger.Clear()
+
 		ctx := context.Background()
 		queues := []transport.Queue{
 			amqp.Queue("first", false, false, false, false),
-			amqp.Queue("second", false, false, false, false),
 		}
 		testTransport.
 			EXPECT().
@@ -48,8 +49,9 @@ func TestSubscriber(t *testing.T) {
 	})
 
 	t.Run("process packages and exit by cancelling the ctx", func(t *testing.T) {
+		defer testLogger.Clear()
+
 		queues := []transport.Queue{
-			amqp.Queue("first", false, false, false, false),
 			amqp.Queue("second", false, false, false, false),
 		}
 		subscriber := NewSubscriber(testTransport, testProcessor, testLogger)
@@ -64,7 +66,10 @@ func TestSubscriber(t *testing.T) {
 			Consume(gomock.AssignableToTypeOf(ctx), queues).
 			Return(pkgsChan, nil)
 
+		wg := &sync.WaitGroup{}
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			if err := subscriber.Run(ctx, queues...); err != nil {
 				assert.NoError(t, err)
 			}
@@ -74,10 +79,12 @@ func TestSubscriber(t *testing.T) {
 
 		cancel()
 
-		time.Sleep(time.Second)
+		wg.Wait()
 
 		assert.Len(t, pkgsChan, 0)
 		close(pkgsChan)
+
+		assert.Contains(t, testLogger.Messages(), "Subscriber's context was canceled")
 	})
 
 }
