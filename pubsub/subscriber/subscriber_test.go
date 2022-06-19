@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -45,6 +46,47 @@ func TestSubscriber(t *testing.T) {
 		err := subscriber.Run(ctx, queues...)
 		assert.Error(t, err)
 		assert.EqualError(t, err, "consume err")
+
+	})
+
+	t.Run("worker was waiting for a job to start and returned back to the pool", func(t *testing.T) {
+		defer testLogger.Clear()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		queues := []transport.Queue{
+			amqp.Queue("first", false, false, false, false),
+		}
+
+		respChan := make(chan transport.IncomingPkg)
+
+		testTransport.
+			EXPECT().
+			Consume(gomock.Any(), queues).
+			Return(respChan, nil)
+
+		config := &Config{
+			WorkersCount:                   10,
+			WorkerWaitingAssignmentTimeout: time.Second * 2,
+			PackageProcessingMaxTime:       time.Second * 10,
+			GracefulShutdownTimeout:        time.Second * 10,
+		}
+
+		subscriber := NewSubscriber(testTransport, testProcessor, testLogger, WithConfig(config))
+
+		wg := &sync.WaitGroup{}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			err := subscriber.Run(ctx, queues...)
+			assert.NoError(t, err)
+		}()
+
+		//wait for package to process
+		time.Sleep(time.Second * 3)
+
+		cancel()
+
+		assert.Contains(t, testLogger.Messages(), fmt.Sprintf("worker was waiting %s for a job to start. returning him to the pool", config.WorkerWaitingAssignmentTimeout.String()))
 
 	})
 
