@@ -73,10 +73,7 @@ func TestSubscriber(t *testing.T) {
 
 		subscriber := NewSubscriber(testTransport, testProcessor, testLogger, WithConfig(config))
 
-		wg := &sync.WaitGroup{}
-		wg.Add(1)
 		go func() {
-			defer wg.Done()
 			err := subscriber.Run(ctx, queues...)
 			assert.NoError(t, err)
 		}()
@@ -127,6 +124,67 @@ func TestSubscriber(t *testing.T) {
 		close(pkgsChan)
 
 		assert.Contains(t, testLogger.Messages(), "Subscriber's context was canceled")
+	})
+
+	t.Run("graceful shutdown timeout", func(t *testing.T) {
+		defer testLogger.Clear()
+
+		defer func() {
+			for _, l := range testLogger.Messages() {
+				t.Log(l)
+			}
+		}()
+
+		queues := []transport.Queue{
+			amqp.Queue("second", false, false, false, false),
+		}
+		subscriber := NewSubscriber(testTransport, testProcessor, testLogger, WithConfig(&Config{
+			WorkersCount:                   10,
+			WorkerWaitingAssignmentTimeout: time.Second * 3,
+			PackageProcessingMaxTime:       time.Second * 10,
+			GracefulShutdownTimeout:        time.Second * 2,
+		}))
+		ctx, cancel := context.WithCancel(context.Background())
+
+		pkgsChan := make(chan transport.IncomingPkg, 1)
+
+		testTransport.
+			EXPECT().
+			Consume(gomock.AssignableToTypeOf(ctx), queues).
+			Return(pkgsChan, nil)
+
+		inPkg := transportMock.NewMockIncomingPkg(ctrl)
+		inPkg.EXPECT().UID().Return("111").Times(2)
+		inPkg.EXPECT().Ack().Return(nil)
+
+		startedProcessingNotifier := make(chan struct{})
+
+		testProcessor.
+			EXPECT().
+			Process(gomock.Any(), inPkg).
+			Do(func(ctx context.Context, inPkg transport.IncomingPkg) {
+				startedProcessingNotifier <- struct{}{}
+				time.Sleep(time.Second * 3)
+			}).
+			Return(nil)
+
+		pkgsChan <- inPkg
+
+		go func() {
+			// wait for the package to be processed
+			<-startedProcessingNotifier
+			// trigger gracefulShutdown
+			cancel()
+		}()
+
+		if err := subscriber.Run(ctx, queues...); err != nil {
+			assert.NoError(t, err)
+		}
+
+		//exiting here without this sleep will stop all goroutines and processed package will abort it's execution.
+		time.Sleep(time.Second * 2)
+
+		assert.Contains(t, testLogger.Messages(), "Stopped gracefulShutdown because of canceled parent ctx")
 	})
 
 }

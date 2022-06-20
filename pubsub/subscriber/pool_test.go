@@ -6,27 +6,33 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-foreman/foreman/testing/log"
+
 	"github.com/stretchr/testify/assert"
 )
 
 func TestWorkerPool(t *testing.T) {
 	rand.Seed(time.Now().Unix())
 
+	testLogger := log.NewNilLogger()
+
 	t.Run("100 workers", func(t *testing.T) {
+		defer testLogger.Clear()
+
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		workersCount := 10
+		workersCount := uint(10)
 		jobsChan := simulateConsume(100)
-		workersDispatcher := newDispatcher(uint(workersCount))
+		workersDispatcher := newDispatcher(uint(workersCount), testLogger)
 
 		workersDispatcher.start(ctx)
 
 		time.Sleep(time.Second)
 
-		assert.Equal(t, 0, workersDispatcher.busyWorkers())
+		assert.Equal(t, uint(0), workersDispatcher.busyWorkers())
 
-		counter := 0
+		var counter uint
 		for job := range jobsChan {
 			// verify that all workers are getting busy in order 1 2 3 4...
 			if counter < workersCount {
@@ -41,14 +47,15 @@ func TestWorkerPool(t *testing.T) {
 
 		time.Sleep(time.Second)
 
-		assert.Equal(t, 0, workersDispatcher.busyWorkers())
+		assert.Equal(t, uint(0), workersDispatcher.busyWorkers())
 	})
 
 	t.Run("cancel ctx", func(t *testing.T) {
+		defer testLogger.Clear()
 		ctx, cancel := context.WithCancel(context.Background())
 
 		workersCount := 10
-		workersDispatcher := newDispatcher(uint(workersCount))
+		workersDispatcher := newDispatcher(uint(workersCount), testLogger)
 		workersDispatcher.start(ctx)
 
 		time.Sleep(time.Millisecond * 500)
@@ -70,7 +77,20 @@ func TestWorkerPool(t *testing.T) {
 		_, opened := <-workersDispatcher.queue()
 		assert.False(t, opened)
 
-		assert.Equal(t, 0, workersDispatcher.busyWorkers())
+		assert.Equal(t, uint(0), workersDispatcher.busyWorkers())
+	})
+
+	t.Run("busyWorkers() works correctly while workers start", func(t *testing.T) {
+		defer testLogger.Clear()
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		workersCount := 5
+		workersDispatcher := newDispatcher(uint(workersCount), testLogger)
+		assert.Equal(t, uint(0), workersDispatcher.busyWorkers())
+		workersDispatcher.start(ctx)
+		assert.Equal(t, uint(0), workersDispatcher.busyWorkers())
+		time.Sleep(time.Millisecond * 200)
+		assert.Equal(t, uint(0), workersDispatcher.busyWorkers())
 	})
 
 	//t.Run("catch panic when someone closed a worker's channel explicitly", func(t *testing.T) {

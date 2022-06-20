@@ -74,7 +74,7 @@ func NewSubscriber(transport transport.Transport, processor Processor, logger lo
 		transport:        transport,
 		logger:           logger,
 		processor:        processor,
-		workerDispatcher: newDispatcher(sOpts.config.WorkersCount),
+		workerDispatcher: newDispatcher(sOpts.config.WorkersCount, logger),
 		opts:             sOpts,
 	}
 }
@@ -89,11 +89,6 @@ type subscriber struct {
 
 func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 	s.logger.Logf(log.InfoLevel, "Started subscriber. Listening to queues: %v", queues)
-
-	//signalChan := make(chan os.Signal, 1)
-	//defer close(signalChan)
-	//
-	//signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
 
 	ctx, cancelSignal := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer cancelSignal()
@@ -124,16 +119,15 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 	for {
 		select {
 		case <-consumerCtx.Done():
-			s.logger.Logf(log.InfoLevel, "Subscriber's context was canceled")
+			s.logger.Log(log.InfoLevel, "Subscriber's context was canceled")
 			return nil
-		//case <-signalChan:
-		//	s.logger.Logf(log.InfoLevel, "Received kill signal")
-		//	return nil
 		case worker, open := <-s.workerDispatcher.queue():
 			if !open {
-				s.logger.Logf(log.InfoLevel, "worker's channel is closed")
+				s.logger.Log(log.InfoLevel, "worker's channel is closed")
 				return nil
 			}
+
+			s.logger.Logf(log.DebugLevel, "got worker. Busy workers %d", s.workerDispatcher.busyWorkers())
 
 			select {
 			case <-scheduleTicker.C:
@@ -142,7 +136,7 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 				break
 			case incomingPkg, open := <-consumedPkgs:
 				if !open {
-					s.logger.Logf(log.InfoLevel, "consumed package is closed")
+					s.logger.Log(log.InfoLevel, "consumed package is closed")
 					return nil
 				}
 				worker <- newTaskProcessPkg(ctx, incomingPkg, s, s.logger)
@@ -158,7 +152,7 @@ func (s *subscriber) processPackage(ctx context.Context, inPkg transport.Incomin
 	s.logger.Logf(log.DebugLevel, "started processing package id %s", inPkg.UID())
 
 	if err := s.processor.Process(processorCtx, inPkg); err != nil {
-		s.logger.Logf(log.ErrorLevel, "error happened while processing pkg %s from %s. %s\n", inPkg.UID(), inPkg.Origin(), err)
+		s.logger.Logf(log.ErrorLevel, "error happened while processing pkg %s from %s. %s", inPkg.UID(), inPkg.Origin(), err)
 
 		return
 	}
@@ -182,7 +176,7 @@ func (s *subscriber) gracefulShutdown(ctx context.Context) {
 	for s.workerDispatcher.busyWorkers() > 0 {
 		select {
 		case <-ctx.Done():
-			s.logger.Logf(log.WarnLevel, "Stopped subscriber because of canceled parent ctx")
+			s.logger.Log(log.WarnLevel, "Stopped gracefulShutdown because of canceled parent ctx")
 			return
 		case <-waitingTicker.C:
 			s.logger.Logf(log.InfoLevel, "Waiting for processor to finish all remaining tasks in a queue. Tasks in progress: %d", s.workerDispatcher.busyWorkers())
