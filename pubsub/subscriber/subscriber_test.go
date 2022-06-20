@@ -307,6 +307,100 @@ func TestSubscriber(t *testing.T) {
 		}
 	})
 
+	t.Run("error acking a package", func(t *testing.T) {
+		defer testLogger.Clear()
+
+		queues := []transport.Queue{
+			amqp.Queue("seventh", false, false, false, false),
+		}
+		subscriber := NewSubscriber(testTransport, testProcessor, testLogger, WithConfig(&Config{
+			WorkersCount:                   10,
+			WorkerWaitingAssignmentTimeout: time.Second * 3,
+			PackageProcessingMaxTime:       time.Second * 10,
+			GracefulShutdownTimeout:        time.Second * 20,
+		}))
+		ctx, cancel := context.WithCancel(context.Background())
+
+		pkgsChan := make(chan transport.IncomingPkg, 1)
+
+		testTransport.
+			EXPECT().
+			Consume(gomock.AssignableToTypeOf(ctx), queues).
+			Return(pkgsChan, nil)
+
+		inPkg := transportMock.NewMockIncomingPkg(ctrl)
+		inPkg.EXPECT().UID().Return("111").Times(2)
+		inPkg.EXPECT().Ack().Return(errors.New("error acking package"))
+
+		testProcessor.
+			EXPECT().
+			Process(gomock.Any(), inPkg).
+			Return(nil)
+
+		pkgsChan <- inPkg
+
+		wg := &sync.WaitGroup{}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := subscriber.Run(ctx, queues...); err != nil {
+				assert.NoError(t, err)
+			}
+		}()
+
+		// give it some time to process packages
+		time.Sleep(time.Second * 2)
+
+		//stop subscriber
+		cancel()
+
+		// wait for subscriber to finish
+		wg.Wait()
+
+		assert.Contains(t, testLogger.Messages(), "error acking package 111. error acking package")
+	})
+
+	t.Run("consume channel is closed", func(t *testing.T) {
+		defer testLogger.Clear()
+
+		queues := []transport.Queue{
+			amqp.Queue("eights", false, false, false, false),
+		}
+		subscriber := NewSubscriber(testTransport, testProcessor, testLogger, WithConfig(&Config{
+			WorkersCount:                   10,
+			WorkerWaitingAssignmentTimeout: time.Second * 3,
+			PackageProcessingMaxTime:       time.Second * 10,
+			GracefulShutdownTimeout:        time.Second,
+		}))
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		pkgsChan := make(chan transport.IncomingPkg)
+
+		testTransport.
+			EXPECT().
+			Consume(gomock.AssignableToTypeOf(ctx), queues).
+			Return(pkgsChan, nil)
+
+		wg := &sync.WaitGroup{}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := subscriber.Run(ctx, queues...); err != nil {
+				assert.NoError(t, err)
+			}
+		}()
+
+		// give it some time to start
+		time.Sleep(time.Second)
+
+		close(pkgsChan)
+
+		// wait for subscriber to finish
+		wg.Wait()
+
+		assert.Contains(t, testLogger.Messages(), "consumed package is closed")
+	})
 }
 
 func producePackages(ctrl *gomock.Controller, processorMock *subscriberMock.MockProcessor, count int, done chan struct{}) chan transport.IncomingPkg {
