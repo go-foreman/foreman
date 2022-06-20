@@ -31,6 +31,7 @@ func TestSubscriber(t *testing.T) {
 	testLogger := log.NewNilLogger()
 
 	t.Run("error consume", func(t *testing.T) {
+		t.Parallel()
 		defer testLogger.Clear()
 
 		ctx := context.Background()
@@ -50,6 +51,7 @@ func TestSubscriber(t *testing.T) {
 	})
 
 	t.Run("worker was waiting for a job to start and returned back to the pool", func(t *testing.T) {
+		t.Parallel()
 		defer testLogger.Clear()
 
 		ctx, cancel := context.WithCancel(context.Background())
