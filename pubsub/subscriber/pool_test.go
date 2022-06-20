@@ -86,11 +86,14 @@ func TestWorkerPool(t *testing.T) {
 		defer cancel()
 		workersCount := 5
 		workersDispatcher := newDispatcher(uint(workersCount), testLogger)
-		assert.Equal(t, uint(0), workersDispatcher.busyWorkers())
+
+		busyWorkers := uint(0)
+
+		assert.Equal(t, busyWorkers, workersDispatcher.busyWorkers())
 		workersDispatcher.start(ctx)
-		assert.Equal(t, uint(0), workersDispatcher.busyWorkers())
+		assert.Equal(t, busyWorkers, workersDispatcher.busyWorkers())
 		time.Sleep(time.Millisecond * 200)
-		assert.Equal(t, uint(0), workersDispatcher.busyWorkers())
+		assert.Equal(t, busyWorkers, workersDispatcher.busyWorkers())
 	})
 
 	//t.Run("catch panic when someone closed a worker's channel explicitly", func(t *testing.T) {
