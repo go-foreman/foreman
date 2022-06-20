@@ -238,6 +238,66 @@ func TestSubscriber(t *testing.T) {
 		assertLogEntryContains(t, testLogger.Messages(), "Waiting for processor to finish all remaining tasks in a queue. Tasks in progress: ")
 	})
 
+	t.Run("error processing package", func(t *testing.T) {
+		defer testLogger.Clear()
+
+		queues := []transport.Queue{
+			amqp.Queue("sixth", false, false, false, false),
+		}
+		subscriber := NewSubscriber(testTransport, testProcessor, testLogger, WithConfig(&Config{
+			WorkersCount:                   10,
+			WorkerWaitingAssignmentTimeout: time.Second * 3,
+			PackageProcessingMaxTime:       time.Second * 10,
+			GracefulShutdownTimeout:        time.Second * 20,
+		}))
+		ctx, cancel := context.WithCancel(context.Background())
+
+		pkgsChan := make(chan transport.IncomingPkg, 10)
+
+		testTransport.
+			EXPECT().
+			Consume(gomock.AssignableToTypeOf(ctx), queues).
+			Return(pkgsChan, nil)
+
+		for i := 0; i < 10; i++ {
+			inPkg := transportMock.NewMockIncomingPkg(ctrl)
+			inPkg.EXPECT().UID().Return(fmt.Sprintf("%d", i)).Times(2)
+			inPkg.EXPECT().Origin().Return("m_bus")
+
+			testProcessor.
+				EXPECT().
+				Process(gomock.Any(), inPkg).
+				Do(func(ctx context.Context, inPkg transport.IncomingPkg) {
+					time.Sleep(time.Second * 1)
+				}).
+				Return(errors.New("some error"))
+
+			pkgsChan <- inPkg
+		}
+
+		wg := &sync.WaitGroup{}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := subscriber.Run(ctx, queues...); err != nil {
+				assert.NoError(t, err)
+			}
+		}()
+
+		// give it some time to process packages
+		time.Sleep(time.Second * 2)
+
+		//stop subscriber
+		cancel()
+
+		// wait for subscriber to finish
+		wg.Wait()
+
+		for i := 0; i < 10; i++ {
+			assert.Contains(t, testLogger.Messages(), fmt.Sprintf("error happened while processing pkg %d from m_bus. some error", i))
+		}
+	})
+
 }
 
 func producePackages(ctrl *gomock.Controller, processorMock *subscriberMock.MockProcessor, count int, done chan struct{}) chan transport.IncomingPkg {
