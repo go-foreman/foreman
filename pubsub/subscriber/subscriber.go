@@ -127,8 +127,6 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 				return nil
 			}
 
-			s.logger.Logf(log.DebugLevel, "got worker. Busy workers %d", s.workerDispatcher.busyWorkers())
-
 			select {
 			case <-scheduleTicker.C:
 				s.logger.Logf(log.DebugLevel, "worker was waiting %s for a job to start. returning him to the pool", config.WorkerWaitingAssignmentTimeout.String())

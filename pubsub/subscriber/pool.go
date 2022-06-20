@@ -43,7 +43,6 @@ func (w *worker) start(wGroup *sync.WaitGroup, startCall func()) {
 
 		for {
 			w.dispatcherQueue <- w.myTasks
-			w.logger.Logf(log.DebugLevel, "worker %d added to the pool", w.id)
 
 			select {
 			case <-w.ctx.Done():
@@ -91,7 +90,6 @@ func (d *dispatcher) busyWorkers() uint {
 		return d.startedWorkers - uint(len(d.workersQueues))
 	}
 
-	d.logger.Logf(log.DebugLevel, "workers in queue %d. Stopped workers: %d", len(d.workersQueues), d.stoppedWorkers)
 	return d.workersCount - uint(len(d.workersQueues)) - d.stoppedWorkers
 }
 
