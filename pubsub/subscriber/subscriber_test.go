@@ -3,6 +3,7 @@ package subscriber
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -31,7 +32,6 @@ func TestSubscriber(t *testing.T) {
 	testLogger := log.NewNilLogger()
 
 	t.Run("error consume", func(t *testing.T) {
-		t.Parallel()
 		defer testLogger.Clear()
 
 		ctx := context.Background()
@@ -51,12 +51,11 @@ func TestSubscriber(t *testing.T) {
 	})
 
 	t.Run("worker was waiting for a job to start and returned back to the pool", func(t *testing.T) {
-		t.Parallel()
 		defer testLogger.Clear()
 
 		ctx, cancel := context.WithCancel(context.Background())
 		queues := []transport.Queue{
-			amqp.Queue("first", false, false, false, false),
+			amqp.Queue("second", false, false, false, false),
 		}
 
 		respChan := make(chan transport.IncomingPkg)
@@ -93,7 +92,7 @@ func TestSubscriber(t *testing.T) {
 		defer testLogger.Clear()
 
 		queues := []transport.Queue{
-			amqp.Queue("second", false, false, false, false),
+			amqp.Queue("third", false, false, false, false),
 		}
 		subscriber := NewSubscriber(testTransport, testProcessor, testLogger)
 		ctx, cancel := context.WithCancel(context.Background())
@@ -131,14 +130,8 @@ func TestSubscriber(t *testing.T) {
 	t.Run("graceful shutdown timeout", func(t *testing.T) {
 		defer testLogger.Clear()
 
-		defer func() {
-			for _, l := range testLogger.Messages() {
-				t.Log(l)
-			}
-		}()
-
 		queues := []transport.Queue{
-			amqp.Queue("second", false, false, false, false),
+			amqp.Queue("fourth", false, false, false, false),
 		}
 		subscriber := NewSubscriber(testTransport, testProcessor, testLogger, WithConfig(&Config{
 			WorkersCount:                   10,
@@ -189,6 +182,62 @@ func TestSubscriber(t *testing.T) {
 		assert.Contains(t, testLogger.Messages(), "Stopped gracefulShutdown because of canceled parent ctx")
 	})
 
+	t.Run("waiting for all tasks to finish in gracefulShutdown", func(t *testing.T) {
+		defer testLogger.Clear()
+
+		queues := []transport.Queue{
+			amqp.Queue("fifth", false, false, false, false),
+		}
+		subscriber := NewSubscriber(testTransport, testProcessor, testLogger, WithConfig(&Config{
+			WorkersCount:                   10,
+			WorkerWaitingAssignmentTimeout: time.Second * 3,
+			PackageProcessingMaxTime:       time.Second * 10,
+			GracefulShutdownTimeout:        time.Second * 20,
+		}))
+		ctx, cancel := context.WithCancel(context.Background())
+
+		pkgsChan := make(chan transport.IncomingPkg, 10)
+
+		testTransport.
+			EXPECT().
+			Consume(gomock.AssignableToTypeOf(ctx), queues).
+			Return(pkgsChan, nil)
+
+		for i := 0; i < 10; i++ {
+			inPkg := transportMock.NewMockIncomingPkg(ctrl)
+			inPkg.EXPECT().UID().Return(fmt.Sprintf("%d", i)).Times(2)
+			inPkg.EXPECT().Ack().Return(nil)
+
+			testProcessor.
+				EXPECT().
+				Process(gomock.Any(), inPkg).
+				Do(func(ctx context.Context, inPkg transport.IncomingPkg) {
+					time.Sleep(time.Second * 3)
+				}).
+				Return(nil)
+
+			pkgsChan <- inPkg
+		}
+
+		go func() {
+			// wait for workers to start and be assigned on tasks
+			time.Sleep(time.Second * 2)
+
+			// trigger gracefulShutdown
+			cancel()
+		}()
+
+		if err := subscriber.Run(ctx, queues...); err != nil {
+			assert.NoError(t, err)
+		}
+
+		//exiting here without this sleep will stop all goroutines and processed package will abort it's execution.
+		time.Sleep(time.Second * 2)
+
+		assert.Contains(t, testLogger.Messages(), "Graceful shutdown. Waiting subscriber for finishing 10 tasks in progress")
+		assertLogEntryContains(t, testLogger.Messages(), "Waiting for processor to finish all remaining tasks in a queue. Tasks in progress: ")
+	})
+
 }
 
 func producePackages(ctrl *gomock.Controller, processorMock *subscriberMock.MockProcessor, count int, done chan struct{}) chan transport.IncomingPkg {
@@ -211,4 +260,16 @@ func producePackages(ctrl *gomock.Controller, processorMock *subscriberMock.Mock
 	}()
 
 	return respChan
+}
+
+func assertLogEntryContains(t *testing.T, entries []string, str string) {
+	present := false
+	for _, l := range entries {
+		if strings.Contains(l, str) {
+			present = true
+			break
+		}
+	}
+
+	assert.Truef(t, present, "asserting that %s was logged", str)
 }
