@@ -134,7 +134,7 @@ func (t *amqpTransport) Send(ctx context.Context, outboundPkg transport.Outbound
 		}
 	}
 
-	err := t.publishingChannel.Publish(
+	if err := t.publishingChannel.Publish(
 		outboundPkg.Destination().DestinationTopic,
 		outboundPkg.Destination().RoutingKey,
 		sendOptions.Mandatory,
@@ -144,8 +144,7 @@ func (t *amqpTransport) Send(ctx context.Context, outboundPkg transport.Outbound
 			ContentType: outboundPkg.ContentType(),
 			Body:        outboundPkg.Payload(),
 		},
-	)
-	if err != nil {
+	); err != nil {
 		return errors.Wrap(err, "sending out pkg")
 	}
 
@@ -191,7 +190,7 @@ func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, o
 					t.logger.Logf(log.ErrorLevel, "error canceling consumer %s", err)
 				}
 				if err := consumingChannel.Close(); err != nil {
-					t.logger.Logf(log.ErrorLevel, "error closing amqp channel", err)
+					t.logger.Logf(log.ErrorLevel, "error closing amqp channel. %s", err)
 				}
 				t.logger.Logf(log.InfoLevel, "canceled consumer %s", queue.Name())
 			}()
@@ -231,7 +230,7 @@ func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, o
 	go func() {
 		consumersWait.Wait()
 		close(income)
-		t.logger.Logf(log.InfoLevel, "closed consumer channel")
+		t.logger.Log(log.InfoLevel, "closed consumer channel")
 	}()
 
 	return income, nil

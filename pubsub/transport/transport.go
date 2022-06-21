@@ -11,7 +11,7 @@ type Transport interface {
 	CreateTopic(ctx context.Context, topic Topic) error
 	// CreateQueue creates a queue in a message broker
 	CreateQueue(ctx context.Context, queue Queue, queueBind ...QueueBind) error
-	// Consume starts receiving packages in a gorotuine and sends them to the <-chan IncomingPkg
+	// Consume starts receiving packages in a goroutine and sends them to the <-chan IncomingPkg
 	Consume(ctx context.Context, queues []Queue, options ...ConsumeOpts) (<-chan IncomingPkg, error)
 	// Send sends an outbound package to a defined destination topic in OutboundPkg
 	Send(ctx context.Context, outboundPkg OutboundPkg, options ...SendOpts) error
