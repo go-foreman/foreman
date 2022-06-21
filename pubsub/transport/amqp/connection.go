@@ -36,7 +36,10 @@ func (c *Connection) Channel() (*Channel, error) {
 			// exit this goroutine if closed by developer
 			if !ok || channel.IsClosed() {
 				c.logger.Log(log.WarnLevel, "channel closed")
-				channel.Close() // close again, ensure closed flag set when connection closed
+				// close again, ensure closed flag set when connection closed
+				if err := channel.Close(); err != nil {
+					c.logger.Logf(log.ErrorLevel, "error closing channel %s", err)
+				}
 				break
 			}
 			c.logger.Logf(log.WarnLevel, "channel closed, reason: %v", reason)
@@ -98,7 +101,8 @@ func (ch *Channel) Consume(queue, consumer string, autoAck, exclusive, noLocal, 
 				ch.logger.Logf(log.ErrorLevel, "consume failed, err: %v", err)
 				time.Sleep(delay * time.Second)
 				if reconnectedCount > reconnectCount {
-					ch.logger.Logf(log.FatalLevel, "Reached limit of reconnects %d", reconnectCount)
+					ch.logger.Logf(log.ErrorLevel, "Reached limit of reconnects %d", reconnectCount)
+					close(deliveries)
 					break
 				}
 				reconnectedCount++

@@ -52,8 +52,8 @@ func (l *defaultLogger) WithFields(fields []Field) Logger {
 	return newLogger
 }
 
-func (l defaultLogger) Logf(level Level, template string, args ...interface{}) {
-	l.Log(level, fmt.Sprintf(template, args...))
+func (l defaultLogger) Logf(level Level, format string, args ...interface{}) {
+	l.Log(level, fmt.Sprintf(format, args...))
 }
 
 func (l *defaultLogger) SetLevel(level Level) {

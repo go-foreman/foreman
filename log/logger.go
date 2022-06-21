@@ -29,7 +29,7 @@ type Level uint32
 // Logger interface allows to fit any logger pkg for usage in MessageBus
 type Logger interface {
 	Log(level Level, v ...interface{})
-	Logf(level Level, template string, args ...interface{})
+	Logf(level Level, format string, args ...interface{})
 	WithFields(fields []Field) Logger
 	SetLevel(level Level)
 }

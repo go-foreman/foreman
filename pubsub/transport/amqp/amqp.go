@@ -179,61 +179,67 @@ func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, o
 
 	consumersWait := &sync.WaitGroup{}
 
+	consumersCtx, cancelConsumers := context.WithCancel(ctx) //nolint:govet
+
 	for _, q := range queues {
+		consumingCh, err := consumingChannel.Consume(
+			q.Name(),
+			q.Name(),
+			false,
+			consumeOptions.Exclusive,
+			consumeOptions.NoLocal,
+			consumeOptions.NoWait,
+			nil,
+		)
+
+		if err != nil {
+			cancelConsumers() // this will shut down all goroutines previously created in this loop
+			return nil, errors.Wrapf(err, "consuming %s", q.Name())
+		}
+
 		consumersWait.Add(1)
-		go func(queue transport.Queue) {
+
+		go func(consumersCtx context.Context, queue transport.Queue, deliveries <-chan amqp.Delivery) {
 			defer consumersWait.Done()
 
 			defer func() {
 				t.logger.Logf(log.InfoLevel, "canceling consumer %s", queue.Name())
 				if err := consumingChannel.Cancel(queue.Name(), true); err != nil {
-					t.logger.Logf(log.ErrorLevel, "error canceling consumer %s", err)
+					t.logger.Logf(log.ErrorLevel, "error canceling consumer %s. %s", queue.Name(), err)
+				} else {
+					t.logger.Logf(log.InfoLevel, "canceled consumer %s", queue.Name())
 				}
-				if err := consumingChannel.Close(); err != nil {
-					t.logger.Logf(log.ErrorLevel, "error closing amqp channel. %s", err)
-				}
-				t.logger.Logf(log.InfoLevel, "canceled consumer %s", queue.Name())
 			}()
-
-			msgs, err := consumingChannel.Consume(
-				queue.Name(),
-				queue.Name(),
-				false,
-				consumeOptions.Exclusive,
-				consumeOptions.NoLocal,
-				consumeOptions.NoWait,
-				nil,
-			)
-
-			if err != nil {
-				t.logger.Log(log.ErrorLevel, err)
-				return
-			}
 
 			for {
 				select {
-				case msg, open := <-msgs:
+				case msg, open := <-deliveries:
 					if !open {
 						t.logger.Logf(log.WarnLevel, "Amqp consumer closed channel for queue %s", queue.Name())
 						return
 					}
 
 					income <- &inAmqpPkg{origin: queue.Name(), receivedAt: time.Now(), delivery: msg}
-				case <-ctx.Done():
+				case <-consumersCtx.Done():
 					t.logger.Logf(log.WarnLevel, "Canceled context. Stopped consuming queue %s", queue.Name())
 					return
 				}
 			}
-		}(q)
+		}(consumersCtx, q, consumingCh)
 	}
 
 	go func() {
 		consumersWait.Wait()
 		close(income)
-		t.logger.Log(log.InfoLevel, "closed consumer channel")
+
+		if err := consumingChannel.Close(); err != nil {
+			t.logger.Logf(log.ErrorLevel, "error closing amqp channel. %s", err)
+		} else {
+			t.logger.Log(log.InfoLevel, "closed consumer channel")
+		}
 	}()
 
-	return income, nil
+	return income, nil //nolint:govet
 }
 
 func (t *amqpTransport) Disconnect(ctx context.Context) error {
