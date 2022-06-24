@@ -91,6 +91,7 @@ func TestWorkerPool(t *testing.T) {
 
 		assert.Equal(t, busyWorkers, workersDispatcher.busyWorkers())
 		workersDispatcher.start(ctx)
+		time.Sleep(time.Millisecond * 50)
 		assert.Equal(t, busyWorkers, workersDispatcher.busyWorkers())
 		time.Sleep(time.Millisecond * 200)
 		assert.Equal(t, busyWorkers, workersDispatcher.busyWorkers())

@@ -35,22 +35,8 @@ func (m *MockTransport) EXPECT() *MockTransportMockRecorder {
 	return m.recorder
 }
 
-// Connect mocks base method.
-func (m *MockTransport) Connect(arg0 context.Context) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Connect", arg0)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Connect indicates an expected call of Connect.
-func (mr *MockTransportMockRecorder) Connect(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockTransport)(nil).Connect), arg0)
-}
-
 // Consume mocks base method.
-func (m *MockTransport) Consume(arg0 context.Context, arg1 []transport.Queue, arg2 ...transport.ConsumeOpts) (<-chan transport.IncomingPkg, error) {
+func (m *MockTransport) Consume(arg0 context.Context, arg1 []transport.Queue, arg2 ...transport.ConsumeOpt) (<-chan transport.IncomingPkg, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{arg0, arg1}
 	for _, a := range arg2 {
@@ -117,7 +103,7 @@ func (mr *MockTransportMockRecorder) Disconnect(arg0 interface{}) *gomock.Call {
 }
 
 // Send mocks base method.
-func (m *MockTransport) Send(arg0 context.Context, arg1 transport.OutboundPkg, arg2 ...transport.SendOpts) error {
+func (m *MockTransport) Send(arg0 context.Context, arg1 transport.OutboundPkg, arg2 ...transport.SendOpt) error {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{arg0, arg1}
 	for _, a := range arg2 {

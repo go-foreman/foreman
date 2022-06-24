@@ -41,7 +41,7 @@ var DefaultConfig = Config{
 
 type subscriberOpts struct {
 	config      *Config
-	consumeOpts []transport.ConsumeOpts
+	consumeOpts []transport.ConsumeOpt
 }
 
 type Opt func(o *subscriberOpts)
@@ -52,7 +52,7 @@ func WithConfig(c *Config) Opt {
 	}
 }
 
-func WithConsumeOpts(opts ...transport.ConsumeOpts) Opt {
+func WithConsumeOpts(opts ...transport.ConsumeOpt) Opt {
 	return func(o *subscriberOpts) {
 		o.consumeOpts = opts
 	}

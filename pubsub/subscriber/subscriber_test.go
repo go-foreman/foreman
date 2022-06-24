@@ -3,7 +3,6 @@ package subscriber
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -40,8 +39,8 @@ func TestSubscriber(t *testing.T) {
 		}
 		testTransport.
 			EXPECT().
-			Consume(gomock.Any(), queues, gomock.AssignableToTypeOf([]transport.ConsumeOpts{})).
-			Do(func(ctx context.Context, queues []transport.Queue, options ...transport.ConsumeOpts) {
+			Consume(gomock.Any(), queues, gomock.AssignableToTypeOf([]transport.ConsumeOpt{})).
+			Do(func(ctx context.Context, queues []transport.Queue, options ...transport.ConsumeOpt) {
 				if queues[0].Name() != "first" {
 					panic("queue name is not equal")
 				}
@@ -244,7 +243,7 @@ func TestSubscriber(t *testing.T) {
 		time.Sleep(time.Second * 2)
 
 		assert.Contains(t, testLogger.Messages(), "Graceful shutdown. Waiting subscriber for finishing 10 tasks in progress")
-		assertLogEntryContains(t, testLogger.Messages(), "Waiting for processor to finish all remaining tasks in a queue. Tasks in progress: ")
+		testLogger.AssertContainsSubstr(t, "Waiting for processor to finish all remaining tasks in a queue. Tasks in progress: ")
 	})
 
 	t.Run("error processing package", func(t *testing.T) {
@@ -423,16 +422,4 @@ func producePackages(ctrl *gomock.Controller, processorMock *subscriberMock.Mock
 	}()
 
 	return respChan
-}
-
-func assertLogEntryContains(t *testing.T, entries []string, str string) {
-	present := false
-	for _, l := range entries {
-		if strings.Contains(l, str) {
-			present = true
-			break
-		}
-	}
-
-	assert.Truef(t, present, "asserting that %s was logged", str)
 }

@@ -1,38 +1,103 @@
 package amqp
 
 import (
+	"reflect"
 	"sync/atomic"
 	"time"
+
+	"github.com/pkg/errors"
 
 	"github.com/go-foreman/foreman/log"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 const (
-	delay          = 3 // reconnect after delay seconds
-	reconnectCount = 10
+	delay          = time.Second * 3 // reconnect after delay seconds
+	reconnectCount = 20
 )
 
-type Connection struct {
-	logger log.Logger
-	*amqp.Connection
-}
+// Dial wrap amqp.Dial, dial and get a reconnect connection
+func Dial(url string, autoReconnect bool, logger log.Logger) (UnderlyingConnection, error) {
+	var connPtr UnderlyingConnection
 
-// Channel wrap amqp.Connection.Channel, get a auto reconnect channel
-func (c *Connection) Channel() (*Channel, error) {
-	ch, err := c.Connection.Channel()
+	conn, err := amqp.Dial(url)
 	if err != nil {
 		return nil, err
 	}
 
+	connPtr = conn
+
+	if autoReconnect {
+		go func() {
+			for {
+				var reconnectedCount uint
+
+				reason, ok := <-conn.NotifyClose(make(chan *amqp.Error))
+				// exit this goroutine if closed by developer
+				if !ok {
+					logger.Log(log.InfoLevel, "connection closed explicitly")
+					break
+				}
+
+				logger.Logf(log.WarnLevel, "connection closed, reason: %v", reason)
+
+				// reconnect if not closed by developer
+				for {
+					// wait for reconnect
+					time.Sleep(delay)
+
+					if reconnectedCount > reconnectCount {
+						logger.Logf(log.FatalLevel, "reached limit of reconnects %d", reconnectCount)
+					}
+					reconnectedCount++
+
+					conn, err := amqp.Dial(url)
+					if err == nil {
+						reflect.ValueOf(connPtr).Elem().Set(reflect.ValueOf(conn).Elem())
+						logger.Log(log.InfoLevel, "successfully reconnected amqp.Connection")
+						break
+					}
+
+					logger.Logf(log.ErrorLevel, "reconnect failed, err: %v", err)
+				}
+			}
+		}()
+	}
+
+	return connPtr, nil
+}
+
+type Connection struct {
+	logger log.Logger
+	//underlyingConn and Connection have to point to the same connection at all times
+	underlyingConn      UnderlyingConnection
+	chReconnectionDelay time.Duration
+}
+
+func (c *Connection) Close() error {
+	return c.underlyingConn.Close()
+}
+
+func (c *Connection) IsClosed() bool {
+	return c.underlyingConn.IsClosed()
+}
+
+// Channel wrap amqp.Connection.Channel, get a auto reconnect channel
+func (c *Connection) Channel() (AmqpChannel, error) {
+	ch, err := c.underlyingConn.Channel()
+	if err != nil {
+		return nil, errors.Wrap(err, "creating channel")
+	}
+
 	channel := &Channel{
-		Channel: ch,
-		logger:  c.logger,
+		AmqpChannel:              ch,
+		logger:                   c.logger,
+		consumeReconnectionDelay: c.chReconnectionDelay,
 	}
 
 	go func() {
 		for {
-			reason, ok := <-channel.Channel.NotifyClose(make(chan *amqp.Error))
+			reason, ok := <-channel.NotifyClose(make(chan *amqp.Error))
 			// exit this goroutine if closed by developer
 			if !ok || channel.IsClosed() {
 				c.logger.Log(log.WarnLevel, "channel closed")
@@ -46,13 +111,19 @@ func (c *Connection) Channel() (*Channel, error) {
 
 			// reconnect if not closed by developer
 			for {
-				// wait 1s for connection reconnect
-				time.Sleep(delay * time.Second)
+				// wait 3s for connection reconnect
+				time.Sleep(c.chReconnectionDelay)
 
-				ch, err := c.Connection.Channel()
+				//@todo here a panic happens panic: send on closed channel
+				// How to reproduce:
+				// 1. connect
+				// 2. docker restart rabbitmq
+				// 3. wait for successful reconnection
+				// 4. docker restart rabbitmq
+				// 5. the issue appears.
+				ch, err = c.underlyingConn.Channel()
 				if err == nil {
-					c.logger.Log(log.InfoLevel, "channel recreation succeed")
-					channel.Channel = ch
+					channel.AmqpChannel = ch
 					break
 				}
 
@@ -65,11 +136,12 @@ func (c *Connection) Channel() (*Channel, error) {
 	return channel, nil
 }
 
-// Channel amqp.Channel wapper
+// Channel amqp.Channel wrapper
 type Channel struct {
-	logger log.Logger
-	*amqp.Channel
-	closed int32
+	AmqpChannel
+	closed                   int32
+	logger                   log.Logger
+	consumeReconnectionDelay time.Duration
 }
 
 // IsClosed indicate closed by developer
@@ -84,8 +156,7 @@ func (ch *Channel) Close() error {
 	}
 
 	atomic.StoreInt32(&ch.closed, 1)
-
-	return ch.Channel.Close()
+	return ch.AmqpChannel.Close()
 }
 
 // Consume warp amqp.Channel.Consume, the returned delivery will end only when channel closed by developer
@@ -95,26 +166,32 @@ func (ch *Channel) Consume(queue, consumer string, autoAck, exclusive, noLocal, 
 	var reconnectedCount uint
 
 	go func() {
+		defer close(deliveries)
 		for {
-			d, err := ch.Channel.Consume(queue, consumer, autoAck, exclusive, noLocal, noWait, args)
+			d, err := ch.AmqpChannel.Consume(queue, consumer, autoAck, exclusive, noLocal, noWait, args)
 			if err != nil {
 				ch.logger.Logf(log.ErrorLevel, "consume failed, err: %v", err)
-				time.Sleep(delay * time.Second)
+				time.Sleep(ch.consumeReconnectionDelay)
+
 				if reconnectedCount > reconnectCount {
 					ch.logger.Logf(log.ErrorLevel, "Reached limit of reconnects %d", reconnectCount)
-					close(deliveries)
 					break
 				}
+
 				reconnectedCount++
+				ch.logger.Logf(log.DebugLevel, "retrying to reconnect consumer %s", consumer)
+
 				continue
 			}
+
+			ch.logger.Logf(log.DebugLevel, "started consuming %s", consumer)
 
 			for msg := range d {
 				deliveries <- msg
 			}
 
 			// sleep before IsClose call. closed flag may not set before sleep.
-			time.Sleep(delay * time.Second)
+			time.Sleep(ch.consumeReconnectionDelay)
 
 			if ch.IsClosed() {
 				break
@@ -123,53 +200,4 @@ func (ch *Channel) Consume(queue, consumer string, autoAck, exclusive, noLocal, 
 	}()
 
 	return deliveries, nil
-}
-
-// Dial wrap amqp.Dial, dial and get a reconnect connection
-func Dial(url string, logger log.Logger) (*Connection, error) {
-	conn, err := amqp.Dial(url)
-	if err != nil {
-		return nil, err
-	}
-
-	connection := &Connection{
-		Connection: conn,
-		logger:     logger,
-	}
-
-	var reconnectedCount uint
-
-	go func() {
-		for {
-			reason, ok := <-connection.Connection.NotifyClose(make(chan *amqp.Error))
-			// exit this goroutine if closed by developer
-			if !ok {
-				logger.Log(log.InfoLevel, "connection closed")
-				break
-			}
-			logger.Logf(log.WarnLevel, "connection closed, reason: %v", reason)
-
-			// reconnect if not closed by developer
-			for {
-				// wait 1s for reconnect
-				time.Sleep(delay * time.Second)
-
-				if reconnectedCount > reconnectCount {
-					logger.Logf(log.FatalLevel, "Reached limit of reconnects %d", reconnectCount)
-				}
-				reconnectedCount++
-
-				conn, err := amqp.Dial(url)
-				if err == nil {
-					connection.Connection = conn
-					logger.Log(log.InfoLevel, "reconnect success")
-					break
-				}
-
-				logger.Logf(log.ErrorLevel, "reconnect failed, err: %v", err)
-			}
-		}
-	}()
-
-	return connection, nil
 }
