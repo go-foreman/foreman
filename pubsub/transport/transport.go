@@ -15,7 +15,7 @@ type Transport interface {
 	Consume(ctx context.Context, queues []Queue, options ...ConsumeOpt) (<-chan IncomingPkg, error)
 	// Send sends an outbound package to a defined destination topic in OutboundPkg
 	Send(ctx context.Context, outboundPkg OutboundPkg, options ...SendOpt) error
-	// Disconnect disconnects from publishing channel
+	// Disconnect disconnects from publishing and consuming channels
 	Disconnect(context.Context) error
 }
 
