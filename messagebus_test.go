@@ -3,6 +3,14 @@ package foreman
 import (
 	"testing"
 
+	"github.com/pkg/errors"
+
+	"github.com/go-foreman/foreman/runtime/scheme"
+	"github.com/go-foreman/foreman/testing/log"
+	"github.com/go-foreman/foreman/testing/mocks/pubsub/message"
+	"github.com/go-foreman/foreman/testing/mocks/pubsub/subscriber"
+	"github.com/stretchr/testify/require"
+
 	"github.com/go-foreman/foreman/testing/mocks/pubsub/dispatcher"
 	"github.com/go-foreman/foreman/testing/mocks/pubsub/endpoint"
 	"github.com/go-foreman/foreman/testing/mocks/pubsub/message/execution"
@@ -39,9 +47,61 @@ func TestMessageBusConfigOptions(t *testing.T) {
 }
 
 type aComponent struct {
+	err error
 }
 
 func (a aComponent) Init(b *MessageBus) error {
-	//TODO implement me
-	panic("implement me")
+	return a.err
+}
+
+func TestMessageBusConstructor(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testLogger := log.NewNilLogger()
+	msgMarshallerMock := message.NewMockMarshaller(ctrl)
+	schemeRegistry := scheme.NewKnownTypesRegistry()
+	subscriberMock := subscriber.NewMockSubscriber(ctrl)
+
+	dispatcherMock := dispatcher.NewMockDispatcher(ctrl)
+	msgExecFactoryMock := execution.NewMockMessageExecutionCtxFactory(ctrl)
+	routerMock := endpoint.NewMockRouter(ctrl)
+	componentMock := &aComponent{}
+	erroredComponentMock := &aComponent{err: errors.New("component error")}
+
+	t.Run("create mbus with all opts", func(t *testing.T) {
+		opts := []ConfigOption{
+			WithDispatcher(dispatcherMock),
+			WithMessageExecutionFactory(msgExecFactoryMock),
+			WithRouter(routerMock),
+		}
+
+		mBus, err := NewMessageBus(testLogger, msgMarshallerMock, schemeRegistry, WithSubscriber(subscriberMock), append(opts, WithComponents(componentMock, erroredComponentMock))...)
+		require.Error(t, err)
+		assert.Nil(t, mBus)
+		assert.EqualError(t, err, "component error")
+
+		mBus, err = NewMessageBus(testLogger, msgMarshallerMock, schemeRegistry, WithSubscriber(subscriberMock), append(opts, WithComponents(componentMock))...)
+		require.NoError(t, err)
+		require.NotNil(t, mBus)
+
+		assert.Same(t, mBus.Logger(), testLogger)
+		assert.Same(t, mBus.Dispatcher(), dispatcherMock)
+		assert.Same(t, mBus.Router(), routerMock)
+		assert.Same(t, mBus.SchemeRegistry(), schemeRegistry)
+		assert.Same(t, mBus.Marshaller(), msgMarshallerMock)
+	})
+
+	t.Run("create mbus without opts", func(t *testing.T) {
+		mBus, err := NewMessageBus(testLogger, msgMarshallerMock, schemeRegistry, WithSubscriber(subscriberMock))
+		require.NoError(t, err)
+		require.NotNil(t, mBus)
+
+		assert.Same(t, mBus.scheme, mBus.SchemeRegistry())
+		assert.Same(t, mBus.marshaller, mBus.Marshaller())
+		assert.Same(t, mBus.messagesDispatcher, mBus.Dispatcher())
+		assert.Same(t, mBus.router, mBus.Router())
+		assert.Same(t, mBus.logger, mBus.Logger())
+		assert.Same(t, mBus.subscriber, mBus.Subscriber())
+	})
 }
