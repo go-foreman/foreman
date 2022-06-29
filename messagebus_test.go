@@ -3,12 +3,15 @@ package foreman
 import (
 	"testing"
 
+	"github.com/go-foreman/foreman/pubsub/message"
+	"github.com/go-foreman/foreman/pubsub/subscriber"
+
 	"github.com/pkg/errors"
 
 	"github.com/go-foreman/foreman/runtime/scheme"
 	"github.com/go-foreman/foreman/testing/log"
-	"github.com/go-foreman/foreman/testing/mocks/pubsub/message"
-	"github.com/go-foreman/foreman/testing/mocks/pubsub/subscriber"
+	messageMock "github.com/go-foreman/foreman/testing/mocks/pubsub/message"
+	subscriberMock "github.com/go-foreman/foreman/testing/mocks/pubsub/subscriber"
 	"github.com/stretchr/testify/require"
 
 	"github.com/go-foreman/foreman/testing/mocks/pubsub/dispatcher"
@@ -59,9 +62,9 @@ func TestMessageBusConstructor(t *testing.T) {
 	defer ctrl.Finish()
 
 	testLogger := log.NewNilLogger()
-	msgMarshallerMock := message.NewMockMarshaller(ctrl)
+	msgMarshallerMock := messageMock.NewMockMarshaller(ctrl)
 	schemeRegistry := scheme.NewKnownTypesRegistry()
-	subscriberMock := subscriber.NewMockSubscriber(ctrl)
+	subscriberMock := subscriberMock.NewMockSubscriber(ctrl)
 
 	dispatcherMock := dispatcher.NewMockDispatcher(ctrl)
 	msgExecFactoryMock := execution.NewMockMessageExecutionCtxFactory(ctrl)
@@ -103,5 +106,18 @@ func TestMessageBusConstructor(t *testing.T) {
 		assert.Same(t, mBus.router, mBus.Router())
 		assert.Same(t, mBus.logger, mBus.Logger())
 		assert.Same(t, mBus.subscriber, mBus.Subscriber())
+	})
+
+	t.Run("create mbus with custom subscriber", func(t *testing.T) {
+		mBus, err := NewMessageBus(
+			testLogger,
+			msgMarshallerMock,
+			schemeRegistry,
+			WithSubscriberFactory(func(processor subscriber.Processor, marshaller message.Marshaller) subscriber.Subscriber {
+				return subscriberMock
+			}),
+		)
+		require.NoError(t, err)
+		assert.Same(t, subscriberMock, mBus.Subscriber())
 	})
 }
