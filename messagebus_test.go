@@ -3,6 +3,8 @@ package foreman
 import (
 	"testing"
 
+	"github.com/go-foreman/foreman/testing/mocks/pubsub/transport"
+
 	"github.com/go-foreman/foreman/pubsub/message"
 	"github.com/go-foreman/foreman/pubsub/subscriber"
 
@@ -64,7 +66,7 @@ func TestMessageBusConstructor(t *testing.T) {
 	testLogger := log.NewNilLogger()
 	msgMarshallerMock := messageMock.NewMockMarshaller(ctrl)
 	schemeRegistry := scheme.NewKnownTypesRegistry()
-	subscriberMock := subscriberMock.NewMockSubscriber(ctrl)
+	subscriberInstanceMock := subscriberMock.NewMockSubscriber(ctrl)
 
 	dispatcherMock := dispatcher.NewMockDispatcher(ctrl)
 	msgExecFactoryMock := execution.NewMockMessageExecutionCtxFactory(ctrl)
@@ -79,12 +81,12 @@ func TestMessageBusConstructor(t *testing.T) {
 			WithRouter(routerMock),
 		}
 
-		mBus, err := NewMessageBus(testLogger, msgMarshallerMock, schemeRegistry, WithSubscriber(subscriberMock), append(opts, WithComponents(componentMock, erroredComponentMock))...)
+		mBus, err := NewMessageBus(testLogger, msgMarshallerMock, schemeRegistry, WithSubscriber(subscriberInstanceMock), append(opts, WithComponents(componentMock, erroredComponentMock))...)
 		require.Error(t, err)
 		assert.Nil(t, mBus)
 		assert.EqualError(t, err, "component error")
 
-		mBus, err = NewMessageBus(testLogger, msgMarshallerMock, schemeRegistry, WithSubscriber(subscriberMock), append(opts, WithComponents(componentMock))...)
+		mBus, err = NewMessageBus(testLogger, msgMarshallerMock, schemeRegistry, WithSubscriber(subscriberInstanceMock), append(opts, WithComponents(componentMock))...)
 		require.NoError(t, err)
 		require.NotNil(t, mBus)
 
@@ -96,7 +98,7 @@ func TestMessageBusConstructor(t *testing.T) {
 	})
 
 	t.Run("create mbus without opts", func(t *testing.T) {
-		mBus, err := NewMessageBus(testLogger, msgMarshallerMock, schemeRegistry, WithSubscriber(subscriberMock))
+		mBus, err := NewMessageBus(testLogger, msgMarshallerMock, schemeRegistry, WithSubscriber(subscriberInstanceMock))
 		require.NoError(t, err)
 		require.NotNil(t, mBus)
 
@@ -114,10 +116,35 @@ func TestMessageBusConstructor(t *testing.T) {
 			msgMarshallerMock,
 			schemeRegistry,
 			WithSubscriberFactory(func(processor subscriber.Processor, marshaller message.Marshaller) subscriber.Subscriber {
-				return subscriberMock
+				return subscriberInstanceMock
 			}),
 		)
 		require.NoError(t, err)
-		assert.Same(t, subscriberMock, mBus.Subscriber())
+		assert.Same(t, subscriberInstanceMock, mBus.Subscriber())
+	})
+
+	t.Run("create mbus with default subscriber", func(t *testing.T) {
+		transportMock := transport.NewMockTransport(ctrl)
+
+		sConfig := &subscriber.Config{}
+		opts := []subscriber.Opt{subscriber.WithConfig(sConfig)}
+		subscriberConfig := DefaultSubscriber(transportMock, opts...)
+		sOpts := &subscriberOpts{}
+		sContainer := &subscriberContainer{}
+		subscriberConfig(sOpts, sContainer)
+
+		assert.Same(t, sOpts.transport, transportMock)
+		assert.Equal(t, sOpts.opts, opts)
+
+		mBus, err := NewMessageBus(testLogger, msgMarshallerMock, schemeRegistry, DefaultSubscriber(transportMock))
+		require.NoError(t, err)
+		defaultSubscriber := subscriber.NewSubscriber(transportMock, nil, nil)
+		assert.IsType(t, defaultSubscriber, mBus.Subscriber())
+	})
+
+	t.Run("nil subscriber", func(t *testing.T) {
+		assert.PanicsWithError(t, "subscriber is nil", func() {
+			_, _ = NewMessageBus(testLogger, msgMarshallerMock, schemeRegistry, WithSubscriber(nil))
+		})
 	})
 }
