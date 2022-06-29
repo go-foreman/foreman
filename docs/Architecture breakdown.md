@@ -22,8 +22,6 @@ type Transport interface {
 	Consume(ctx context.Context, queues []Queue, options ...ConsumeOpts) (<-chan IncomingPkg, error)
 	// Send sends an outbound package to a defined destination topic in OutboundPkg
 	Send(ctx context.Context, outboundPkg OutboundPkg, options ...SendOpts) error
-	// Connect connects to a message broker. It should be able to reconnect automatically in case of failure. 
-	Connect(context.Context) error
 	// Disconnect disconnects from a message broker and stops listening for packages.
 	Disconnect(context.Context) error
 }

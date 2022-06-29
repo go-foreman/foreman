@@ -5,51 +5,51 @@ import (
 	"github.com/pkg/errors"
 )
 
-type ConsumeOptions struct {
+type consumeOptions struct {
 	Exclusive     bool
 	NoLocal       bool
 	NoWait        bool
 	PrefetchCount uint
 }
 
-func convertConsumeOptsType(options interface{}) (*ConsumeOptions, error) {
-	opts, ok := options.(*ConsumeOptions)
+func convertConsumeOptsType(options interface{}) (*consumeOptions, error) {
+	opts, ok := options.(*consumeOptions)
 
 	if !ok {
-		return nil, errors.Errorf("SuppliedOption must be amqp.ConsumeOptions")
+		return nil, errors.Errorf("this option must be called on amqp.consumeOptions type")
 	}
 
 	return opts, nil
 }
 
-func convertSendOptsType(options interface{}) (*SendOptions, error) {
-	opts, ok := options.(*SendOptions)
+func convertSendOptsType(options interface{}) (*sendOptions, error) {
+	opts, ok := options.(*sendOptions)
 
 	if !ok {
-		return nil, errors.Errorf("SuppliedOption must be amqp.SendOptions")
+		return nil, errors.Errorf("this option must be called on amqp.sendOptions type")
 	}
 
 	return opts, nil
 }
 
-func WithQosPrefetchCount(limit uint) transport.ConsumeOpts {
+func WithQosPrefetchCount(limit uint) transport.ConsumeOpt {
 	return func(options interface{}) error {
 		opts, err := convertConsumeOptsType(options)
 
 		if err != nil {
-			return errors.WithStack(err)
+			return errors.Wrap(err, "calling WithQosPrefetchCount opt")
 		}
 		opts.PrefetchCount = limit
 		return nil
 	}
 }
 
-func WithExclusive() transport.ConsumeOpts {
+func WithExclusive() transport.ConsumeOpt {
 	return func(options interface{}) error {
 		opts, err := convertConsumeOptsType(options)
 
 		if err != nil {
-			return errors.WithStack(err)
+			return errors.Wrap(err, "calling WithExclusive opt")
 		}
 
 		opts.Exclusive = true
@@ -58,12 +58,12 @@ func WithExclusive() transport.ConsumeOpts {
 	}
 }
 
-func WithNoLocal() transport.ConsumeOpts {
+func WithNoLocal() transport.ConsumeOpt {
 	return func(options interface{}) error {
 		opts, err := convertConsumeOptsType(options)
 
 		if err != nil {
-			return errors.WithStack(err)
+			return errors.Wrap(err, "calling WithNoLocal opt")
 		}
 
 		opts.NoLocal = true
@@ -72,12 +72,12 @@ func WithNoLocal() transport.ConsumeOpts {
 	}
 }
 
-func WithNoWait() transport.ConsumeOpts {
+func WithNoWait() transport.ConsumeOpt {
 	return func(options interface{}) error {
 		opts, err := convertConsumeOptsType(options)
 
 		if err != nil {
-			return errors.WithStack(err)
+			return errors.Wrap(err, "calling WithNoWait opt")
 		}
 
 		opts.NoWait = true
@@ -86,17 +86,17 @@ func WithNoWait() transport.ConsumeOpts {
 	}
 }
 
-type SendOptions struct {
+type sendOptions struct {
 	Mandatory bool
 	Immediate bool
 }
 
-func WithMandatory() transport.SendOpts {
+func WithMandatory() transport.SendOpt {
 	return func(options interface{}) error {
 		opts, err := convertSendOptsType(options)
 
 		if err != nil {
-			return errors.WithStack(err)
+			return errors.Wrap(err, "calling WithMandatory opt")
 		}
 
 		opts.Mandatory = true
@@ -105,15 +105,15 @@ func WithMandatory() transport.SendOpts {
 	}
 }
 
-func WithImmediate() transport.SendOpts {
+func WithImmediate() transport.SendOpt {
 	return func(options interface{}) error {
 		opts, err := convertSendOptsType(options)
 
 		if err != nil {
-			return errors.WithStack(err)
+			return errors.Wrap(err, "calling WithImmediate opt")
 		}
 
-		opts.Mandatory = true
+		opts.Immediate = true
 
 		return nil
 	}

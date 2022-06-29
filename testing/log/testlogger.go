@@ -2,7 +2,11 @@ package log
 
 import (
 	"fmt"
+	"strings"
 	"sync"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/go-foreman/foreman/log"
 )
@@ -99,4 +103,16 @@ func (n *testLogger) Clear() {
 	n.entriesStore.entries = make([]entry, 0)
 	n.level = log.InfoLevel
 	n.fields = nil
+}
+
+func (n *testLogger) AssertContainsSubstr(t *testing.T, substr string) {
+	present := false
+	for _, l := range n.Messages() {
+		if strings.Contains(l, substr) {
+			present = true
+			break
+		}
+	}
+
+	assert.Truef(t, present, "asserting that '%s' was logged", substr)
 }

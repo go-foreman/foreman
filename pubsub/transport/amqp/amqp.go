@@ -13,36 +13,25 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-func NewTransport(url string, logger log.Logger) transport.Transport {
+func NewTransport(conn UnderlyingConnection, logger log.Logger) transport.Transport {
 	return &amqpTransport{
-		url:    url,
-		logger: logger,
+		connection: &Connection{
+			underlyingConn:      conn,
+			logger:              logger,
+			chReconnectionDelay: delay,
+		},
+		mutex:             &sync.Mutex{},
+		consumingChannels: map[AmqpChannel]struct{}{},
+		logger:            logger,
 	}
 }
 
 type amqpTransport struct {
-	url               string
-	connection        *Connection
-	publishingChannel *Channel
+	connection        AmqpConnection
+	publishingChannel AmqpChannel
+	mutex             *sync.Mutex
+	consumingChannels map[AmqpChannel]struct{}
 	logger            log.Logger
-}
-
-func (t *amqpTransport) Connect(ctx context.Context) error {
-	conn, err := Dial(t.url, t.logger)
-	if err != nil {
-		return errors.WithStack(err)
-	}
-
-	publishingChannel, err := conn.Channel()
-
-	if err != nil {
-		return errors.WithStack(err)
-	}
-
-	t.connection = conn
-	t.publishingChannel = publishingChannel
-
-	return nil
 }
 
 // CreateTopic creates an exchange in amqp. Allows options are: durable, autoDelete, internal, noWait.
@@ -54,7 +43,7 @@ func (t *amqpTransport) CreateTopic(ctx context.Context, topic transport.Topic) 
 	amqpTopic, topicConv := topic.(amqpTopic)
 
 	if !topicConv {
-		return errors.Errorf("Supplied topic is not an instance of amqp.Topic")
+		return errors.Errorf("supplied topic is not an instance of amqp.Topic")
 	}
 
 	if err := t.publishingChannel.ExchangeDeclare(
@@ -80,7 +69,7 @@ func (t *amqpTransport) CreateQueue(ctx context.Context, q transport.Queue, qbs 
 	queue, queueConv := q.(amqpQueue)
 
 	if !queueConv {
-		return errors.Errorf("Supplied Queue is not an instance of amqp.amqpQueue")
+		return errors.Errorf("supplied Queue is not an instance of amqp.amqpQueue")
 	}
 
 	var queueBinds []amqpQueueBind
@@ -89,7 +78,7 @@ func (t *amqpTransport) CreateQueue(ctx context.Context, q transport.Queue, qbs 
 		queueBind, queueBindConv := item.(amqpQueueBind)
 
 		if !queueBindConv {
-			return errors.Errorf("One of supplied QueueBinds is not an instance of amqp.amqpQueueBind")
+			return errors.Errorf("one of supplied QueueBinds is not an instance of amqp.amqpQueueBind")
 		}
 
 		queueBinds = append(queueBinds, queueBind)
@@ -121,12 +110,12 @@ func (t *amqpTransport) CreateQueue(ctx context.Context, q transport.Queue, qbs 
 	return nil
 }
 
-func (t *amqpTransport) Send(ctx context.Context, outboundPkg transport.OutboundPkg, options ...transport.SendOpts) error {
+func (t *amqpTransport) Send(ctx context.Context, outboundPkg transport.OutboundPkg, options ...transport.SendOpt) error {
 	if err := t.checkConnection(); err != nil {
 		return errors.WithStack(err)
 	}
 
-	sendOptions := &SendOptions{}
+	sendOptions := &sendOptions{}
 
 	for _, opt := range options {
 		if err := opt(sendOptions); err != nil {
@@ -151,7 +140,7 @@ func (t *amqpTransport) Send(ctx context.Context, outboundPkg transport.Outbound
 	return nil
 }
 
-func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, options ...transport.ConsumeOpts) (<-chan transport.IncomingPkg, error) {
+func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, options ...transport.ConsumeOpt) (<-chan transport.IncomingPkg, error) {
 	if err := t.checkConnection(); err != nil {
 		return nil, errors.WithStack(err)
 	}
@@ -161,7 +150,11 @@ func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, o
 		return nil, errors.WithStack(err)
 	}
 
-	consumeOptions := &ConsumeOptions{}
+	t.mutex.Lock()
+	t.consumingChannels[consumingChannel] = struct{}{}
+	t.mutex.Unlock()
+
+	consumeOptions := &consumeOptions{}
 
 	for _, opt := range options {
 		if err := opt(consumeOptions); err != nil {
@@ -181,6 +174,8 @@ func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, o
 
 	consumersCtx, cancelConsumers := context.WithCancel(ctx) //nolint:govet
 
+	var consumersErr error
+
 	for _, q := range queues {
 		consumingCh, err := consumingChannel.Consume(
 			q.Name(),
@@ -194,7 +189,8 @@ func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, o
 
 		if err != nil {
 			cancelConsumers() // this will shut down all goroutines previously created in this loop
-			return nil, errors.Wrapf(err, "consuming %s", q.Name())
+			consumersErr = errors.Wrapf(err, "consuming %s", q.Name())
+			break
 		}
 
 		consumersWait.Add(1)
@@ -204,7 +200,7 @@ func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, o
 
 			defer func() {
 				t.logger.Logf(log.InfoLevel, "canceling consumer %s", queue.Name())
-				if err := consumingChannel.Cancel(queue.Name(), true); err != nil {
+				if err := consumingChannel.Cancel(queue.Name(), false); err != nil {
 					t.logger.Logf(log.ErrorLevel, "error canceling consumer %s. %s", queue.Name(), err)
 				} else {
 					t.logger.Logf(log.InfoLevel, "canceled consumer %s", queue.Name())
@@ -215,13 +211,17 @@ func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, o
 				select {
 				case msg, open := <-deliveries:
 					if !open {
-						t.logger.Logf(log.WarnLevel, "Amqp consumer closed channel for queue %s", queue.Name())
+						t.logger.Logf(log.WarnLevel, "amqp consumer closed channel for queue %s", queue.Name())
 						return
 					}
 
-					income <- &inAmqpPkg{origin: queue.Name(), receivedAt: time.Now(), delivery: msg}
+					select {
+					case income <- &inAmqpPkg{origin: queue.Name(), receivedAt: time.Now(), delivery: msg}:
+					case <-consumersCtx.Done():
+						break
+					}
 				case <-consumersCtx.Done():
-					t.logger.Logf(log.WarnLevel, "Canceled context. Stopped consuming queue %s", queue.Name())
+					t.logger.Logf(log.WarnLevel, "canceled context. Stopped consuming queue %s", queue.Name())
 					return
 				}
 			}
@@ -237,30 +237,56 @@ func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, o
 		} else {
 			t.logger.Log(log.InfoLevel, "closed consumer channel")
 		}
+
+		t.mutex.Lock()
+		delete(t.consumingChannels, consumingChannel)
+		t.mutex.Unlock()
 	}()
+
+	if consumersErr != nil {
+		cancelConsumers()
+		return nil, consumersErr
+	}
 
 	return income, nil //nolint:govet
 }
 
 func (t *amqpTransport) Disconnect(ctx context.Context) error {
+
 	if t.connection == nil || t.publishingChannel == nil {
 		return nil
 	}
 
 	if err := t.publishingChannel.Close(); err != nil {
-		return errors.Wrap(err, "error closing publishing channel")
+		return errors.Wrap(err, "closing publishing channel")
 	}
 
-	if err := t.connection.Close(); err != nil {
-		return errors.Wrap(err, "error closing connection")
+	t.mutex.Lock()
+
+	for ch := range t.consumingChannels {
+		if err := ch.Close(); err != nil {
+			return errors.Wrap(err, "closing one of consuming channels")
+		}
 	}
+
+	t.mutex.Unlock()
 
 	return nil
 }
 
 func (t *amqpTransport) checkConnection() error {
 	if t.connection == nil {
-		return errors.Errorf("Connection wasn't established. Use transport.Connect first")
+		return errors.Errorf("connection is nil")
+	}
+
+	if t.publishingChannel == nil {
+		ch, err := t.connection.Channel()
+
+		if err != nil {
+			return errors.Wrap(err, "creating publishing channel")
+		}
+
+		t.publishingChannel = ch
 	}
 
 	return nil
