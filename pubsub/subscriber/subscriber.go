@@ -14,6 +14,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+//go:generate mockgen --build_flags=--mod=mod -destination ../../testing/mocks/pubsub/subscriber/subscriber.go -package subscriber . Subscriber
+
 // Subscriber starts listening for queues and processes messages
 type Subscriber interface {
 	// Run listens queues for packages and processes them. Gracefully shuts down either on os.Signal or ctx.Done()

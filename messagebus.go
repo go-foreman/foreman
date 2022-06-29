@@ -13,6 +13,8 @@ import (
 	"github.com/go-foreman/foreman/runtime/scheme"
 )
 
+//go:generate mockgen --build_flags=--mod=mod -destination testing/mocks/messagebus.go -package foreman . Component
+
 // Component allow to wrap and prepare booting of your component, which will be initialized by MessageBus
 type Component interface {
 	Init(b *MessageBus) error
