@@ -12,7 +12,7 @@ var KnownTypesRegistryInstance = NewKnownTypesRegistry()
 
 type KnownTypesRegistry interface {
 	// AddKnownTypes registers list of types of objects to a Group. Kind of each type will be set as struct name using reflection
-	AddKnownTypes(gv Group, types ...Object)
+	AddKnownTypes(g Group, types ...Object)
 	// AddKnownTypeWithName registers a type an object to a Group and custom defined Kind
 	AddKnownTypeWithName(gk GroupKind, obj Object)
 	// NewObject instantiates new object instance of a type registered behind GroupKind

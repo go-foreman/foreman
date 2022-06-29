@@ -17,7 +17,6 @@ import (
 
 type Component struct {
 	sagas            []saga.Saga
-	contracts        []message.Object
 	sagaStoreFactory StoreFactory
 	sagaMutex        mutex.Mutex
 	endpoints        []endpoint.Endpoint
@@ -64,6 +63,8 @@ func (c Component) Init(mBus *foreman.MessageBus) error {
 	mBus.Dispatcher().SubscribeForCmd(&contracts.RecoverSagaCommand{}, sagaControlHandler.Handle)
 	mBus.Dispatcher().SubscribeForCmd(&contracts.CompensateSagaCommand{}, sagaControlHandler.Handle)
 
+	var sagasContracts []message.Object
+
 	for _, s := range c.sagas {
 		s.SetSchema(mBus.SchemeRegistry())
 		s.Init()
@@ -76,6 +77,7 @@ func (c Component) Init(mBus *foreman.MessageBus) error {
 			}
 
 			mBus.Dispatcher().SubscribeForEvent(evObj, eventHandler.Handle)
+			sagasContracts = append(sagasContracts, evObj)
 		}
 	}
 
@@ -87,7 +89,7 @@ func (c Component) Init(mBus *foreman.MessageBus) error {
 			&contracts.SagaCompletedEvent{},
 			&contracts.SagaChildCompletedEvent{},
 		)
-		mBus.Router().RegisterEndpoint(sagaEndpoint, c.contracts...)
+		mBus.Router().RegisterEndpoint(sagaEndpoint, sagasContracts...)
 	}
 
 	return nil
@@ -97,9 +99,9 @@ func (c *Component) RegisterSagas(sagas ...saga.Saga) {
 	c.sagas = append(c.sagas, sagas...)
 }
 
-func (c *Component) RegisterContracts(contracts ...message.Object) {
-	c.contracts = append(c.contracts, contracts...)
-}
+//func (c *Component) RegisterContracts(contracts ...message.Object) {
+//	c.contracts = append(c.contracts, contracts...)
+//}
 
 func (c *Component) RegisterSagaEndpoints(endpoints ...endpoint.Endpoint) {
 	c.endpoints = append(c.endpoints, endpoints...)

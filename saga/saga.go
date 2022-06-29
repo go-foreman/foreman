@@ -8,6 +8,8 @@ import (
 	"github.com/go-foreman/foreman/runtime/scheme"
 )
 
+//go:generate mockgen --build_flags=--mod=mod -destination ../testing/mocks/saga/saga.go -package saga . Saga
+
 type Saga interface {
 	// include Object interface as any message type in MessageBus a saga should have metadata
 	message.Object

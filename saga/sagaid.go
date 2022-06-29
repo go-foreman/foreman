@@ -7,6 +7,8 @@ import (
 
 const sagaUIDKey = "sagaUID"
 
+//go:generate mockgen --build_flags=--mod=mod -destination ../testing/mocks/saga/sagaid.go -package saga . SagaUIDService
+
 // SagaUIDService manipulates with sagaId in headers
 type SagaUIDService interface {
 	ExtractSagaUID(headers message.Headers) (string, error)

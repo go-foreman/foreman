@@ -16,6 +16,8 @@ const (
 	sagaStatusRecovering   status = "recovering"
 )
 
+//go:generate mockgen --build_flags=--mod=mod -destination ../testing/mocks/saga/instance.go -package saga . Instance
+
 type Instance interface {
 	UID() string
 	Saga() Saga
