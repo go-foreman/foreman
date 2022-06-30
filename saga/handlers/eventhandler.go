@@ -101,11 +101,14 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 	}
 
 	//write received event into history
-	sagaInstance.AddHistoryEvent(msg.Payload(), sagaPkg.WithOrigin(msg.Origin()), sagaPkg.WithTraceUID(msg.UID()))
+	sagaInstance.AddHistoryEvent(msg.Payload(), &sagaPkg.AddHistoryEvent{
+		TraceUID: msg.UID(),
+		Origin:   msg.Origin(),
+	})
 
 	//just to remember what we sent out
 	for _, ev := range sagaCtx.Deliveries() {
-		sagaInstance.AddHistoryEvent(ev.Payload)
+		sagaInstance.AddHistoryEvent(ev.Payload, nil)
 	}
 
 	if err := e.sagaStore.Update(ctx, sagaInstance); err != nil {
