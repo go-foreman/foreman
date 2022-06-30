@@ -50,7 +50,7 @@ func TestControlHandler(t *testing.T) {
 			},
 			SagaUID:   "123",
 			ParentUID: "",
-			Saga: &sagaExample{
+			Saga: &SagaExample{
 				Data: "data",
 			},
 		}
@@ -190,7 +190,7 @@ func TestControlHandler(t *testing.T) {
 				},
 				SagaUID:   "123",
 				ParentUID: "",
-				Saga: &sagaExample{
+				Saga: &SagaExample{
 					Data: "data",
 					err:  errors.New("starting err"),
 				},
@@ -254,7 +254,7 @@ func TestRecoverSaga(t *testing.T) {
 		sagaMutexMock.EXPECT().Lock(ctx, recoverSagaCmd.SagaUID).Return(lockMock, nil)
 		lockMock.EXPECT().Release(ctx).Return(errors.New("error releasing mutex"))
 
-		sagaInst := sagaPkg.NewSagaInstance(recoverSagaCmd.SagaUID, "", &sagaExample{})
+		sagaInst := sagaPkg.NewSagaInstance(recoverSagaCmd.SagaUID, "", &SagaExample{})
 		sagaInst.Fail(nil)
 
 		sagaStoreMock.EXPECT().GetById(ctx, recoverSagaCmd.SagaUID).Return(sagaInst, nil)
@@ -285,7 +285,7 @@ func TestRecoverSaga(t *testing.T) {
 		sagaMutexMock.EXPECT().Lock(ctx, recoverSagaCmd.SagaUID).Return(lockMock, nil)
 		lockMock.EXPECT().Release(ctx).Return(nil)
 
-		sagaInst := sagaPkg.NewSagaInstance(recoverSagaCmd.SagaUID, "", &sagaExample{})
+		sagaInst := sagaPkg.NewSagaInstance(recoverSagaCmd.SagaUID, "", &SagaExample{})
 		sagaInst.Fail(nil)
 
 		sagaStoreMock.EXPECT().GetById(ctx, recoverSagaCmd.SagaUID).Return(nil, errors.New("get by id error"))
@@ -305,7 +305,7 @@ func TestRecoverSaga(t *testing.T) {
 		sagaMutexMock.EXPECT().Lock(ctx, recoverSagaCmd.SagaUID).Return(lockMock, nil)
 		lockMock.EXPECT().Release(ctx).Return(nil)
 
-		sagaInst := sagaPkg.NewSagaInstance(recoverSagaCmd.SagaUID, "", &sagaExample{})
+		sagaInst := sagaPkg.NewSagaInstance(recoverSagaCmd.SagaUID, "", &SagaExample{})
 		sagaStoreMock.EXPECT().GetById(ctx, recoverSagaCmd.SagaUID).Return(sagaInst, nil)
 
 		err := handler.Handle(msgExecutionCtx)
@@ -323,7 +323,7 @@ func TestRecoverSaga(t *testing.T) {
 		sagaMutexMock.EXPECT().Lock(ctx, recoverSagaCmd.SagaUID).Return(lockMock, nil)
 		lockMock.EXPECT().Release(ctx).Return(nil)
 
-		sagaInst := sagaPkg.NewSagaInstance(recoverSagaCmd.SagaUID, "", &sagaExample{err: errors.New("error recovering")})
+		sagaInst := sagaPkg.NewSagaInstance(recoverSagaCmd.SagaUID, "", &SagaExample{err: errors.New("error recovering")})
 		sagaInst.Fail(nil)
 		sagaStoreMock.EXPECT().GetById(ctx, recoverSagaCmd.SagaUID).Return(sagaInst, nil)
 
@@ -370,7 +370,7 @@ func TestCompensate(t *testing.T) {
 		sagaMutexMock.EXPECT().Lock(ctx, recoverSagaCmd.SagaUID).Return(lockMock, nil)
 		lockMock.EXPECT().Release(ctx).Return(errors.New("error releasing mutex"))
 
-		sagaInst := sagaPkg.NewSagaInstance(recoverSagaCmd.SagaUID, "", &sagaExample{})
+		sagaInst := sagaPkg.NewSagaInstance(recoverSagaCmd.SagaUID, "", &SagaExample{})
 		sagaInst.Fail(nil)
 
 		sagaStoreMock.EXPECT().GetById(ctx, recoverSagaCmd.SagaUID).Return(sagaInst, nil)
@@ -401,7 +401,7 @@ func TestCompensate(t *testing.T) {
 		sagaMutexMock.EXPECT().Lock(ctx, recoverSagaCmd.SagaUID).Return(lockMock, nil)
 		lockMock.EXPECT().Release(ctx).Return(nil)
 
-		sagaInst := sagaPkg.NewSagaInstance(recoverSagaCmd.SagaUID, "", &sagaExample{})
+		sagaInst := sagaPkg.NewSagaInstance(recoverSagaCmd.SagaUID, "", &SagaExample{})
 		sagaInst.Fail(nil)
 
 		sagaStoreMock.EXPECT().GetById(ctx, recoverSagaCmd.SagaUID).Return(sagaInst, nil)
@@ -431,7 +431,7 @@ func TestCompensate(t *testing.T) {
 		sagaMutexMock.EXPECT().Lock(ctx, recoverSagaCmd.SagaUID).Return(lockMock, nil)
 		lockMock.EXPECT().Release(ctx).Return(nil)
 
-		sagaInst := sagaPkg.NewSagaInstance(recoverSagaCmd.SagaUID, "", &sagaExample{})
+		sagaInst := sagaPkg.NewSagaInstance(recoverSagaCmd.SagaUID, "", &SagaExample{})
 		sagaInst.Fail(nil)
 
 		sagaStoreMock.EXPECT().GetById(ctx, recoverSagaCmd.SagaUID).Return(nil, errors.New("get by id error"))
@@ -451,7 +451,7 @@ func TestCompensate(t *testing.T) {
 		sagaMutexMock.EXPECT().Lock(ctx, recoverSagaCmd.SagaUID).Return(lockMock, nil)
 		lockMock.EXPECT().Release(ctx).Return(nil)
 
-		sagaInst := sagaPkg.NewSagaInstance(recoverSagaCmd.SagaUID, "", &sagaExample{})
+		sagaInst := sagaPkg.NewSagaInstance(recoverSagaCmd.SagaUID, "", &SagaExample{})
 		sagaStoreMock.EXPECT().GetById(ctx, recoverSagaCmd.SagaUID).Return(sagaInst, nil)
 		sagaInst.Complete()
 
@@ -470,7 +470,7 @@ func TestCompensate(t *testing.T) {
 		sagaMutexMock.EXPECT().Lock(ctx, recoverSagaCmd.SagaUID).Return(lockMock, nil)
 		lockMock.EXPECT().Release(ctx).Return(nil)
 
-		sagaInst := sagaPkg.NewSagaInstance(recoverSagaCmd.SagaUID, "", &sagaExample{err: errors.New("error compensating")})
+		sagaInst := sagaPkg.NewSagaInstance(recoverSagaCmd.SagaUID, "", &SagaExample{err: errors.New("error compensating")})
 		sagaInst.Fail(nil)
 		sagaStoreMock.EXPECT().GetById(ctx, recoverSagaCmd.SagaUID).Return(sagaInst, nil)
 
@@ -480,27 +480,27 @@ func TestCompensate(t *testing.T) {
 	})
 }
 
-type sagaExample struct {
+type SagaExample struct {
 	sagaPkg.BaseSaga
 	Data string
 	err  error
 }
 
-func (s *sagaExample) Init() {
+func (s *SagaExample) Init() {
 	s.AddEventHandler(&DataContract{}, s.HandleData)
 }
 
-func (s *sagaExample) Start(sagaCtx sagaPkg.SagaContext) error {
+func (s *SagaExample) Start(sagaCtx sagaPkg.SagaContext) error {
 	sagaCtx.Dispatch(&DataContract{Message: "start"})
 	return s.err
 }
 
-func (s *sagaExample) Compensate(sagaCtx sagaPkg.SagaContext) error {
+func (s *SagaExample) Compensate(sagaCtx sagaPkg.SagaContext) error {
 	sagaCtx.Dispatch(&DataContract{Message: "compensate"})
 	return s.err
 }
 
-func (s *sagaExample) Recover(sagaCtx sagaPkg.SagaContext) error {
+func (s *SagaExample) Recover(sagaCtx sagaPkg.SagaContext) error {
 	if failedEv := sagaCtx.SagaInstance().Status().FailedOnEvent(); failedEv != nil {
 		sagaCtx.Dispatch(failedEv)
 		return s.err
@@ -510,9 +510,9 @@ func (s *sagaExample) Recover(sagaCtx sagaPkg.SagaContext) error {
 	return s.err
 }
 
-func (s *sagaExample) HandleData(sagaCtx sagaPkg.SagaContext) error {
+func (s *SagaExample) HandleData(sagaCtx sagaPkg.SagaContext) error {
 	sagaCtx.Dispatch(&DataContract{Message: "handle"})
-	return nil
+	return s.err
 }
 
 type DataContract struct {
