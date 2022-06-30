@@ -342,6 +342,137 @@ func TestSqlStore_Update(t *testing.T) {
 
 		assert.NoError(t, dbMock.ExpectationsWereMet())
 	})
+
+	t.Run("pg update saga", func(t *testing.T) {
+		store, dbMock, marshallerMock := createStore(t, ctrl, PGDriver)
+		sagaObj := &SagaExample{
+			BaseSaga: BaseSaga{
+				ObjectMeta: message.ObjectMeta{
+					TypeMeta: scheme.TypeMeta{
+						Kind:  "SagaExample",
+						Group: "example",
+					},
+				},
+				adjacencyMap: nil,
+				scheme:       nil,
+			},
+			Data: "data",
+		}
+		sagaInstance := NewSagaInstance(sagaID, parentSagaID, sagaObj)
+		sagaInstance.AddHistoryEvent(&ExampleEv{Data: "h1"}, &AddHistoryEvent{
+			TraceUID: "xxx",
+			Origin:   "yyy",
+		})
+		sagaInstance.AddHistoryEvent(&ExampleEv{Data: "h2"}, &AddHistoryEvent{
+			TraceUID: "qqq",
+			Origin:   "ttt",
+		})
+
+		sagaInstance.Fail(&ExampleEv{Data: "failed"})
+
+		payload := []byte("payload")
+
+		marshallerMock.
+			EXPECT().
+			Marshal(sagaInstance.Saga()).
+			Return(payload, nil)
+
+		marshallerMock.
+			EXPECT().
+			Marshal(sagaInstance.Status().FailedOnEvent()).
+			Return(payload, nil)
+
+		require.Len(t, sagaInstance.HistoryEvents(), 2)
+		ev := sagaInstance.HistoryEvents()[0]
+
+		marshallerMock.
+			EXPECT().
+			Marshal(ev.Payload).
+			Return(payload, nil)
+
+		dbMock.ExpectBegin()
+		dbMock.ExpectExec("UPDATE saga SET parent_uid=$1, name=$2, payload=$3, status=$4, started_at=$5, updated_at=$6, last_failed_ev=$7 WHERE uid=$8;").
+			WithArgs(
+				sagaInstance.ParentID(),
+				"example.SagaExample",
+				payload,
+				sagaInstance.Status().String(),
+				sagaInstance.StartedAt(),
+				sagaInstance.UpdatedAt(),
+				payload,
+				sagaInstance.UID(),
+			).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+		dbMock.ExpectQuery("SELECT uid FROM saga_history WHERE saga_uid=$1;").
+			WithArgs(sagaInstance.UID()).
+			WillReturnRows(sqlmock.NewRows([]string{"uid"}).AddRow(sagaInstance.HistoryEvents()[1].UID))
+
+		dbMock.ExpectExec("INSERT INTO saga_history (uid, saga_uid, name, status, payload, origin, created_at, trace_uid) VALUES ($1, $2, $3, $4, $5, $6, $7, $8);").
+			WithArgs(
+				ev.UID,
+				sagaInstance.UID(),
+				ev.Payload.GroupKind().String(),
+				ev.SagaStatus,
+				payload,
+				ev.OriginSource,
+				ev.CreatedAt,
+				ev.TraceUID,
+			).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+
+		dbMock.ExpectCommit()
+
+		assert.NoError(t, store.Update(ctx, sagaInstance))
+
+		assert.NoError(t, dbMock.ExpectationsWereMet())
+	})
+}
+
+func TestSqlStore_Delete(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+
+	sagaID := "123"
+
+	t.Run("mysql delete saga by id", func(t *testing.T) {
+		store, dbMock, _ := createStore(t, ctrl, MYSQLDriver)
+
+		dbMock.ExpectExec("DELETE FROM saga WHERE uid=?;").
+			WithArgs(sagaID).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+
+		err := store.Delete(ctx, sagaID)
+		assert.NoError(t, err)
+		assert.NoError(t, dbMock.ExpectationsWereMet())
+	})
+
+	t.Run("pg delete saga by id no rows affected", func(t *testing.T) {
+		store, dbMock, _ := createStore(t, ctrl, PGDriver)
+
+		dbMock.ExpectExec("DELETE FROM saga WHERE uid=$1;").
+			WithArgs(sagaID).
+			WillReturnResult(sqlmock.NewResult(1, 0))
+
+		err := store.Delete(ctx, sagaID)
+		assert.Error(t, err)
+		assert.EqualError(t, err, "no saga instance 123 found")
+		assert.NoError(t, dbMock.ExpectationsWereMet())
+	})
+
+	t.Run("exec returns an error", func(t *testing.T) {
+		store, dbMock, _ := createStore(t, ctrl, PGDriver)
+
+		dbMock.ExpectExec("DELETE FROM saga WHERE uid=$1;").
+			WithArgs(sagaID).
+			WillReturnError(errors.New("exec error"))
+
+		err := store.Delete(ctx, sagaID)
+		assert.Error(t, err)
+		assert.EqualError(t, err, "executing delete query for saga 123: exec error")
+		assert.NoError(t, dbMock.ExpectationsWereMet())
+	})
 }
 
 func createStore(t *testing.T, ctrl *gomock.Controller, provider SQLDriver) (Store, sqlmock.Sqlmock, *mockMessage.MockMarshaller) {
