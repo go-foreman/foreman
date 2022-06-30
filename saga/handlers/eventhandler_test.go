@@ -248,6 +248,8 @@ func TestEventHandler(t *testing.T) {
 	})
 
 	t.Run("saga handler returns an error", func(t *testing.T) {
+		defer testLogger.Clear()
+
 		sagaID := "123"
 		ev := &DataContract{
 			ObjectMeta: evObjMeta,
@@ -308,5 +310,4 @@ func TestEventHandler(t *testing.T) {
 		assert.Error(t, err)
 		assert.EqualError(t, err, "saga '123' has already completed")
 	})
-
 }
