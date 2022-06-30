@@ -28,6 +28,7 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 	var (
 		sagaInstance sagaPkg.Instance
 		sagaCtx      sagaPkg.SagaContext
+		err          error
 	)
 
 	ctx := execCtx.Context()
@@ -38,6 +39,11 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 	case *contracts.StartSagaCommand:
 		logger.Logf(log.DebugLevel, "creating saga %s", cmd.SagaUID)
 
+		sagaInstance, err = h.createSaga(cmd)
+		if err != nil {
+			return errors.WithStack(err)
+		}
+
 		lock, err := h.mutex.Lock(ctx, cmd.SagaUID)
 		if err != nil {
 			return errors.Wrap(err, "locking saga")
@@ -45,14 +51,9 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 
 		defer func() {
 			if err := lock.Release(ctx); err != nil {
-				execCtx.Logger().Log(log.ErrorLevel, err.Error())
+				logger.Log(log.ErrorLevel, err.Error())
 			}
 		}()
-
-		sagaInstance, err = h.createSaga(cmd)
-		if err != nil {
-			return errors.WithStack(err)
-		}
 
 		if err := h.store.Create(ctx, sagaInstance); err != nil {
 			return errors.Wrapf(err, "saving created saga `%s` with id %s to store", cmd.Saga.GroupKind().String(), cmd.SagaUID)
@@ -69,7 +70,7 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 	case *contracts.RecoverSagaCommand:
 		lock, err := h.mutex.Lock(ctx, cmd.SagaUID)
 		if err != nil {
-			return errors.Wrap(err, "locking saga")
+			return errors.Wrapf(err, "locking saga %s", cmd.SagaUID)
 		}
 
 		defer func() {

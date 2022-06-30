@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/go-foreman/foreman/pubsub/endpoint"
 
 	"github.com/go-foreman/foreman/testing/log"
@@ -38,35 +40,34 @@ func TestControlHandler(t *testing.T) {
 	handler := NewSagaControlHandler(sagaStoreMock, sagaMutexMock, schemeRegistry, idService)
 
 	t.Run("create saga", func(t *testing.T) {
+		startSagaCmd := &contracts.StartSagaCommand{
+			ObjectMeta: message.ObjectMeta{
+				TypeMeta: scheme.TypeMeta{
+					Kind:  "StartSagaCommand",
+					Group: "systemSaga",
+				},
+			},
+			SagaUID:   "123",
+			ParentUID: "",
+			Saga: &sagaExample{
+				Data: "data",
+			},
+		}
+
+		now := time.Now()
+		ctx := context.Background()
+
 		t.Run("success", func(t *testing.T) {
 			defer testLogger.Clear()
 
-			startSagaCmd := &contracts.StartSagaCommand{
-				ObjectMeta: message.ObjectMeta{
-					TypeMeta: scheme.TypeMeta{
-						Kind:  "StartSagaCommand",
-						Group: "systemSaga",
-					},
-				},
-				SagaUID:   "123",
-				ParentUID: "",
-				Saga: &sagaExample{
-					Data: "data",
-				},
-			}
-
-			now := time.Now()
-			ctx := context.Background()
-
 			receivedMsg := message.NewReceivedMessage("123", startSagaCmd, message.Headers{}, now, "origin")
-
 			msgExecutionCtx.EXPECT().Message().Return(receivedMsg)
 			msgExecutionCtx.EXPECT().Context().Return(ctx)
 			msgExecutionCtx.EXPECT().Logger().Return(testLogger).Times(2)
 
 			lockMock := mutex.NewMockLock(ctrl)
 			sagaMutexMock.EXPECT().Lock(ctx, startSagaCmd.SagaUID).Return(lockMock, nil)
-			lockMock.EXPECT().Release(ctx).Return(nil)
+			lockMock.EXPECT().Release(ctx).Return(errors.New("error releasing mutex"))
 
 			var sagaInstance sagaPkg.Instance
 			sagaStoreMock.
@@ -98,7 +99,84 @@ func TestControlHandler(t *testing.T) {
 			assert.NoError(t, err)
 
 			assert.Len(t, sagaInstance.HistoryEvents(), 2)
+			testLogger.AssertContainsSubstr(t, "error releasing mutex")
 		})
+
+		t.Run("error locking mutex", func(t *testing.T) {
+			defer testLogger.Clear()
+
+			receivedMsg := message.NewReceivedMessage("123", startSagaCmd, message.Headers{}, now, "origin")
+			msgExecutionCtx.EXPECT().Message().Return(receivedMsg)
+			msgExecutionCtx.EXPECT().Context().Return(ctx)
+			msgExecutionCtx.EXPECT().Logger().Return(testLogger)
+
+			sagaMutexMock.EXPECT().Lock(ctx, startSagaCmd.SagaUID).Return(nil, errors.New("mutex error"))
+
+			err := handler.Handle(msgExecutionCtx)
+			assert.Error(t, err)
+			assert.EqualError(t, err, "locking saga: mutex error")
+		})
+
+		t.Run("creating saga instance with empty saga id", func(t *testing.T) {
+			defer testLogger.Clear()
+
+			startSagaCmd := &contracts.StartSagaCommand{
+				ObjectMeta: message.ObjectMeta{},
+				SagaUID:    "",
+				ParentUID:  "",
+				Saga:       nil,
+			}
+
+			receivedMsg := message.NewReceivedMessage("123", startSagaCmd, message.Headers{}, now, "origin")
+			msgExecutionCtx.EXPECT().Message().Return(receivedMsg)
+			msgExecutionCtx.EXPECT().Context().Return(ctx)
+			msgExecutionCtx.EXPECT().Logger().Return(testLogger)
+
+			err := handler.Handle(msgExecutionCtx)
+			assert.Error(t, err)
+			assert.EqualError(t, err, "sagaId is empty")
+		})
+
+		t.Run("creating saga instance with nil saga payload", func(t *testing.T) {
+			defer testLogger.Clear()
+
+			startSagaCmd := &contracts.StartSagaCommand{
+				ObjectMeta: message.ObjectMeta{},
+				SagaUID:    "123",
+				ParentUID:  "",
+				Saga:       nil,
+			}
+
+			receivedMsg := message.NewReceivedMessage("123", startSagaCmd, message.Headers{}, now, "origin")
+			msgExecutionCtx.EXPECT().Message().Return(receivedMsg)
+			msgExecutionCtx.EXPECT().Context().Return(ctx)
+			msgExecutionCtx.EXPECT().Logger().Return(testLogger)
+
+			err := handler.Handle(msgExecutionCtx)
+			assert.Error(t, err)
+			assert.EqualError(t, err, "saga payload is nil")
+		})
+
+		t.Run("creating saga instance with wrong saga type", func(t *testing.T) {
+			defer testLogger.Clear()
+
+			startSagaCmd := &contracts.StartSagaCommand{
+				ObjectMeta: message.ObjectMeta{},
+				SagaUID:    "123",
+				ParentUID:  "",
+				Saga:       &DataContract{},
+			}
+
+			receivedMsg := message.NewReceivedMessage("123", startSagaCmd, message.Headers{}, now, "origin")
+			msgExecutionCtx.EXPECT().Message().Return(receivedMsg)
+			msgExecutionCtx.EXPECT().Context().Return(ctx)
+			msgExecutionCtx.EXPECT().Logger().Return(testLogger)
+
+			err := handler.Handle(msgExecutionCtx)
+			assert.Error(t, err)
+			assert.EqualError(t, err, "error asserting that startCmd.Saga is Saga type")
+		})
+
 	})
 
 }
