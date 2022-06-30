@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/go-foreman/foreman/saga/contracts"
 
 	"github.com/go-foreman/foreman/pubsub/endpoint"
@@ -163,6 +165,11 @@ func TestEventHandler(t *testing.T) {
 
 		err := handler.Handle(msgExecutionCtx)
 		assert.NoError(t, err)
+
+		events := sagaInstance.HistoryEvents()
+		require.Len(t, events, 2)
+		assert.Equal(t, events[0].Payload, ev)                               //received
+		assert.Equal(t, events[1].Payload, &DataContract{Message: "handle"}) //was sent out
 	})
 
 	t.Run("error extracting saga id", func(t *testing.T) {
@@ -271,6 +278,35 @@ func TestEventHandler(t *testing.T) {
 		err := handler.Handle(msgExecutionCtx)
 		assert.Error(t, err)
 		assert.EqualError(t, err, "handling event 'example.DataContract' from message '123': handler returned an error")
+	})
+
+	t.Run("already completed", func(t *testing.T) {
+		defer testLogger.Clear()
+
+		sagaID := "123"
+		ev := &DataContract{
+			ObjectMeta: evObjMeta,
+			Message:    "something happened",
+		}
+		receivedMsg := message.NewReceivedMessage(sagaID, ev, message.Headers{}, time.Now(), "origin")
+
+		msgExecutionCtx.EXPECT().Message().Return(receivedMsg)
+		msgExecutionCtx.EXPECT().Context().Return(ctx)
+		msgExecutionCtx.EXPECT().Logger().Return(testLogger)
+		idService.EXPECT().ExtractSagaUID(receivedMsg.Headers()).Return(sagaID, nil)
+
+		lockMock := mutex.NewMockLock(ctrl)
+		sagaMutexMock.EXPECT().Lock(ctx, sagaID).Return(lockMock, nil)
+		lockMock.EXPECT().Release(gomock.Any()).Return(nil)
+
+		sagaInstance := saga.NewSagaInstance(sagaID, "777", sagaObj)
+		sagaInstance.Complete()
+
+		sagaStoreMock.EXPECT().GetById(ctx, sagaID).Return(sagaInstance, nil)
+
+		err := handler.Handle(msgExecutionCtx)
+		assert.Error(t, err)
+		assert.EqualError(t, err, "saga '123' has already completed")
 	})
 
 }
