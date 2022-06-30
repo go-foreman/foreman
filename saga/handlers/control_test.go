@@ -276,11 +276,31 @@ func TestRecoverSaga(t *testing.T) {
 		assert.NoError(t, err)
 		testLogger.AssertContainsSubstr(t, fmt.Sprintf("Saga '%s' has status '%s', you can't start recovering the process", sagaInst.UID(), sagaInst.Status()))
 	})
+
+	t.Run("saga instance Recover() returns an error", func(t *testing.T) {
+		receivedMsg := message.NewReceivedMessage("123", recoverSagaCmd, message.Headers{}, now, "origin")
+		msgExecutionCtx.EXPECT().Message().Return(receivedMsg)
+		msgExecutionCtx.EXPECT().Context().Return(ctx)
+		msgExecutionCtx.EXPECT().Logger().Return(testLogger).Times(2)
+
+		lockMock := mutex.NewMockLock(ctrl)
+		sagaMutexMock.EXPECT().Lock(ctx, recoverSagaCmd.SagaUID).Return(lockMock, nil)
+		lockMock.EXPECT().Release(ctx).Return(nil)
+
+		sagaInst := sagaPkg.NewSagaInstance(recoverSagaCmd.SagaUID, "", &sagaExample{err: errors.New("error recovering")})
+		sagaInst.Fail(nil)
+		sagaStoreMock.EXPECT().GetById(ctx, recoverSagaCmd.SagaUID).Return(sagaInst, nil)
+
+		err := handler.Handle(msgExecutionCtx)
+		assert.Error(t, err)
+		assert.EqualError(t, err, "recovering saga '123': error recovering")
+	})
 }
 
 type sagaExample struct {
 	sagaPkg.BaseSaga
 	Data string
+	err  error
 }
 
 func (s *sagaExample) Init() {
@@ -289,22 +309,22 @@ func (s *sagaExample) Init() {
 
 func (s *sagaExample) Start(sagaCtx sagaPkg.SagaContext) error {
 	sagaCtx.Dispatch(&DataContract{Message: "start"})
-	return nil
+	return s.err
 }
 
 func (s *sagaExample) Compensate(sagaCtx sagaPkg.SagaContext) error {
 	sagaCtx.Dispatch(&DataContract{Message: "compensate"})
-	return nil
+	return s.err
 }
 
 func (s *sagaExample) Recover(sagaCtx sagaPkg.SagaContext) error {
 	if failedEv := sagaCtx.SagaInstance().Status().FailedOnEvent(); failedEv != nil {
 		sagaCtx.Dispatch(failedEv)
-		return nil
+		return s.err
 	}
 
 	sagaCtx.Dispatch(&DataContract{Message: "recover"})
-	return nil
+	return s.err
 }
 
 func (s *sagaExample) HandleData(sagaCtx sagaPkg.SagaContext) error {
