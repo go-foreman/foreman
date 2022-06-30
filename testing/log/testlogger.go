@@ -12,15 +12,15 @@ import (
 )
 
 //NewNilLogger is used mostly in testing, prints nothing
-func NewNilLogger() *testLogger {
-	return &testLogger{entriesStore: &entriesStore{}, mutex: &sync.Mutex{}, level: log.InfoLevel}
+func NewNilLogger() *TestLogger {
+	return &TestLogger{entriesStore: &entriesStore{}, mutex: &sync.Mutex{}, level: log.InfoLevel}
 }
 
 type entriesStore struct {
 	entries []entry
 }
 
-type testLogger struct {
+type TestLogger struct {
 	mutex        *sync.Mutex
 	level        log.Level
 	fields       []log.Field
@@ -32,27 +32,27 @@ type entry struct {
 	Level log.Level
 }
 
-func (n *testLogger) Log(level log.Level, v ...interface{}) {
+func (n *TestLogger) Log(level log.Level, v ...interface{}) {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 
 	n.entriesStore.entries = append(n.entriesStore.entries, entry{Msg: fmt.Sprint(v...), Level: level})
 }
 
-func (n *testLogger) Logf(level log.Level, template string, args ...interface{}) {
+func (n *TestLogger) Logf(level log.Level, template string, args ...interface{}) {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 	n.entriesStore.entries = append(n.entriesStore.entries, entry{Msg: fmt.Sprintf(template, args...), Level: level})
 }
 
-func (n *testLogger) SetLevel(level log.Level) {
+func (n *TestLogger) SetLevel(level log.Level) {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 	n.level = level
 }
 
-func (n *testLogger) WithFields(fields []log.Field) log.Logger {
-	return &testLogger{
+func (n *TestLogger) WithFields(fields []log.Field) log.Logger {
+	return &TestLogger{
 		entriesStore: n.entriesStore,
 		level:        n.level,
 		fields:       append(n.fields, fields...),
@@ -60,13 +60,13 @@ func (n *testLogger) WithFields(fields []log.Field) log.Logger {
 	}
 }
 
-func (n testLogger) Entries() []entry {
+func (n TestLogger) Entries() []entry {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 	return n.entriesStore.entries
 }
 
-func (n testLogger) Messages() []string {
+func (n TestLogger) Messages() []string {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 
@@ -78,14 +78,14 @@ func (n testLogger) Messages() []string {
 	return r
 }
 
-func (n testLogger) Fields() []log.Field {
+func (n TestLogger) Fields() []log.Field {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 
 	return n.fields
 }
 
-func (n testLogger) LastMessage() string {
+func (n TestLogger) LastMessage() string {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 
@@ -96,7 +96,7 @@ func (n testLogger) LastMessage() string {
 	return ""
 }
 
-func (n *testLogger) Clear() {
+func (n *TestLogger) Clear() {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 
@@ -105,7 +105,7 @@ func (n *testLogger) Clear() {
 	n.fields = nil
 }
 
-func (n *testLogger) AssertContainsSubstr(t *testing.T, substr string) {
+func (n *TestLogger) AssertContainsSubstr(t *testing.T, substr string) {
 	present := false
 	for _, l := range n.Messages() {
 		if strings.Contains(l, substr) {

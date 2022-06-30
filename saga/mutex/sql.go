@@ -116,7 +116,11 @@ func (p *pgsqlMutex) Lock(ctx context.Context, sagaId string) (Lock, error) {
 		}
 
 		if err := conn.PingContext(ctx); err != nil {
+			p.logger.Logf(log.ErrorLevel, "locking saga '%s'. error verifying that obtained mutex connection is alive. %s", sagaId, err)
 			if i < retries-1 {
+				if err := conn.Close(true); err != nil {
+					p.logger.Logf(log.ErrorLevel, "locking '%s'. closing connection after verifying that it's dead %s", sagaId, err)
+				}
 				continue
 			}
 		}

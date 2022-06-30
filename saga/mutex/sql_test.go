@@ -5,8 +5,6 @@ import (
 	"testing"
 	"time"
 
-	foremanLog "github.com/go-foreman/foreman/log"
-
 	"github.com/pkg/errors"
 
 	"github.com/stretchr/testify/assert"
@@ -150,7 +148,91 @@ func TestMysqlMutex(t *testing.T) {
 	})
 }
 
-func createMutex(t *testing.T, provider saga.SQLDriver) (Mutex, sqlmock.Sqlmock, foremanLog.Logger) {
+func TestPGMutex(t *testing.T) {
+	t.Run("successfully lock saga and unlock", func(t *testing.T) {
+		m, mock, testLogger := createMutex(t, saga.PGDriver)
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+		defer cancel()
+		sagaId := "123"
+
+		mock.ExpectPing().WillReturnError(errors.New("ping returned an error"))
+		mock.ExpectPing()
+
+		//lock
+		mock.
+			ExpectExec("SELECT pg_advisory_lock(hashtext($1));").
+			WithArgs(sagaId).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+
+		lock, err := m.Lock(ctx, sagaId)
+		assert.NoError(t, err)
+		testLogger.AssertContainsSubstr(t, "error verifying that obtained mutex connection is alive")
+
+		mock.
+			ExpectExec("SELECT pg_advisory_unlock(hashtext($1));").
+			WithArgs(sagaId).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+
+		assert.NoError(t, lock.Release(ctx))
+
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("lock exec returns an error", func(t *testing.T) {
+		m, mock, _ := createMutex(t, saga.PGDriver)
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+		defer cancel()
+		sagaId := "123"
+		mock.ExpectPing()
+
+		//lock
+		mock.
+			ExpectExec("SELECT pg_advisory_lock(hashtext($1));").
+			WithArgs(sagaId).
+			WillReturnError(errors.New("exec returned an error"))
+
+		_, err := m.Lock(ctx, sagaId)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "exec returned an error")
+
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("release exec returns an error", func(t *testing.T) {
+		m, mock, _ := createMutex(t, saga.PGDriver)
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+		defer cancel()
+		sagaId := "123"
+
+		mock.ExpectPing()
+
+		//lock
+		mock.
+			ExpectExec("SELECT pg_advisory_lock(hashtext($1));").
+			WithArgs(sagaId).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+
+		lock, err := m.Lock(ctx, sagaId)
+		assert.NoError(t, err)
+
+		mock.
+			ExpectExec("SELECT pg_advisory_unlock(hashtext($1));").
+			WithArgs(sagaId).
+			WillReturnError(errors.New("release returns an error"))
+
+		err = lock.Release(ctx)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "release returns an error")
+
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+}
+
+func createMutex(t *testing.T, provider saga.SQLDriver) (Mutex, sqlmock.Sqlmock, *log.TestLogger) {
 	db, mock, err := sqlmock.New(
 		sqlmock.MonitorPingsOption(true),
 		sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual),
