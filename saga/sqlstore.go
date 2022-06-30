@@ -246,7 +246,7 @@ func (s sqlStore) GetById(ctx context.Context, sagaId string) (Instance, error) 
 
 func (s sqlStore) GetByFilter(ctx context.Context, filters ...FilterOption) ([]Instance, error) {
 	if len(filters) == 0 {
-		return nil, errors.Errorf("No filters found, you have to specify at least one so result won't be whole store")
+		return nil, errors.Errorf("no filters found, you have to specify at least one so result won't be whole store")
 	}
 
 	opts := &filterOptions{}
@@ -263,9 +263,9 @@ func (s sqlStore) GetByFilter(ctx context.Context, filters ...FilterOption) ([]I
 			s.name,
 			s.payload,
 			s.status,
+			s.last_failed_ev,
 			s.started_at,
 			s.updated_at,
-			s.last_failed_ev,
 			sh.uid,
 			sh.name,
 			sh.status,
@@ -333,9 +333,9 @@ func (s sqlStore) GetByFilter(ctx context.Context, filters ...FilterOption) ([]I
 			&sagaData.Name,
 			&sagaData.Payload,
 			&sagaData.Status,
+			&sagaData.LastFailedMsg,
 			&sagaData.StartedAt,
 			&sagaData.UpdatedAt,
-			&sagaData.LastFailedMsg,
 			&ev.ID,
 			&ev.Name,
 			&ev.SagaStatus,
@@ -511,7 +511,7 @@ func (s sqlStore) instanceFromModel(sagaData sagaSqlModel) (*sagaInstance, error
 	sagaInterface, ok := saga.(Saga)
 
 	if !ok {
-		return nil, errors.New("error converting %s into type Saga interface")
+		return nil, errors.New("error converting payload into type Saga interface")
 	}
 
 	sagaInstance.saga = sagaInterface
