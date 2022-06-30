@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -215,7 +216,7 @@ func TestRecoverSaga(t *testing.T) {
 
 		lockMock := mutex.NewMockLock(ctrl)
 		sagaMutexMock.EXPECT().Lock(ctx, recoverSagaCmd.SagaUID).Return(lockMock, nil)
-		lockMock.EXPECT().Release(ctx).Return(nil)
+		lockMock.EXPECT().Release(ctx).Return(errors.New("error releasing mutex"))
 
 		sagaInst := sagaPkg.NewSagaInstance(recoverSagaCmd.SagaUID, "", &sagaExample{})
 		sagaInst.Fail(nil)
@@ -235,6 +236,45 @@ func TestRecoverSaga(t *testing.T) {
 
 		err := handler.Handle(msgExecutionCtx)
 		assert.NoError(t, err)
+		testLogger.AssertContainsSubstr(t, "error releasing mutex")
+	})
+
+	t.Run("error getting saga instance by id", func(t *testing.T) {
+		receivedMsg := message.NewReceivedMessage("123", recoverSagaCmd, message.Headers{}, now, "origin")
+		msgExecutionCtx.EXPECT().Message().Return(receivedMsg)
+		msgExecutionCtx.EXPECT().Context().Return(ctx)
+		msgExecutionCtx.EXPECT().Logger().Return(testLogger)
+
+		lockMock := mutex.NewMockLock(ctrl)
+		sagaMutexMock.EXPECT().Lock(ctx, recoverSagaCmd.SagaUID).Return(lockMock, nil)
+		lockMock.EXPECT().Release(ctx).Return(nil)
+
+		sagaInst := sagaPkg.NewSagaInstance(recoverSagaCmd.SagaUID, "", &sagaExample{})
+		sagaInst.Fail(nil)
+
+		sagaStoreMock.EXPECT().GetById(ctx, recoverSagaCmd.SagaUID).Return(nil, errors.New("get by id error"))
+
+		err := handler.Handle(msgExecutionCtx)
+		assert.Error(t, err)
+		assert.EqualError(t, err, "fetching saga instance '123' from store: get by id error")
+	})
+
+	t.Run("can't recover unless status is right", func(t *testing.T) {
+		receivedMsg := message.NewReceivedMessage("123", recoverSagaCmd, message.Headers{}, now, "origin")
+		msgExecutionCtx.EXPECT().Message().Return(receivedMsg)
+		msgExecutionCtx.EXPECT().Context().Return(ctx)
+		msgExecutionCtx.EXPECT().Logger().Return(testLogger)
+
+		lockMock := mutex.NewMockLock(ctrl)
+		sagaMutexMock.EXPECT().Lock(ctx, recoverSagaCmd.SagaUID).Return(lockMock, nil)
+		lockMock.EXPECT().Release(ctx).Return(nil)
+
+		sagaInst := sagaPkg.NewSagaInstance(recoverSagaCmd.SagaUID, "", &sagaExample{})
+		sagaStoreMock.EXPECT().GetById(ctx, recoverSagaCmd.SagaUID).Return(sagaInst, nil)
+
+		err := handler.Handle(msgExecutionCtx)
+		assert.NoError(t, err)
+		testLogger.AssertContainsSubstr(t, fmt.Sprintf("Saga '%s' has status '%s', you can't start recovering the process", sagaInst.UID(), sagaInst.Status()))
 	})
 }
 

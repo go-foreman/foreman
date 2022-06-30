@@ -13,7 +13,7 @@ import (
 
 //NewNilLogger is used mostly in testing, prints nothing
 func NewNilLogger() *testLogger {
-	return &testLogger{entriesStore: &entriesStore{}, mutex: &sync.Mutex{}}
+	return &testLogger{entriesStore: &entriesStore{}, mutex: &sync.Mutex{}, level: log.InfoLevel}
 }
 
 type entriesStore struct {
