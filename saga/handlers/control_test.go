@@ -297,6 +297,123 @@ func TestRecoverSaga(t *testing.T) {
 	})
 }
 
+func TestCompensate(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	sagaStoreMock := saga.NewMockStore(ctrl)
+	sagaMutexMock := mutex.NewMockMutex(ctrl)
+	idService := saga.NewMockSagaUIDService(ctrl)
+	schemeRegistry := scheme.NewKnownTypesRegistry()
+	testLogger := log.NewNilLogger()
+
+	msgExecutionCtx := execution.NewMockMessageExecutionCtx(ctrl)
+
+	handler := NewSagaControlHandler(sagaStoreMock, sagaMutexMock, schemeRegistry, idService)
+
+	recoverSagaCmd := &contracts.CompensateSagaCommand{
+		ObjectMeta: message.ObjectMeta{
+			TypeMeta: scheme.TypeMeta{
+				Kind:  "CompensateSagaCommand",
+				Group: "systemSaga",
+			},
+		},
+		SagaUID: "123",
+	}
+
+	now := time.Now()
+	ctx := context.Background()
+
+	t.Run("success", func(t *testing.T) {
+		receivedMsg := message.NewReceivedMessage("123", recoverSagaCmd, message.Headers{}, now, "origin")
+		msgExecutionCtx.EXPECT().Message().Return(receivedMsg)
+		msgExecutionCtx.EXPECT().Context().Return(ctx)
+		msgExecutionCtx.EXPECT().Logger().Return(testLogger).Times(2)
+
+		lockMock := mutex.NewMockLock(ctrl)
+		sagaMutexMock.EXPECT().Lock(ctx, recoverSagaCmd.SagaUID).Return(lockMock, nil)
+		lockMock.EXPECT().Release(ctx).Return(errors.New("error releasing mutex"))
+
+		sagaInst := sagaPkg.NewSagaInstance(recoverSagaCmd.SagaUID, "", &sagaExample{})
+		sagaInst.Fail(nil)
+
+		sagaStoreMock.EXPECT().GetById(ctx, recoverSagaCmd.SagaUID).Return(sagaInst, nil)
+		idService.EXPECT().AddSagaId(receivedMsg.Headers(), recoverSagaCmd.SagaUID)
+
+		sagaStoreMock.EXPECT().Update(ctx, sagaInst).Return(nil)
+
+		msgExecutionCtx.
+			EXPECT().
+			Send(gomock.Any()).
+			DoAndReturn(func(msg *message.OutcomingMessage, options ...endpoint.DeliveryOption) error {
+				assert.Equal(t, &DataContract{Message: "compensate"}, msg.Payload())
+				return nil
+			})
+
+		err := handler.Handle(msgExecutionCtx)
+		assert.NoError(t, err)
+		testLogger.AssertContainsSubstr(t, "error releasing mutex")
+	})
+
+	t.Run("error fetching saga by id", func(t *testing.T) {
+		receivedMsg := message.NewReceivedMessage("123", recoverSagaCmd, message.Headers{}, now, "origin")
+		msgExecutionCtx.EXPECT().Message().Return(receivedMsg)
+		msgExecutionCtx.EXPECT().Context().Return(ctx)
+		msgExecutionCtx.EXPECT().Logger().Return(testLogger)
+
+		lockMock := mutex.NewMockLock(ctrl)
+		sagaMutexMock.EXPECT().Lock(ctx, recoverSagaCmd.SagaUID).Return(lockMock, nil)
+		lockMock.EXPECT().Release(ctx).Return(nil)
+
+		sagaInst := sagaPkg.NewSagaInstance(recoverSagaCmd.SagaUID, "", &sagaExample{})
+		sagaInst.Fail(nil)
+
+		sagaStoreMock.EXPECT().GetById(ctx, recoverSagaCmd.SagaUID).Return(nil, errors.New("get by id error"))
+
+		err := handler.Handle(msgExecutionCtx)
+		assert.Error(t, err)
+		assert.EqualError(t, err, "fetching saga instance '123' from store: get by id error")
+	})
+
+	t.Run("status isn't failed or compensating", func(t *testing.T) {
+		receivedMsg := message.NewReceivedMessage("123", recoverSagaCmd, message.Headers{}, now, "origin")
+		msgExecutionCtx.EXPECT().Message().Return(receivedMsg)
+		msgExecutionCtx.EXPECT().Context().Return(ctx)
+		msgExecutionCtx.EXPECT().Logger().Return(testLogger)
+
+		lockMock := mutex.NewMockLock(ctrl)
+		sagaMutexMock.EXPECT().Lock(ctx, recoverSagaCmd.SagaUID).Return(lockMock, nil)
+		lockMock.EXPECT().Release(ctx).Return(nil)
+
+		sagaInst := sagaPkg.NewSagaInstance(recoverSagaCmd.SagaUID, "", &sagaExample{})
+		sagaStoreMock.EXPECT().GetById(ctx, recoverSagaCmd.SagaUID).Return(sagaInst, nil)
+		sagaInst.Complete()
+
+		err := handler.Handle(msgExecutionCtx)
+		assert.NoError(t, err)
+		testLogger.AssertContainsSubstr(t, fmt.Sprintf("Saga '%s' has status '%s', you can't compensate the process", sagaInst.UID(), sagaInst.Status()))
+	})
+
+	t.Run("error starting compensation", func(t *testing.T) {
+		receivedMsg := message.NewReceivedMessage("123", recoverSagaCmd, message.Headers{}, now, "origin")
+		msgExecutionCtx.EXPECT().Message().Return(receivedMsg)
+		msgExecutionCtx.EXPECT().Context().Return(ctx)
+		msgExecutionCtx.EXPECT().Logger().Return(testLogger).Times(2)
+
+		lockMock := mutex.NewMockLock(ctrl)
+		sagaMutexMock.EXPECT().Lock(ctx, recoverSagaCmd.SagaUID).Return(lockMock, nil)
+		lockMock.EXPECT().Release(ctx).Return(nil)
+
+		sagaInst := sagaPkg.NewSagaInstance(recoverSagaCmd.SagaUID, "", &sagaExample{err: errors.New("error compensating")})
+		sagaInst.Fail(nil)
+		sagaStoreMock.EXPECT().GetById(ctx, recoverSagaCmd.SagaUID).Return(sagaInst, nil)
+
+		err := handler.Handle(msgExecutionCtx)
+		assert.Error(t, err)
+		assert.EqualError(t, err, "compensating saga '123': error compensating")
+	})
+}
+
 type sagaExample struct {
 	sagaPkg.BaseSaga
 	Data string
