@@ -178,7 +178,64 @@ func TestControlHandler(t *testing.T) {
 		})
 
 	})
+}
 
+func TestRecoverSaga(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	sagaStoreMock := saga.NewMockStore(ctrl)
+	sagaMutexMock := mutex.NewMockMutex(ctrl)
+	idService := saga.NewMockSagaUIDService(ctrl)
+	schemeRegistry := scheme.NewKnownTypesRegistry()
+	testLogger := log.NewNilLogger()
+
+	msgExecutionCtx := execution.NewMockMessageExecutionCtx(ctrl)
+
+	handler := NewSagaControlHandler(sagaStoreMock, sagaMutexMock, schemeRegistry, idService)
+
+	recoverSagaCmd := &contracts.RecoverSagaCommand{
+		ObjectMeta: message.ObjectMeta{
+			TypeMeta: scheme.TypeMeta{
+				Kind:  "RecoverSagaCommand",
+				Group: "systemSaga",
+			},
+		},
+		SagaUID: "123",
+	}
+
+	now := time.Now()
+	ctx := context.Background()
+
+	t.Run("success", func(t *testing.T) {
+		receivedMsg := message.NewReceivedMessage("123", recoverSagaCmd, message.Headers{}, now, "origin")
+		msgExecutionCtx.EXPECT().Message().Return(receivedMsg)
+		msgExecutionCtx.EXPECT().Context().Return(ctx)
+		msgExecutionCtx.EXPECT().Logger().Return(testLogger).Times(2)
+
+		lockMock := mutex.NewMockLock(ctrl)
+		sagaMutexMock.EXPECT().Lock(ctx, recoverSagaCmd.SagaUID).Return(lockMock, nil)
+		lockMock.EXPECT().Release(ctx).Return(nil)
+
+		sagaInst := sagaPkg.NewSagaInstance(recoverSagaCmd.SagaUID, "", &sagaExample{})
+		sagaInst.Fail(nil)
+
+		sagaStoreMock.EXPECT().GetById(ctx, recoverSagaCmd.SagaUID).Return(sagaInst, nil)
+		idService.EXPECT().AddSagaId(receivedMsg.Headers(), recoverSagaCmd.SagaUID)
+
+		sagaStoreMock.EXPECT().Update(ctx, sagaInst).Return(nil)
+
+		msgExecutionCtx.
+			EXPECT().
+			Send(gomock.Any()).
+			DoAndReturn(func(msg *message.OutcomingMessage, options ...endpoint.DeliveryOption) error {
+				assert.Equal(t, &DataContract{Message: "recover"}, msg.Payload())
+				return nil
+			})
+
+		err := handler.Handle(msgExecutionCtx)
+		assert.NoError(t, err)
+	})
 }
 
 type sagaExample struct {
