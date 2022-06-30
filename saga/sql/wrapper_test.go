@@ -87,7 +87,7 @@ func TestSqlWrapper(t *testing.T) {
 		assert.NotNil(t, firstConn)
 
 		go func() {
-			time.Sleep(time.Microsecond * 200)
+			time.Sleep(time.Microsecond * 100)
 			assert.NoError(t, firstConn.Close(true))
 		}()
 
