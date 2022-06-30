@@ -178,6 +178,42 @@ func TestControlHandler(t *testing.T) {
 			assert.EqualError(t, err, "error asserting that startCmd.Saga is Saga type")
 		})
 
+		t.Run("saga start returns an error", func(t *testing.T) {
+			defer testLogger.Clear()
+
+			startSagaCmd := &contracts.StartSagaCommand{
+				ObjectMeta: message.ObjectMeta{
+					TypeMeta: scheme.TypeMeta{
+						Kind:  "StartSagaCommand",
+						Group: "systemSaga",
+					},
+				},
+				SagaUID:   "123",
+				ParentUID: "",
+				Saga: &sagaExample{
+					Data: "data",
+					err:  errors.New("starting err"),
+				},
+			}
+
+			receivedMsg := message.NewReceivedMessage("123", startSagaCmd, message.Headers{}, now, "origin")
+			msgExecutionCtx.EXPECT().Message().Return(receivedMsg)
+			msgExecutionCtx.EXPECT().Context().Return(ctx)
+			msgExecutionCtx.EXPECT().Logger().Return(testLogger).Times(2)
+
+			lockMock := mutex.NewMockLock(ctrl)
+			sagaMutexMock.EXPECT().Lock(ctx, startSagaCmd.SagaUID).Return(lockMock, nil)
+			lockMock.EXPECT().Release(ctx).Return(nil)
+
+			sagaStoreMock.
+				EXPECT().
+				Create(ctx, gomock.Any()).
+				Return(nil)
+
+			err := handler.Handle(msgExecutionCtx)
+			assert.Error(t, err)
+			assert.EqualError(t, err, "starting saga '123': starting err")
+		})
 	})
 }
 
