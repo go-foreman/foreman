@@ -16,6 +16,80 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestSqlStore_InitTable(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	msgMarshallerMock := mockMessage.NewMockMarshaller(ctrl)
+
+	t.Run("error committing", func(t *testing.T) {
+		db, mock, err := sqlmock.New(
+			sqlmock.MonitorPingsOption(true),
+			sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual),
+		)
+		require.NoError(t, err)
+		wrapper := sql.NewDB(db)
+
+		mock.ExpectBegin()
+		mock.ExpectExec("create table if not exists saga ( uid varchar(255) not null primary key, parent_uid varchar(255) null, name varchar(255) null, payload text null, status varchar(255) null, started_at timestamp null, updated_at timestamp null, last_failed_ev text null );").
+			WithArgs().
+			WillReturnResult(sqlmock.NewResult(1, 1))
+		mock.ExpectExec("create table if not exists saga_history ( uid varchar(255) not null primary key, saga_uid varchar(255) not null, name varchar(255) null, status varchar(255) null, payload text null, origin varchar(255) null, created_at timestamp null, trace_uid varchar(255) null, constraint saga_history_saga_model_id_fk foreign key (saga_uid) references saga (uid) on update cascade on delete cascade );").
+			WithArgs().
+			WillReturnResult(sqlmock.NewResult(1, 1))
+		mock.ExpectCommit().WillReturnError(errors.New("error commit"))
+
+		_, err = NewSQLSagaStore(wrapper, MYSQLDriver, msgMarshallerMock)
+		require.Error(t, err)
+		assert.EqualError(t, err, "initializing tables for SQLSagaStore, driver mysql: error commit")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("error exec saga table", func(t *testing.T) {
+		db, mock, err := sqlmock.New(
+			sqlmock.MonitorPingsOption(true),
+			sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual),
+		)
+		require.NoError(t, err)
+		wrapper := sql.NewDB(db)
+
+		mock.ExpectBegin()
+		mock.ExpectExec("create table if not exists saga ( uid varchar(255) not null primary key, parent_uid varchar(255) null, name varchar(255) null, payload text null, status varchar(255) null, started_at timestamp null, updated_at timestamp null, last_failed_ev text null );").
+			WithArgs().
+			WillReturnError(errors.New("error exec1"))
+		mock.ExpectRollback()
+
+		_, err = NewSQLSagaStore(wrapper, MYSQLDriver, msgMarshallerMock)
+		require.Error(t, err)
+		assert.EqualError(t, err, "initializing tables for SQLSagaStore, driver mysql: error exec1")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("error exec saga history table", func(t *testing.T) {
+		db, mock, err := sqlmock.New(
+			sqlmock.MonitorPingsOption(true),
+			sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual),
+		)
+		require.NoError(t, err)
+		wrapper := sql.NewDB(db)
+
+		mock.ExpectBegin()
+		mock.ExpectExec("create table if not exists saga ( uid varchar(255) not null primary key, parent_uid varchar(255) null, name varchar(255) null, payload text null, status varchar(255) null, started_at timestamp null, updated_at timestamp null, last_failed_ev text null );").
+			WithArgs().
+			WillReturnResult(sqlmock.NewResult(1, 1))
+		mock.ExpectExec("create table if not exists saga_history ( uid varchar(255) not null primary key, saga_uid varchar(255) not null, name varchar(255) null, status varchar(255) null, payload text null, origin varchar(255) null, created_at timestamp null, trace_uid varchar(255) null, constraint saga_history_saga_model_id_fk foreign key (saga_uid) references saga (uid) on update cascade on delete cascade );").
+			WithArgs().
+			WillReturnError(errors.New("error exec2"))
+		mock.ExpectRollback()
+
+		_, err = NewSQLSagaStore(wrapper, MYSQLDriver, msgMarshallerMock)
+		require.Error(t, err)
+		assert.EqualError(t, err, "initializing tables for SQLSagaStore, driver mysql: error exec2")
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+}
+
 func TestSqlStore_Create(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -99,6 +173,36 @@ func TestSqlStore_Create(t *testing.T) {
 		err := store.Create(ctx, sagaInstance)
 		assert.Error(t, err)
 		assert.EqualError(t, err, "error marshaling")
+	})
+
+	t.Run("error exec and rollback", func(t *testing.T) {
+		store, dbMock, marshallerMock := createStore(t, ctrl, MYSQLDriver)
+		sagaInstance := NewSagaInstance(sagaID, parentSagaID, &SagaExample{Data: "data"})
+
+		payload := []byte("payload")
+
+		marshallerMock.
+			EXPECT().
+			Marshal(sagaInstance.Saga()).
+			Return(payload, nil)
+
+		dbMock.ExpectBegin()
+		dbMock.ExpectExec("INSERT INTO saga (uid, parent_uid, name, payload, status, started_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?);").
+			WithArgs(
+				sagaInstance.UID(),
+				sagaInstance.ParentID(),
+				sagaInstance.Saga().GroupKind().String(),
+				payload,
+				sagaInstance.Status().String(),
+				sagaInstance.StartedAt(),
+				sagaInstance.UpdatedAt(),
+			).WillReturnError(errors.New("exec error"))
+		dbMock.ExpectRollback()
+
+		err := store.Create(ctx, sagaInstance)
+		assert.Error(t, err)
+		assert.EqualError(t, err, "inserting saga instance 123: exec error")
+		assert.NoError(t, dbMock.ExpectationsWereMet())
 	})
 
 }
