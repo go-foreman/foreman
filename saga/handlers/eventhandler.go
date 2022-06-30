@@ -90,8 +90,8 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 		}
 
 		for _, delivery := range sagaCtx.Deliveries() {
-			e.sagaUIDSvc.AddSagaId(execCtx.Message().Headers(), sagaInstance.UID())
-			outcomingMsg := message.NewOutcomingMessage(delivery.Payload, message.WithHeaders(execCtx.Message().Headers()))
+			e.sagaUIDSvc.AddSagaId(msg.Headers(), sagaInstance.UID())
+			outcomingMsg := message.NewOutcomingMessage(delivery.Payload, message.WithHeaders(msg.Headers()))
 
 			if err := execCtx.Send(outcomingMsg, delivery.Options...); err != nil {
 				logger.Log(log.ErrorLevel, fmt.Sprintf("error sending delivery for saga '%s'. Delivery: (%v). %s", sagaCtx.SagaInstance().UID(), delivery, err))
@@ -121,9 +121,9 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 	if sagaInstance.Status().Completed() {
 		//if parent exists - we should forward this event to parent saga
 		if sagaInstance.ParentID() != "" {
-			e.sagaUIDSvc.AddSagaId(execCtx.Message().Headers(), sagaInstance.ParentID())
+			e.sagaUIDSvc.AddSagaId(msg.Headers(), sagaInstance.ParentID())
 
-			return execCtx.Send(message.NewOutcomingMessage(&contracts.SagaChildCompletedEvent{SagaUID: sagaInstance.UID()}, message.WithHeaders(execCtx.Message().Headers())))
+			return execCtx.Send(message.NewOutcomingMessage(&contracts.SagaChildCompletedEvent{SagaUID: sagaInstance.UID()}, message.WithHeaders(msg.Headers())))
 		}
 	}
 
