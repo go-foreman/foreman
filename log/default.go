@@ -46,7 +46,7 @@ func (l defaultLogger) Log(level Level, v ...interface{}) {
 }
 
 func (l *defaultLogger) WithFields(fields []Field) Logger {
-	newLogger := &defaultLogger{fields: append(l.fields, fields...), mutex: &sync.Mutex{}, level: l.level}
+	newLogger := &defaultLogger{fields: append(l.fields, fields...), mutex: &sync.Mutex{}, level: l.level, out: l.out}
 	newLogger.internalLogger = newLogger.createInternalLogger(l.out)
 
 	newLogger.compiledFieldsStr = newLogger.generatePrefix()

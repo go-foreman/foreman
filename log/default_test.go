@@ -61,6 +61,16 @@ func TestDefaultLogger(t *testing.T) {
 
 		fieldsLogger.Log(DebugLevel, "some debug")
 		assert.Contains(t, output.String(), "debug [key=val]  [some debug]")
+
+		nestedLogger := fieldsLogger.WithFields([]Field{
+			{
+				Name: "key1",
+				Val:  "val1",
+			},
+		})
+
+		nestedLogger.Log(DebugLevel, "another debug")
+		assert.Contains(t, output.String(), "debug [key=val] [key1=val1]  [another debug]")
 	})
 
 }
