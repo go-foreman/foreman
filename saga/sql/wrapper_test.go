@@ -120,6 +120,20 @@ func TestSqlWrapper(t *testing.T) {
 		assert.NotSame(t, lockConn, queryConn)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
+
+	t.Run("unlock connection that wasn't locked", func(t *testing.T) {
+		wrapper, _ := createWrapper(t)
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+		defer cancel()
+
+		sagaID := "123"
+		lockConn, err := wrapper.Conn(ctx, sagaID, false)
+		assert.NoError(t, err)
+		err = lockConn.Close(true)
+		assert.Error(t, err)
+		assert.EqualError(t, err, "called conn.Close(true) on connection that wasn't locked")
+	})
 }
 
 func createWrapper(t *testing.T) (*DB, sqlmock.Sqlmock) {
