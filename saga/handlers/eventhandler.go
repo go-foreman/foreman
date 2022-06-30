@@ -78,7 +78,6 @@ func (e SagaEventsHandler) Handle(execCtx execution.MessageExecutionCtx) error {
 	saga.Init()
 
 	sagaCtx := sagaPkg.NewSagaCtx(execCtx, sagaInstance)
-	sagaInstance.Progress()
 
 	if handler, exists := saga.EventHandlers()[msg.Payload().GroupKind()]; exists {
 
