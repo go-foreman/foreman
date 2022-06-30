@@ -37,7 +37,8 @@ func NewSQLSagaStore(db *sagaSql.DB, driver SQLDriver, msgMarshaller message.Mar
 	return s, nil
 }
 
-// Create saves saga instance into mysql store. History events, last failed event are not persisted at this step, there is not way for them to be at creation step.
+// Create saves saga instance into mysql store. History events, last failed event are not persisted at this step,
+// there is no way for them to be at creation step.
 func (s sqlStore) Create(ctx context.Context, sagaInstance Instance) error {
 	payload, err := s.msgMarshaller.Marshal(sagaInstance.Saga())
 
