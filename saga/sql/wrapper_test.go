@@ -87,11 +87,11 @@ func TestSqlWrapper(t *testing.T) {
 		assert.NotNil(t, firstConn)
 
 		go func() {
-			time.Sleep(time.Microsecond * 100)
+			time.Sleep(time.Microsecond * 200)
 			assert.NoError(t, firstConn.Close(true))
 		}()
 
-		secondCtx, secondCancel := context.WithTimeout(context.Background(), time.Microsecond*400)
+		secondCtx, secondCancel := context.WithTimeout(context.Background(), time.Microsecond*500)
 		defer secondCancel()
 
 		mock.ExpectPing()
