@@ -8,7 +8,6 @@ import (
 
 	"github.com/go-foreman/foreman/log"
 	"github.com/go-foreman/foreman/saga"
-	sagaApiErrors "github.com/go-foreman/foreman/saga/api/errors"
 	"github.com/pkg/errors"
 )
 
@@ -23,9 +22,11 @@ type SagaEvent struct {
 	saga.HistoryEvent
 }
 
+//go:generate mockgen --build_flags=--mod=mod -destination ./mock_test.go -package status . StatusService
+
 type StatusService interface {
 	GetStatus(ctx context.Context, sagaId string) (*StatusResponse, error)
-	GetFilteredBy(ctx context.Context, sagaId, status, sagaType string) ([]*StatusResponse, error)
+	GetFilteredBy(ctx context.Context, sagaId, status, sagaType string) ([]StatusResponse, error)
 }
 
 func NewStatusService(store saga.Store) StatusService {
@@ -40,11 +41,11 @@ func (s statusService) GetStatus(ctx context.Context, sagaId string) (*StatusRes
 	sagaInstance, err := s.sagaStore.GetById(ctx, sagaId)
 
 	if err != nil {
-		return nil, errors.Wrapf(err, "error loading saga `%s`", sagaId)
+		return nil, errors.Wrapf(err, "error loading saga '%s'", sagaId)
 	}
 
 	if sagaInstance == nil {
-		return nil, sagaApiErrors.NewResponseError(http.StatusNotFound, errors.Errorf("Saga `%s` not found", sagaId))
+		return nil, NewResponseError(http.StatusNotFound, errors.Errorf("saga '%s' not found", sagaId))
 	}
 
 	events := make([]SagaEvent, len(sagaInstance.HistoryEvents()))
@@ -56,7 +57,7 @@ func (s statusService) GetStatus(ctx context.Context, sagaId string) (*StatusRes
 	return &StatusResponse{SagaUID: sagaId, Status: sagaInstance.Status().String(), Payload: sagaInstance.Saga(), Events: events}, nil
 }
 
-func (s statusService) GetFilteredBy(ctx context.Context, sagaId, status, sagaName string) ([]*StatusResponse, error) {
+func (s statusService) GetFilteredBy(ctx context.Context, sagaId, status, sagaName string) ([]StatusResponse, error) {
 
 	var opts []saga.FilterOption
 
@@ -73,7 +74,7 @@ func (s statusService) GetFilteredBy(ctx context.Context, sagaId, status, sagaNa
 	}
 
 	if len(opts) == 0 {
-		return nil, sagaApiErrors.NewResponseError(http.StatusBadRequest, errors.New("No filters specified"))
+		return nil, NewResponseError(http.StatusBadRequest, errors.New("no filters specified"))
 	}
 
 	sagas, err := s.sagaStore.GetByFilter(ctx, opts...)
@@ -82,7 +83,7 @@ func (s statusService) GetFilteredBy(ctx context.Context, sagaId, status, sagaNa
 		return nil, errors.WithStack(err)
 	}
 
-	resp := make([]*StatusResponse, len(sagas))
+	resp := make([]StatusResponse, len(sagas))
 
 	for i, instance := range sagas {
 		events := make([]SagaEvent, len(instance.HistoryEvents()))
@@ -91,7 +92,7 @@ func (s statusService) GetFilteredBy(ctx context.Context, sagaId, status, sagaNa
 			events[j] = SagaEvent{ev}
 		}
 
-		resp[i] = &StatusResponse{
+		resp[i] = StatusResponse{
 			SagaUID: instance.UID(),
 			Status:  instance.Status().String(),
 			Payload: instance.Saga(),
@@ -130,7 +131,7 @@ func (h *StatusHandler) GetStatus(resp http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.logger.Log(log.ErrorLevel, err)
 
-		if respErr, ok := err.(sagaApiErrors.ResponseError); ok {
+		if respErr, ok := err.(ResponseError); ok {
 			resp.WriteHeader(respErr.Status())
 		} else {
 			resp.WriteHeader(http.StatusInternalServerError)
@@ -168,7 +169,7 @@ func (h *StatusHandler) GetFilteredBy(resp http.ResponseWriter, r *http.Request)
 	if err != nil {
 		h.logger.Log(log.ErrorLevel, err)
 
-		if respErr, ok := err.(sagaApiErrors.ResponseError); ok {
+		if respErr, ok := err.(ResponseError); ok {
 			resp.WriteHeader(respErr.Status())
 		} else {
 			resp.WriteHeader(http.StatusInternalServerError)
@@ -193,4 +194,18 @@ func (h *StatusHandler) GetFilteredBy(resp http.ResponseWriter, r *http.Request)
 	if _, err := resp.Write(rawResponse); err != nil {
 		h.logger.Log(log.ErrorLevel, err)
 	}
+}
+
+type ResponseError struct {
+	error
+	status int
+}
+
+//Status returns http status code
+func (e ResponseError) Status() int {
+	return e.status
+}
+
+func NewResponseError(status int, err error) ResponseError {
+	return ResponseError{status: status, error: err}
 }

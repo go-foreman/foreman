@@ -1,8 +1,6 @@
 package foreman
 
 import (
-	"errors"
-
 	"github.com/go-foreman/foreman/log"
 	"github.com/go-foreman/foreman/pubsub/dispatcher"
 	"github.com/go-foreman/foreman/pubsub/endpoint"
@@ -11,7 +9,10 @@ import (
 	"github.com/go-foreman/foreman/pubsub/subscriber"
 	"github.com/go-foreman/foreman/pubsub/transport"
 	"github.com/go-foreman/foreman/runtime/scheme"
+	"github.com/pkg/errors"
 )
+
+//go:generate mockgen --build_flags=--mod=mod -destination testing/mocks/messagebus.go -package foreman . Component
 
 // Component allow to wrap and prepare booting of your component, which will be initialized by MessageBus
 type Component interface {
@@ -149,7 +150,8 @@ func NewMessageBus(logger log.Logger, msgMarshaller message.Marshaller, scheme s
 	} else if subscriberCreationOpts.transport != nil {
 		mBus.subscriber = subscriber.NewSubscriber(subscriberCreationOpts.transport, container.processor, logger, subscriberCreationOpts.opts...)
 	} else {
-		return nil, errors.New("subscriber is nil")
+
+		panic(errors.New("subscriber is nil"))
 	}
 
 	for _, component := range container.components {

@@ -1,12 +1,15 @@
 package saga
 
 import (
-	"fmt"
 	"reflect"
+
+	"github.com/pkg/errors"
 
 	"github.com/go-foreman/foreman/pubsub/message"
 	"github.com/go-foreman/foreman/runtime/scheme"
 )
+
+//go:generate mockgen --build_flags=--mod=mod -destination ../testing/mocks/saga/saga.go -package saga . Saga
 
 type Saga interface {
 	// include Object interface as any message type in MessageBus a saga should have metadata
@@ -40,13 +43,13 @@ func (b *BaseSaga) AddEventHandler(ev message.Object, handler Executor) *BaseSag
 	}
 
 	if b.scheme == nil {
-		panic("schema wasn't set")
+		panic(errors.New("schema wasn't set"))
 	}
 
 	groupKind, err := b.scheme.ObjectKind(ev)
 
 	if err != nil {
-		panic(fmt.Sprintf("ev %s is not registered in schema", reflect.TypeOf(ev).String()))
+		panic(errors.Errorf("ev %s is not registered in schema", reflect.TypeOf(ev).String()))
 	}
 
 	b.adjacencyMap[*groupKind] = handler

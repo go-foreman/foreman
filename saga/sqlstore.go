@@ -37,7 +37,8 @@ func NewSQLSagaStore(db *sagaSql.DB, driver SQLDriver, msgMarshaller message.Mar
 	return s, nil
 }
 
-// Create saves saga instance into mysql store. History events, last failed event are not persisted at this step, there is not way for them to be at creation step.
+// Create saves saga instance into mysql store. History events, last failed event are not persisted at this step,
+// there is no way for them to be at creation step.
 func (s sqlStore) Create(ctx context.Context, sagaInstance Instance) error {
 	payload, err := s.msgMarshaller.Marshal(sagaInstance.Saga())
 
@@ -143,7 +144,7 @@ func (s *sqlStore) Update(ctx context.Context, sagaInstance Instance) error {
 	defer rows.Close()
 
 	var eventID string
-	eventsIDs := make(map[string]string)
+	eventsIDs := make(map[string]struct{})
 
 	for rows.Next() {
 		if err := rows.Scan(&eventID); err != nil {
@@ -153,7 +154,7 @@ func (s *sqlStore) Update(ctx context.Context, sagaInstance Instance) error {
 			return errors.Wrap(err, "scanning row")
 		}
 
-		eventsIDs[eventID] = eventID
+		eventsIDs[eventID] = struct{}{}
 	}
 
 	if len(eventsIDs) < len(sagaInstance.HistoryEvents()) {
@@ -245,7 +246,7 @@ func (s sqlStore) GetById(ctx context.Context, sagaId string) (Instance, error) 
 
 func (s sqlStore) GetByFilter(ctx context.Context, filters ...FilterOption) ([]Instance, error) {
 	if len(filters) == 0 {
-		return nil, errors.Errorf("No filters found, you have to specify at least one so result won't be whole store")
+		return nil, errors.Errorf("no filters found, you have to specify at least one so result won't be whole store")
 	}
 
 	opts := &filterOptions{}
@@ -262,9 +263,9 @@ func (s sqlStore) GetByFilter(ctx context.Context, filters ...FilterOption) ([]I
 			s.name,
 			s.payload,
 			s.status,
+			s.last_failed_ev,
 			s.started_at,
 			s.updated_at,
-			s.last_failed_ev,
 			sh.uid,
 			sh.name,
 			sh.status,
@@ -297,7 +298,7 @@ func (s sqlStore) GetByFilter(ctx context.Context, filters ...FilterOption) ([]I
 	}
 
 	if len(conditions) == 0 {
-		return nil, errors.Errorf("All specified filters are empty, you have to specify at least one so result won't be whole store")
+		return nil, errors.Errorf("all specified filters are empty, you have to specify at least one so result won't be whole store")
 	}
 
 	for i, condition := range conditions {
@@ -332,9 +333,9 @@ func (s sqlStore) GetByFilter(ctx context.Context, filters ...FilterOption) ([]I
 			&sagaData.Name,
 			&sagaData.Payload,
 			&sagaData.Status,
+			&sagaData.LastFailedMsg,
 			&sagaData.StartedAt,
 			&sagaData.UpdatedAt,
-			&sagaData.LastFailedMsg,
 			&ev.ID,
 			&ev.Name,
 			&ev.SagaStatus,
@@ -510,7 +511,7 @@ func (s sqlStore) instanceFromModel(sagaData sagaSqlModel) (*sagaInstance, error
 	sagaInterface, ok := saga.(Saga)
 
 	if !ok {
-		return nil, errors.New("error converting %s into type Saga interface")
+		return nil, errors.New("error converting payload into type Saga interface")
 	}
 
 	sagaInstance.saga = sagaInterface

@@ -9,6 +9,8 @@ import (
 	"github.com/go-foreman/foreman/pubsub/message/execution"
 )
 
+//go:generate mockgen --build_flags=--mod=mod -destination ./context_mock_test.go -package saga . SagaContext
+
 //SagaContext is sealed interface due to deliver method, that takes all dispatched deliveries and start sending out them
 //Still its' not decided if this interface users should be able to implement
 type SagaContext interface {

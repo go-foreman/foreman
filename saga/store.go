@@ -14,6 +14,8 @@ const (
 
 type FilterOption func(opts *filterOptions)
 
+//go:generate mockgen --build_flags=--mod=mod -destination ../testing/mocks/saga/store.go -package saga . Store
+
 type Store interface {
 	Create(ctx context.Context, saga Instance) error
 	GetById(ctx context.Context, sagaId string) (Instance, error)
