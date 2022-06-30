@@ -635,6 +635,14 @@ func TestSqlStore_GetByFilter(t *testing.T) {
 		assert.EqualError(t, err, "no filters found, you have to specify at least one so result won't be whole store")
 	})
 
+	t.Run("empty values in filters", func(t *testing.T) {
+		store, _, _ := createStore(t, ctrl, MYSQLDriver)
+
+		_, err := store.GetByFilter(ctx, WithStatus(""), WithSagaName(""), WithSagaId(""))
+		assert.Error(t, err)
+		assert.EqualError(t, err, "all specified filters are empty, you have to specify at least one so result won't be whole store")
+	})
+
 	t.Run("get with all filters", func(t *testing.T) {
 		store, dbMock, marshallerMock := createStore(t, ctrl, MYSQLDriver)
 
@@ -699,7 +707,6 @@ func TestSqlStore_GetByFilter(t *testing.T) {
 		evData2 := evData1
 		evData2.ID.String = "yyy"
 
-		//marshallerMock
 		dbMock.ExpectQuery("SELECT s.uid, s.parent_uid, s.name, s.payload, s.status, s.last_failed_ev, s.started_at, s.updated_at, sh.uid, sh.name, sh.status, sh.payload, sh.origin, sh.created_at, sh.trace_uid FROM saga s LEFT JOIN saga_history sh ON s.uid = sh.saga_uid WHERE s.uid = ? AND s.status = ? AND s.name = ?;").
 			WithArgs("sagaId", "created", "sagaName").
 			WillReturnRows(

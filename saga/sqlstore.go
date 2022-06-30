@@ -298,7 +298,7 @@ func (s sqlStore) GetByFilter(ctx context.Context, filters ...FilterOption) ([]I
 	}
 
 	if len(conditions) == 0 {
-		return nil, errors.Errorf("All specified filters are empty, you have to specify at least one so result won't be whole store")
+		return nil, errors.Errorf("all specified filters are empty, you have to specify at least one so result won't be whole store")
 	}
 
 	for i, condition := range conditions {
