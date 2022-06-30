@@ -128,7 +128,7 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 		return errors.Errorf("unknown command type `%s` for SagaControlHandler. Supported: StartSagaCommand, RecoverSagaCommand, CompensateSagaCommand", msg.Payload().GroupKind().String())
 	}
 
-	sagaInstance.AddHistoryEvent(msg.Payload(), sagaPkg.WithOrigin(msg.Origin()), sagaPkg.WithTraceUID(msg.UID()))
+	sagaInstance.AddHistoryEvent(msg.Payload(), &sagaPkg.AddHistoryEvent{Origin: msg.Origin(), TraceUID: msg.TraceID()})
 
 	for _, delivery := range sagaCtx.Deliveries() {
 		h.sagaUIDSvc.AddSagaId(msg.Headers(), sagaCtx.SagaInstance().UID())
@@ -138,7 +138,7 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 			logger.Logf(log.ErrorLevel, "sending delivery for saga %s. Delivery: (%v). %s", sagaCtx.SagaInstance().UID(), delivery, err)
 			return errors.Wrapf(err, "sending delivery for saga %s. Delivery: (%v)", sagaCtx.SagaInstance().UID(), delivery)
 		}
-		sagaCtx.SagaInstance().AddHistoryEvent(delivery.Payload)
+		sagaCtx.SagaInstance().AddHistoryEvent(delivery.Payload, nil)
 	}
 
 	return h.store.Update(ctx, sagaInstance)

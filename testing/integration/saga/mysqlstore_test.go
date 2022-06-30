@@ -129,7 +129,7 @@ func testSQLStoreUseCases(t *testing.T, store saga.Store, schemeRegistry scheme.
 		someEv := &SomeEvent{Field: "field"}
 
 		sagaInstance = fetchedSagaInstance
-		fetchedSagaInstance.AddHistoryEvent(someEv, saga.WithOrigin("origin"), saga.WithTraceUID(uuid.New().String()))
+		fetchedSagaInstance.AddHistoryEvent(someEv, &saga.AddHistoryEvent{Origin: "origin", TraceUID: uuid.New().String()})
 
 		err = store.Update(ctx, fetchedSagaInstance)
 		require.Error(t, err)

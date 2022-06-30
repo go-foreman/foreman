@@ -40,11 +40,11 @@ func (s statusService) GetStatus(ctx context.Context, sagaId string) (*StatusRes
 	sagaInstance, err := s.sagaStore.GetById(ctx, sagaId)
 
 	if err != nil {
-		return nil, errors.Wrapf(err, "error loading saga `%s`", sagaId)
+		return nil, errors.Wrapf(err, "error loading saga '%s'", sagaId)
 	}
 
 	if sagaInstance == nil {
-		return nil, sagaApiErrors.NewResponseError(http.StatusNotFound, errors.Errorf("Saga `%s` not found", sagaId))
+		return nil, sagaApiErrors.NewResponseError(http.StatusNotFound, errors.Errorf("saga '%s' not found", sagaId))
 	}
 
 	events := make([]SagaEvent, len(sagaInstance.HistoryEvents()))
@@ -73,7 +73,7 @@ func (s statusService) GetFilteredBy(ctx context.Context, sagaId, status, sagaNa
 	}
 
 	if len(opts) == 0 {
-		return nil, sagaApiErrors.NewResponseError(http.StatusBadRequest, errors.New("No filters specified"))
+		return nil, sagaApiErrors.NewResponseError(http.StatusBadRequest, errors.New("no filters specified"))
 	}
 
 	sagas, err := s.sagaStore.GetByFilter(ctx, opts...)

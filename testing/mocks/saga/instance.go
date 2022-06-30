@@ -37,20 +37,15 @@ func (m *MockInstance) EXPECT() *MockInstanceMockRecorder {
 }
 
 // AddHistoryEvent mocks base method.
-func (m *MockInstance) AddHistoryEvent(arg0 message.Object, arg1 ...saga.AddEvOpt) {
+func (m *MockInstance) AddHistoryEvent(arg0 message.Object, arg1 *saga.AddHistoryEvent) {
 	m.ctrl.T.Helper()
-	varargs := []interface{}{arg0}
-	for _, a := range arg1 {
-		varargs = append(varargs, a)
-	}
-	m.ctrl.Call(m, "AddHistoryEvent", varargs...)
+	m.ctrl.Call(m, "AddHistoryEvent", arg0, arg1)
 }
 
 // AddHistoryEvent indicates an expected call of AddHistoryEvent.
-func (mr *MockInstanceMockRecorder) AddHistoryEvent(arg0 interface{}, arg1 ...interface{}) *gomock.Call {
+func (mr *MockInstanceMockRecorder) AddHistoryEvent(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{arg0}, arg1...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddHistoryEvent", reflect.TypeOf((*MockInstance)(nil).AddHistoryEvent), varargs...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddHistoryEvent", reflect.TypeOf((*MockInstance)(nil).AddHistoryEvent), arg0, arg1)
 }
 
 // Compensate mocks base method.
