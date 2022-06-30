@@ -39,7 +39,9 @@ func (s *SagaExample) Recover(sagaCtx sagaPkg.SagaContext) error {
 func (s *SagaExample) HandleData(sagaCtx sagaPkg.SagaContext) error {
 	sagaCtx.Dispatch(&DataContract{Message: "handle"})
 
-	s.handleCallback(sagaCtx.SagaInstance())
+	if s.handleCallback != nil {
+		s.handleCallback(sagaCtx.SagaInstance())
+	}
 
 	return s.err
 }

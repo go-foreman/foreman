@@ -81,6 +81,16 @@ func TestEventHandler(t *testing.T) {
 		sagaStoreMock.EXPECT().GetById(ctx, sagaID).Return(sagaInstance, nil)
 		sagaStoreMock.EXPECT().Update(ctx, sagaInstance).Return(nil)
 
+		idService.EXPECT().AddSagaId(receivedMsg.Headers(), sagaID).Return()
+
+		msgExecutionCtx.
+			EXPECT().
+			Send(gomock.Any()).
+			DoAndReturn(func(msg *message.OutcomingMessage, options ...endpoint.DeliveryOption) error {
+				assert.Equal(t, msg.Payload(), &DataContract{Message: "handle"})
+				return nil
+			})
+
 		err := handler.Handle(msgExecutionCtx)
 		assert.NoError(t, err)
 	})
