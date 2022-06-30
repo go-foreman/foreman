@@ -50,6 +50,8 @@ func TestInstance(t *testing.T) {
 	assert.Equal(t, instance.Status().String(), sagaStatusInProgress.String())
 	assert.True(t, instance.Status().InProgress())
 
+	firstStartedAt := instance.StartedAt()
+
 	sagaCtxMock.EXPECT().Dispatch(&DataContract{Message: "recover"})
 	sagaCtxMock.EXPECT().SagaInstance().Return(instance)
 
@@ -60,8 +62,8 @@ func TestInstance(t *testing.T) {
 
 	failedEv := &DataContract{Message: "failed here"}
 	instance.Fail(failedEv)
-
 	assert.Equal(t, instance.Status().FailedOnEvent(), failedEv)
+	assert.True(t, instance.Status().Failed())
 
 	sagaCtxMock.EXPECT().Dispatch(failedEv)
 	sagaCtxMock.EXPECT().SagaInstance().Return(instance)
@@ -79,6 +81,8 @@ func TestInstance(t *testing.T) {
 	instance.Complete()
 	assert.Equal(t, instance.Status().String(), sagaStatusCompleted.String())
 	assert.True(t, instance.Status().Completed())
+
+	assert.Equal(t, firstStartedAt, instance.StartedAt())
 
 }
 

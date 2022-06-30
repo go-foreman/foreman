@@ -121,16 +121,10 @@ func (s sagaInstance) HistoryEvents() []HistoryEvent {
 }
 
 func (s sagaInstance) StartedAt() *time.Time {
-	if s.startedAt != nil {
-		return s.startedAt
-	}
-	return nil
+	return s.startedAt
 }
 
 func (s sagaInstance) UpdatedAt() *time.Time {
-	if s.updatedAt != nil {
-		return s.updatedAt
-	}
 	return s.updatedAt
 }
 
