@@ -2,7 +2,9 @@ package saga
 
 import (
 	"context"
+	"database/sql"
 	"testing"
+	"time"
 
 	"github.com/go-foreman/foreman/runtime/scheme"
 
@@ -12,7 +14,7 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/go-foreman/foreman/pubsub/message"
-	"github.com/go-foreman/foreman/saga/sql"
+	formanSql "github.com/go-foreman/foreman/saga/sql"
 	mockMessage "github.com/go-foreman/foreman/testing/mocks/pubsub/message"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
@@ -30,7 +32,7 @@ func TestSqlStore_InitTable(t *testing.T) {
 			sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual),
 		)
 		require.NoError(t, err)
-		wrapper := sql.NewDB(db)
+		wrapper := formanSql.NewDB(db)
 
 		mock.ExpectBegin()
 		mock.ExpectExec("create table if not exists saga ( uid varchar(255) not null primary key, parent_uid varchar(255) null, name varchar(255) null, payload text null, status varchar(255) null, started_at timestamp null, updated_at timestamp null, last_failed_ev text null );").
@@ -53,7 +55,7 @@ func TestSqlStore_InitTable(t *testing.T) {
 			sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual),
 		)
 		require.NoError(t, err)
-		wrapper := sql.NewDB(db)
+		wrapper := formanSql.NewDB(db)
 
 		mock.ExpectBegin()
 		mock.ExpectExec("create table if not exists saga ( uid varchar(255) not null primary key, parent_uid varchar(255) null, name varchar(255) null, payload text null, status varchar(255) null, started_at timestamp null, updated_at timestamp null, last_failed_ev text null );").
@@ -73,7 +75,7 @@ func TestSqlStore_InitTable(t *testing.T) {
 			sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual),
 		)
 		require.NoError(t, err)
-		wrapper := sql.NewDB(db)
+		wrapper := formanSql.NewDB(db)
 
 		mock.ExpectBegin()
 		mock.ExpectExec("create table if not exists saga ( uid varchar(255) not null primary key, parent_uid varchar(255) null, name varchar(255) null, payload text null, status varchar(255) null, started_at timestamp null, updated_at timestamp null, last_failed_ev text null );").
@@ -475,13 +477,157 @@ func TestSqlStore_Delete(t *testing.T) {
 	})
 }
 
+func TestSqlStore_GetById(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+
+	sagaID := "123"
+
+	t.Run("mysql get saga by id", func(t *testing.T) {
+		store, dbMock, marshallerMock := createStore(t, ctrl, MYSQLDriver)
+
+		timeNow := time.Now()
+
+		sagaData := &sagaSqlModel{
+			ID: sql.NullString{
+				String: "123",
+				Valid:  true,
+			},
+			ParentID: sql.NullString{
+				String: "222",
+				Valid:  true,
+			},
+			Name: sql.NullString{
+				String: "example.SagaExample",
+				Valid:  true,
+			},
+			Payload: []byte("payload"),
+			Status: sql.NullString{
+				String: "failed",
+				Valid:  true,
+			},
+			LastFailedMsg: []byte("payload"),
+			StartedAt: sql.NullTime{
+				Time:  timeNow,
+				Valid: true,
+			},
+			UpdatedAt: sql.NullTime{
+				Time:  timeNow,
+				Valid: true,
+			},
+		}
+
+		dbMock.ExpectQuery("SELECT s.uid, s.parent_uid, s.name, s.payload, s.status, s.last_failed_ev, s.started_at, s.updated_at FROM saga s WHERE uid=?;").
+			WithArgs(sagaID).
+			WillReturnRows(
+				sqlmock.NewRows([]string{"uid", "parent_uid", "name", "payload", "status", "last_failed_ev", "started_at", "updated_at"}).
+					AddRow(
+						sagaData.ID.String,
+						sagaData.ParentID.String,
+						sagaData.Name.String,
+						sagaData.Payload,
+						sagaData.Status.String,
+						sagaData.LastFailedMsg,
+						sagaData.StartedAt.Time,
+						sagaData.UpdatedAt.Time,
+					),
+			)
+
+		evData := &historyEventSqlModel{
+			ID: sql.NullString{
+				String: "xxx",
+				Valid:  true,
+			},
+			Name: sql.NullString{
+				String: "example.DataExample",
+				Valid:  true,
+			},
+			CreatedAt: sql.NullTime{
+				Time:  timeNow,
+				Valid: true,
+			},
+			Payload: []byte("payload"),
+			OriginSource: sql.NullString{
+				String: "origin",
+				Valid:  true,
+			},
+			SagaStatus: sql.NullString{
+				String: "created",
+				Valid:  true,
+			},
+			TraceUID: sql.NullString{
+				String: "gg",
+				Valid:  true,
+			},
+		}
+
+		dbMock.ExpectQuery("SELECT uid, name, status, payload, origin, created_at, trace_uid FROM saga_history WHERE saga_uid=? ORDER BY created_at;").
+			WithArgs(sagaID).
+			WillReturnRows(
+				sqlmock.NewRows([]string{"uid", "name", "status", "payload", "origin", "created_at", "trace_uid"}).
+					AddRow(evData.ID.String, evData.Name.String, evData.SagaStatus.String, evData.Payload, evData.OriginSource.String, evData.CreatedAt.Time, evData.TraceUID.String),
+			)
+
+		marshallerMock.
+			EXPECT().
+			Unmarshal(sagaData.LastFailedMsg).
+			Return(&DataContract{Message: "data"}, nil)
+		marshallerMock.
+			EXPECT().
+			Unmarshal(sagaData.Payload).
+			Return(&SagaExample{Data: "data"}, nil)
+		marshallerMock.
+			EXPECT().
+			Unmarshal(evData.Payload).
+			Return(&DataContract{Message: "h1"}, nil)
+
+		sagaInstance, err := store.GetById(ctx, sagaID)
+		assert.NoError(t, err)
+		assert.NotNil(t, sagaInstance)
+
+		assert.Equal(t, sagaData.ID.String, sagaInstance.UID())
+		assert.Equal(t, sagaData.ParentID.String, sagaInstance.ParentID())
+		assert.Equal(t, sagaData.Status.String, sagaInstance.Status().String())
+		assert.Equal(t, &SagaExample{Data: "data"}, sagaInstance.Saga())
+		require.Len(t, sagaInstance.HistoryEvents(), 1)
+		ev := sagaInstance.HistoryEvents()[0]
+
+		assert.Equal(t, evData.ID.String, ev.UID)
+		assert.Equal(t, evData.TraceUID.String, ev.TraceUID)
+		assert.Equal(t, evData.SagaStatus.String, ev.SagaStatus)
+		assert.Equal(t, evData.OriginSource.String, ev.OriginSource)
+		assert.Equal(t, evData.CreatedAt.Time, ev.CreatedAt)
+		assert.Equal(t, &DataContract{Message: "h1"}, ev.Payload)
+
+		assert.NoError(t, dbMock.ExpectationsWereMet())
+	})
+
+	t.Run("PG: no saga found", func(t *testing.T) {
+		store, dbMock, _ := createStore(t, ctrl, PGDriver)
+
+		dbMock.ExpectQuery("SELECT s.uid, s.parent_uid, s.name, s.payload, s.status, s.last_failed_ev, s.started_at, s.updated_at FROM saga s WHERE uid=$1;").
+			WithArgs(sagaID).
+			WillReturnRows(
+				sqlmock.NewRows([]string{"uid", "parent_uid", "name", "payload", "status", "last_failed_ev", "started_at", "updated_at"}),
+			)
+
+		sagaInstance, err := store.GetById(ctx, sagaID)
+		assert.NoError(t, err)
+		assert.Nil(t, sagaInstance)
+
+		assert.NoError(t, dbMock.ExpectationsWereMet())
+	})
+}
+
 func createStore(t *testing.T, ctrl *gomock.Controller, provider SQLDriver) (Store, sqlmock.Sqlmock, *mockMessage.MockMarshaller) {
 	db, mock, err := sqlmock.New(
 		sqlmock.MonitorPingsOption(true),
 		sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual),
 	)
 	require.NoError(t, err)
-	wrapper := sql.NewDB(db)
+	wrapper := formanSql.NewDB(db)
 	msgMarshallerMock := mockMessage.NewMockMarshaller(ctrl)
 
 	mock.ExpectBegin()
