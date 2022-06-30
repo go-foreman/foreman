@@ -59,6 +59,7 @@ func TestEventHandler(t *testing.T) {
 	handler := NewEventsHandler(sagaStoreMock, sagaMutexMock, schemeRegistry, idService)
 
 	t.Run("success", func(t *testing.T) {
+		times := 2
 		sagaID := "123"
 		ev := &DataContract{
 			ObjectMeta: evObjMeta,
@@ -68,20 +69,20 @@ func TestEventHandler(t *testing.T) {
 
 		sagaInstance := saga.NewSagaInstance(sagaID, "777", sagaObj)
 
-		msgExecutionCtx.EXPECT().Message().Return(receivedMsg)
-		msgExecutionCtx.EXPECT().Context().Return(ctx)
-		msgExecutionCtx.EXPECT().Logger().Return(testLogger).Times(2)
+		msgExecutionCtx.EXPECT().Message().Return(receivedMsg).Times(times)
+		msgExecutionCtx.EXPECT().Context().Return(ctx).Times(times)
+		msgExecutionCtx.EXPECT().Logger().Return(testLogger).Times(times * 2)
 
-		idService.EXPECT().ExtractSagaUID(receivedMsg.Headers()).Return(sagaID, nil)
+		idService.EXPECT().ExtractSagaUID(receivedMsg.Headers()).Return(sagaID, nil).Times(times)
 
 		lockMock := mutex.NewMockLock(ctrl)
-		sagaMutexMock.EXPECT().Lock(ctx, sagaID).Return(lockMock, nil)
-		lockMock.EXPECT().Release(gomock.Any()).Return(errors.New("error releasing mutex"))
+		sagaMutexMock.EXPECT().Lock(ctx, sagaID).Return(lockMock, nil).Times(times)
+		lockMock.EXPECT().Release(gomock.Any()).Return(errors.New("error releasing mutex")).Times(times)
 
-		sagaStoreMock.EXPECT().GetById(ctx, sagaID).Return(sagaInstance, nil)
+		sagaStoreMock.EXPECT().GetById(ctx, sagaID).Return(sagaInstance, nil).Times(times)
 		sagaStoreMock.EXPECT().Update(ctx, sagaInstance).Return(nil)
 
-		idService.EXPECT().AddSagaId(receivedMsg.Headers(), sagaID).Return()
+		idService.EXPECT().AddSagaId(receivedMsg.Headers(), sagaID).Return().Times(times)
 
 		msgExecutionCtx.
 			EXPECT().
@@ -93,6 +94,18 @@ func TestEventHandler(t *testing.T) {
 
 		err := handler.Handle(msgExecutionCtx)
 		assert.NoError(t, err)
+
+		msgExecutionCtx.
+			EXPECT().
+			Send(gomock.Any()).
+			DoAndReturn(func(msg *message.OutcomingMessage, options ...endpoint.DeliveryOption) error {
+				assert.Equal(t, msg.Payload(), &DataContract{Message: "handle"})
+				return errors.New("error sending msg")
+			})
+
+		err = handler.Handle(msgExecutionCtx)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "error sending msg")
 	})
 
 	t.Run("success with parent id", func(t *testing.T) {
@@ -225,6 +238,10 @@ func TestEventHandler(t *testing.T) {
 		err = handler.Handle(msgExecutionCtx)
 		assert.Error(t, err)
 		assert.EqualError(t, err, "retrieving saga '123' from store: error getting by id")
+	})
+
+	t.Run("error sending msg", func(t *testing.T) {
+
 	})
 
 }
