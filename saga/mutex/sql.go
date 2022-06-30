@@ -42,6 +42,8 @@ func (m *mysqlMutex) Lock(ctx context.Context, sagaId string) (Lock, error) {
 
 	r := sql.NullInt64{}
 	if err := conn.QueryRowContext(ctx, "SELECT GET_LOCK(?, -1);", sagaId).Scan(&r); err != nil {
+		//@todo I'm not so sure that connection needs to be closed in case of failure, what about retries?
+		// NOTE: Multiple replicas of messagebus do not guarantee that retry will be handle by this specific instance.
 		closingErr := conn.Close(true)
 		return nil, WithMutexErr(errors.Wrapf(err, "acquiring lock for saga %s. %s", sagaId, closingErr))
 	}
@@ -52,7 +54,6 @@ func (m *mysqlMutex) Lock(ctx context.Context, sagaId string) (Lock, error) {
 		or NULL if an error occurred (such as running out of memory or the thread was killed with mysqladmin kill).
 	*/
 	if r.Int64 == 1 {
-		//we lock map here because GET_LOCK allows us to acquire a lock, other clients won't be able to pass that point.
 		return &sqlLock{
 			releaseFunc: func(ctx context.Context) error {
 				return m.release(ctx, conn, sagaId)
@@ -62,7 +63,7 @@ func (m *mysqlMutex) Lock(ctx context.Context, sagaId string) (Lock, error) {
 
 	closingErr := conn.Close(true)
 
-	return nil, WithMutexErr(errors.Errorf("Got error status %d when acquiring lock for saga %s. %s", r.Int64, sagaId, closingErr))
+	return nil, WithMutexErr(errors.Errorf("got error status %d when acquiring lock for saga %s. %s", r.Int64, sagaId, closingErr))
 }
 
 func (m *mysqlMutex) release(ctx context.Context, conn *sagaSql.Conn, sagaId string) error {
