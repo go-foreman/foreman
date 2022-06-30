@@ -99,10 +99,6 @@ func (c *Component) RegisterSagas(sagas ...saga.Saga) {
 	c.sagas = append(c.sagas, sagas...)
 }
 
-//func (c *Component) RegisterContracts(contracts ...message.Object) {
-//	c.contracts = append(c.contracts, contracts...)
-//}
-
 func (c *Component) RegisterSagaEndpoints(endpoints ...endpoint.Endpoint) {
 	c.endpoints = append(c.endpoints, endpoints...)
 }

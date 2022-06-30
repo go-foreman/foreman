@@ -1,6 +1,7 @@
 package component
 
 import (
+	"net/http"
 	"reflect"
 	"runtime"
 	"testing"
@@ -57,11 +58,14 @@ func TestComponent_Init(t *testing.T) {
 
 	t.Run("init component with no errors", func(t *testing.T) {
 		endpointInstanceMock := endpointMock.NewMockEndpoint(ctrl)
+		mux := &http.ServeMux{}
+
 		c := NewSagaComponent(
 			func(msgMarshaller message.Marshaller) (sagaPkg.Store, error) {
 				return storeMock, nil
 			},
 			mutexMock,
+			WithSagaApiServer(mux),
 		)
 
 		group := scheme.Group("test")
@@ -165,4 +169,43 @@ func (s *sagaExample) HandleData(sagaCtx sagaPkg.SagaContext) error {
 
 type dataContract struct {
 	message.ObjectMeta
+}
+
+func TestOpts(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	sagaUIDServiceMock := saga.NewMockSagaUIDService(ctrl)
+
+	mux := &http.ServeMux{}
+
+	configs := []configOption{
+		WithSagaUIDService(sagaUIDServiceMock),
+		WithSagaApiServer(mux),
+	}
+
+	opts := &opts{}
+
+	for _, o := range configs {
+		o(opts)
+	}
+
+	assert.Same(t, opts.uidService, sagaUIDServiceMock)
+	assert.Same(t, opts.apiServerMux, mux)
+
+	//req, err := http.NewRequest("GET", "/sagas", nil)
+	//require.NoError(t, err)
+	//
+	//rr := httptest.NewRecorder()
+	//mux.ServeHTTP(rr, req)
+	//
+	//assert.Equal(t, rr.Code, http.StatusOK)
+	//
+	//// Check the response body is what we expect.
+	//expected := `{"alive": true}`
+	//if rr.Body.String() != expected {
+	//	t.Errorf("handler returned unexpected body: got %v want %v",
+	//		rr.Body.String(), expected)
+	//}
+
 }
