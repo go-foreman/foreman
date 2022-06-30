@@ -144,7 +144,7 @@ func (s *sqlStore) Update(ctx context.Context, sagaInstance Instance) error {
 	defer rows.Close()
 
 	var eventID string
-	eventsIDs := make(map[string]string)
+	eventsIDs := make(map[string]struct{})
 
 	for rows.Next() {
 		if err := rows.Scan(&eventID); err != nil {
@@ -154,7 +154,7 @@ func (s *sqlStore) Update(ctx context.Context, sagaInstance Instance) error {
 			return errors.Wrap(err, "scanning row")
 		}
 
-		eventsIDs[eventID] = eventID
+		eventsIDs[eventID] = struct{}{}
 	}
 
 	if len(eventsIDs) < len(sagaInstance.HistoryEvents()) {

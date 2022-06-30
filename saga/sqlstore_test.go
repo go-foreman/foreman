@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/go-foreman/foreman/runtime/scheme"
+
 	"github.com/pkg/errors"
 
 	"github.com/stretchr/testify/assert"
@@ -102,11 +104,6 @@ func TestSqlStore_Create(t *testing.T) {
 	t.Run("mysql create saga", func(t *testing.T) {
 		store, dbMock, marshallerMock := createStore(t, ctrl, MYSQLDriver)
 		sagaInstance := NewSagaInstance(sagaID, parentSagaID, &SagaExample{Data: "data"})
-		//sagaInstance.AddHistoryEvent(&ExampleEv{Data: "data"}, &AddHistoryEvent{
-		//	TraceUID: "xxx",
-		//	Origin:   "yyy",
-		//})
-
 		payload := []byte("payload")
 
 		marshallerMock.
@@ -205,6 +202,141 @@ func TestSqlStore_Create(t *testing.T) {
 		assert.NoError(t, dbMock.ExpectationsWereMet())
 	})
 
+	t.Run("error beginning Tx", func(t *testing.T) {
+		store, dbMock, marshallerMock := createStore(t, ctrl, MYSQLDriver)
+		sagaInstance := NewSagaInstance(sagaID, parentSagaID, &SagaExample{Data: "data"})
+
+		payload := []byte("payload")
+
+		marshallerMock.
+			EXPECT().
+			Marshal(sagaInstance.Saga()).
+			Return(payload, nil)
+
+		dbMock.ExpectBegin().WillReturnError(errors.New("error Begin"))
+
+		err := store.Create(ctx, sagaInstance)
+		assert.Error(t, err)
+		assert.EqualError(t, err, "beginning a transaction for saga 123: error Begin")
+		assert.NoError(t, dbMock.ExpectationsWereMet())
+	})
+}
+
+func TestSqlStore_Update(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+
+	sagaID := "123"
+	parentSagaID := "321"
+
+	t.Run("error marshalling", func(t *testing.T) {
+		store, _, marshallerMock := createStore(t, ctrl, PGDriver)
+		sagaInstance := NewSagaInstance(sagaID, parentSagaID, &SagaExample{Data: "data"})
+
+		marshallerMock.
+			EXPECT().
+			Marshal(sagaInstance.Saga()).
+			Return(nil, errors.New("error marshaling"))
+
+		err := store.Update(ctx, sagaInstance)
+		assert.Error(t, err)
+		assert.EqualError(t, err, "marshaling saga instance 123 on update: error marshaling")
+
+		sagaInstance.Fail(&ExampleEv{Data: "failed"})
+		marshallerMock.
+			EXPECT().
+			Marshal(sagaInstance.Saga()).
+			Return([]byte("payload"), nil)
+		marshallerMock.
+			EXPECT().
+			Marshal(&ExampleEv{Data: "failed"}).
+			Return(nil, errors.New("error marshaling failed ev"))
+
+		err = store.Update(ctx, sagaInstance)
+		assert.Error(t, err)
+		assert.EqualError(t, err, "marshaling last failed event of saga instance 123 on update: error marshaling failed ev")
+	})
+
+	t.Run("mysql update saga", func(t *testing.T) {
+		store, dbMock, marshallerMock := createStore(t, ctrl, MYSQLDriver)
+		sagaObj := &SagaExample{
+			BaseSaga: BaseSaga{
+				ObjectMeta: message.ObjectMeta{
+					TypeMeta: scheme.TypeMeta{
+						Kind:  "SagaExample",
+						Group: "example",
+					},
+				},
+				adjacencyMap: nil,
+				scheme:       nil,
+			},
+			Data: "data",
+		}
+		sagaInstance := NewSagaInstance(sagaID, parentSagaID, sagaObj)
+		sagaInstance.AddHistoryEvent(&ExampleEv{Data: "data"}, &AddHistoryEvent{
+			TraceUID: "xxx",
+			Origin:   "yyy",
+		})
+		sagaInstance.Fail(&ExampleEv{Data: "failed"})
+
+		payload := []byte("payload")
+
+		marshallerMock.
+			EXPECT().
+			Marshal(sagaInstance.Saga()).
+			Return(payload, nil)
+
+		marshallerMock.
+			EXPECT().
+			Marshal(sagaInstance.Status().FailedOnEvent()).
+			Return(payload, nil)
+
+		require.Len(t, sagaInstance.HistoryEvents(), 1)
+		ev := sagaInstance.HistoryEvents()[0]
+
+		marshallerMock.
+			EXPECT().
+			Marshal(ev.Payload).
+			Return(payload, nil)
+
+		dbMock.ExpectBegin()
+		dbMock.ExpectExec("UPDATE saga SET parent_uid=?, name=?, payload=?, status=?, started_at=?, updated_at=?, last_failed_ev=? WHERE uid=?;").
+			WithArgs(
+				sagaInstance.ParentID(),
+				"example.SagaExample",
+				payload,
+				sagaInstance.Status().String(),
+				sagaInstance.StartedAt(),
+				sagaInstance.UpdatedAt(),
+				payload,
+				sagaInstance.UID(),
+			).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+		dbMock.ExpectQuery("SELECT uid FROM saga_history WHERE saga_uid=?;").
+			WithArgs(sagaInstance.UID()).
+			WillReturnRows(sqlmock.NewRows([]string{"uid"}))
+
+		dbMock.ExpectExec("INSERT INTO saga_history (uid, saga_uid, name, status, payload, origin, created_at, trace_uid) VALUES (?, ?, ?, ?, ?, ?, ?, ?);").
+			WithArgs(
+				ev.UID,
+				sagaInstance.UID(),
+				ev.Payload.GroupKind().String(),
+				ev.SagaStatus,
+				payload,
+				ev.OriginSource,
+				ev.CreatedAt,
+				ev.TraceUID,
+			).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+
+		dbMock.ExpectCommit()
+
+		assert.NoError(t, store.Update(ctx, sagaInstance))
+
+		assert.NoError(t, dbMock.ExpectationsWereMet())
+	})
 }
 
 func createStore(t *testing.T, ctrl *gomock.Controller, provider SQLDriver) (Store, sqlmock.Sqlmock, *mockMessage.MockMarshaller) {
