@@ -74,6 +74,7 @@ func TestComponent_Init(t *testing.T) {
 		sagaExample := &sagaExample{}
 
 		c.RegisterSagas(sagaExample)
+		c.RegisterContracts(&dataContract{})
 		c.RegisterSagaEndpoints(endpointInstanceMock)
 
 		err := c.Init(mBus)
