@@ -63,6 +63,7 @@ func TestSqlWrapper(t *testing.T) {
 		firstConn, err := wrapper.Conn(ctx, sagaID, true)
 		assert.NoError(t, err)
 		assert.NotNil(t, firstConn)
+
 		assert.NoError(t, firstConn.Close(true))
 
 		secondConn, err := wrapper.Conn(ctx, sagaID, true)
