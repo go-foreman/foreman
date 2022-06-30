@@ -240,8 +240,37 @@ func TestEventHandler(t *testing.T) {
 		assert.EqualError(t, err, "retrieving saga '123' from store: error getting by id")
 	})
 
-	t.Run("error sending msg", func(t *testing.T) {
+	t.Run("saga handler returns an error", func(t *testing.T) {
+		sagaID := "123"
+		ev := &DataContract{
+			ObjectMeta: evObjMeta,
+			Message:    "something happened",
+		}
 
+		sagaObj := &SagaExample{
+			BaseSaga: sagaObj.BaseSaga,
+			Data:     "data",
+			err:      errors.New("handler returned an error"),
+		}
+
+		receivedMsg := message.NewReceivedMessage(sagaID, ev, message.Headers{}, time.Now(), "origin")
+		sagaInstance := saga.NewSagaInstance(sagaID, "777", sagaObj)
+
+		msgExecutionCtx.EXPECT().Message().Return(receivedMsg)
+		msgExecutionCtx.EXPECT().Context().Return(ctx)
+		msgExecutionCtx.EXPECT().Logger().Return(testLogger).Times(2)
+
+		idService.EXPECT().ExtractSagaUID(receivedMsg.Headers()).Return(sagaID, nil)
+
+		lockMock := mutex.NewMockLock(ctrl)
+		sagaMutexMock.EXPECT().Lock(ctx, sagaID).Return(lockMock, nil)
+		lockMock.EXPECT().Release(gomock.Any()).Return(nil)
+
+		sagaStoreMock.EXPECT().GetById(ctx, sagaID).Return(sagaInstance, nil)
+
+		err := handler.Handle(msgExecutionCtx)
+		assert.Error(t, err)
+		assert.EqualError(t, err, "handling event 'example.DataContract' from message '123': handler returned an error")
 	})
 
 }
