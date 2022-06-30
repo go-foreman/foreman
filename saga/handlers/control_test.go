@@ -355,6 +355,36 @@ func TestCompensate(t *testing.T) {
 		testLogger.AssertContainsSubstr(t, "error releasing mutex")
 	})
 
+	t.Run("error sending msg", func(t *testing.T) {
+		receivedMsg := message.NewReceivedMessage("123", recoverSagaCmd, message.Headers{}, now, "origin")
+		msgExecutionCtx.EXPECT().Message().Return(receivedMsg)
+		msgExecutionCtx.EXPECT().Context().Return(ctx)
+		msgExecutionCtx.EXPECT().Logger().Return(testLogger).Times(2)
+
+		lockMock := mutex.NewMockLock(ctrl)
+		sagaMutexMock.EXPECT().Lock(ctx, recoverSagaCmd.SagaUID).Return(lockMock, nil)
+		lockMock.EXPECT().Release(ctx).Return(nil)
+
+		sagaInst := sagaPkg.NewSagaInstance(recoverSagaCmd.SagaUID, "", &sagaExample{})
+		sagaInst.Fail(nil)
+
+		sagaStoreMock.EXPECT().GetById(ctx, recoverSagaCmd.SagaUID).Return(sagaInst, nil)
+		idService.EXPECT().AddSagaId(receivedMsg.Headers(), recoverSagaCmd.SagaUID)
+
+		msgExecutionCtx.
+			EXPECT().
+			Send(gomock.Any()).
+			DoAndReturn(func(msg *message.OutcomingMessage, options ...endpoint.DeliveryOption) error {
+				assert.Equal(t, &DataContract{Message: "compensate"}, msg.Payload())
+				return errors.New("error sending msg")
+			})
+
+		err := handler.Handle(msgExecutionCtx)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "error sending msg")
+		testLogger.AssertContainsSubstr(t, fmt.Sprintf("sending delivery for saga '%s'", recoverSagaCmd.SagaUID))
+	})
+
 	t.Run("error fetching saga by id", func(t *testing.T) {
 		receivedMsg := message.NewReceivedMessage("123", recoverSagaCmd, message.Headers{}, now, "origin")
 		msgExecutionCtx.EXPECT().Message().Return(receivedMsg)
