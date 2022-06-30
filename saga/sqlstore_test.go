@@ -275,10 +275,15 @@ func TestSqlStore_Update(t *testing.T) {
 			Data: "data",
 		}
 		sagaInstance := NewSagaInstance(sagaID, parentSagaID, sagaObj)
-		sagaInstance.AddHistoryEvent(&ExampleEv{Data: "data"}, &AddHistoryEvent{
+		sagaInstance.AddHistoryEvent(&ExampleEv{Data: "h1"}, &AddHistoryEvent{
 			TraceUID: "xxx",
 			Origin:   "yyy",
 		})
+		sagaInstance.AddHistoryEvent(&ExampleEv{Data: "h2"}, &AddHistoryEvent{
+			TraceUID: "qqq",
+			Origin:   "ttt",
+		})
+
 		sagaInstance.Fail(&ExampleEv{Data: "failed"})
 
 		payload := []byte("payload")
@@ -293,7 +298,7 @@ func TestSqlStore_Update(t *testing.T) {
 			Marshal(sagaInstance.Status().FailedOnEvent()).
 			Return(payload, nil)
 
-		require.Len(t, sagaInstance.HistoryEvents(), 1)
+		require.Len(t, sagaInstance.HistoryEvents(), 2)
 		ev := sagaInstance.HistoryEvents()[0]
 
 		marshallerMock.
@@ -316,7 +321,7 @@ func TestSqlStore_Update(t *testing.T) {
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		dbMock.ExpectQuery("SELECT uid FROM saga_history WHERE saga_uid=?;").
 			WithArgs(sagaInstance.UID()).
-			WillReturnRows(sqlmock.NewRows([]string{"uid"}))
+			WillReturnRows(sqlmock.NewRows([]string{"uid"}).AddRow(sagaInstance.HistoryEvents()[1].UID))
 
 		dbMock.ExpectExec("INSERT INTO saga_history (uid, saga_uid, name, status, payload, origin, created_at, trace_uid) VALUES (?, ?, ?, ?, ?, ?, ?, ?);").
 			WithArgs(
