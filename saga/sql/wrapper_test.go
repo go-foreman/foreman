@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -22,6 +24,7 @@ func TestSqlWrapper(t *testing.T) {
 		lockConn, err := wrapper.Conn(ctx, sagaID, true)
 		assert.NoError(t, err)
 		mock.ExpectPing()
+
 		queryConn, err := wrapper.Conn(ctx, sagaID, false)
 		assert.NoError(t, err)
 		assert.Same(t, lockConn, queryConn)
@@ -44,8 +47,6 @@ func TestSqlWrapper(t *testing.T) {
 
 		secondCtx, secondCancel := context.WithTimeout(context.Background(), time.Microsecond*200)
 		defer secondCancel()
-
-		mock.ExpectPing()
 
 		_, err = wrapper.Conn(secondCtx, sagaID, true)
 		assert.Error(t, err)
@@ -102,10 +103,27 @@ func TestSqlWrapper(t *testing.T) {
 		assert.Same(t, firstConn, secondConn)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
+
+	t.Run("connection is not alive", func(t *testing.T) {
+		wrapper, mock := createWrapper(t)
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+		defer cancel()
+
+		sagaID := "123"
+		lockConn, err := wrapper.Conn(ctx, sagaID, true)
+		assert.NoError(t, err)
+		mock.ExpectPing().WillReturnError(errors.New("conn is dead"))
+
+		queryConn, err := wrapper.Conn(ctx, sagaID, false)
+		assert.NoError(t, err)
+		assert.NotSame(t, lockConn, queryConn)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
 }
 
 func createWrapper(t *testing.T) (*DB, sqlmock.Sqlmock) {
-	db, mock, err := sqlmock.New()
+	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true))
 	require.NoError(t, err)
 	wrapper := NewDB(db)
 
