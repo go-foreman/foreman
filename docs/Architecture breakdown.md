@@ -1,6 +1,16 @@
 # Architecture breakdown
 
-BPMN diagram
+```mermaid
+graph LR
+    T[Transport] --> |Consume| PKG[Package]
+    PKG --> |Assign onto worker| W[Worker]
+    W -->  PRC[Processor]
+    PRC --> |Validate/Unmarshal| DSP[Dispatcher]
+    DSP --> |Match Handlers| EX["for exec(msgCtx)"]
+    EX --> |Respond event| Endpoint[Endpoint]
+    Endpoint --> |Result| RES[Result]
+    RES --> |Ack/Nack|PKG
+```
 
 ## Components:
 
