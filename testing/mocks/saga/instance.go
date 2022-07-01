@@ -114,18 +114,6 @@ func (mr *MockInstanceMockRecorder) ParentID() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ParentID", reflect.TypeOf((*MockInstance)(nil).ParentID))
 }
 
-// Progress mocks base method.
-func (m *MockInstance) Progress() {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Progress")
-}
-
-// Progress indicates an expected call of Progress.
-func (mr *MockInstanceMockRecorder) Progress() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Progress", reflect.TypeOf((*MockInstance)(nil).Progress))
-}
-
 // Recover mocks base method.
 func (m *MockInstance) Recover(arg0 saga.SagaContext) error {
 	m.ctrl.T.Helper()

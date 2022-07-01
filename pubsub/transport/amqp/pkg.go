@@ -7,15 +7,43 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
+type delivery struct {
+	msg *amqp.Delivery
+}
+
+func (d delivery) Reject(requeue bool) error {
+	return d.msg.Reject(requeue)
+}
+
+func (d delivery) Nack(multiple, requeue bool) error {
+	return d.msg.Nack(multiple, requeue)
+}
+
+func (d delivery) Ack(multiple bool) error {
+	return d.msg.Ack(multiple)
+}
+
+func (d delivery) Timestamp() time.Time {
+	return d.msg.Timestamp
+}
+
+func (d delivery) Headers() amqp.Table {
+	return d.msg.Headers
+}
+
+func (d delivery) Body() []byte {
+	return d.msg.Body
+}
+
 type inAmqpPkg struct {
-	delivery   amqp.Delivery
+	delivery   Delivery
 	receivedAt time.Time
 	origin     string
 	attributes map[string]string
 }
 
 func (i inAmqpPkg) UID() string {
-	uidVal, ok := i.Headers()["uid"]
+	uidVal, ok := i.delivery.Headers()["uid"]
 	if ok {
 		return uidVal.(string)
 	}
@@ -27,15 +55,15 @@ func (i inAmqpPkg) Origin() string {
 }
 
 func (i inAmqpPkg) Payload() []byte {
-	return i.delivery.Body
+	return i.delivery.Body()
 }
 
 func (i inAmqpPkg) Headers() map[string]interface{} {
-	if i.delivery.Headers == nil {
-		i.delivery.Headers = make(amqp.Table)
+	if i.delivery.Headers() == nil {
+		return make(amqp.Table)
 	}
 
-	return i.delivery.Headers
+	return i.delivery.Headers()
 }
 
 func (i inAmqpPkg) Attributes() map[string]string {
@@ -61,7 +89,7 @@ func (i inAmqpPkg) Reject(options ...transport.AcknowledgmentOption) error {
 }
 
 func (i inAmqpPkg) PublishedAt() time.Time {
-	return i.delivery.Timestamp
+	return i.delivery.Timestamp()
 }
 
 func (i inAmqpPkg) ReceivedAt() time.Time {

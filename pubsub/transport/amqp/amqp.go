@@ -216,7 +216,7 @@ func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, o
 					}
 
 					select {
-					case income <- &inAmqpPkg{origin: queue.Name(), receivedAt: time.Now(), delivery: msg}:
+					case income <- &inAmqpPkg{origin: queue.Name(), receivedAt: time.Now(), delivery: &delivery{msg: &msg}}:
 					case <-consumersCtx.Done():
 						break
 					}

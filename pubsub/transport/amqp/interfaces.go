@@ -1,10 +1,12 @@
 package amqp
 
 import (
+	"time"
+
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-//go:generate mockgen --build_flags=--mod=mod -destination mock_test.go -package amqp . AmqpChannel,AmqpConnection,UnderlyingConnection
+//go:generate mockgen --build_flags=--mod=mod -destination mock_test.go -package amqp . AmqpChannel,AmqpConnection,UnderlyingConnection,Delivery
 
 type AmqpChannel interface {
 	ExchangeDeclare(name, kind string, durable, autoDelete, internal, noWait bool, args amqp.Table) error
@@ -28,4 +30,13 @@ type UnderlyingConnection interface {
 	Channel() (*amqp.Channel, error)
 	Close() error
 	IsClosed() bool
+}
+
+type Delivery interface {
+	Reject(requeue bool) error
+	Nack(multiple, requeue bool) error
+	Ack(multiple bool) error
+	Timestamp() time.Time
+	Headers() amqp.Table
+	Body() []byte
 }
