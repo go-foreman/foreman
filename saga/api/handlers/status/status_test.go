@@ -306,5 +306,42 @@ func TestHandler(t *testing.T) {
 			assert.Equal(t, rr.Code, http.StatusInternalServerError)
 			assert.Contains(t, rr.Body.String(), "some error")
 		})
+
+		t.Run("pass limit and offset through from API to Store", func(t *testing.T) {
+			req, err := http.NewRequest("GET", "http://localhost:8000/sagas?&status=created&sagaType=someType&offset=10&limit=10", nil)
+			require.NoError(t, err)
+
+			offset := 10
+			limit := 10
+
+			statuses := []StatusResponse{
+				{
+					SagaUID: "123",
+					Status:  "created",
+				},
+				{
+					SagaUID: "111",
+					Status:  "created",
+				},
+			}
+
+			statusServiceMock.
+				EXPECT().
+				GetFilteredBy(req.Context(), &Filters{
+					SagaID:   "",
+					Status:   "created",
+					SagaName: "someType",
+					Offset:   &offset,
+					Limit:    &limit,
+				}).
+				Return(statuses, nil)
+
+			rr := httptest.NewRecorder()
+			handler.GetFilteredBy(rr, req)
+
+			statusRespMarshalled, _ := json.Marshal(statuses)
+			assert.Contains(t, rr.Body.String(), string(statusRespMarshalled))
+			assert.Equal(t, rr.Header().Get("Content-Type"), "application/json")
+		})
 	})
 }
