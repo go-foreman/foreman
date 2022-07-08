@@ -42,10 +42,24 @@ func WithSagaName(sagaName string) FilterOption {
 	}
 }
 
+func WithOffset(offset int) FilterOption {
+	return func(opts *filterOptions) {
+		opts.offset = &offset
+	}
+}
+
+func WithLimit(limit int) FilterOption {
+	return func(opts *filterOptions) {
+		opts.limit = &limit
+	}
+}
+
 type filterOptions struct {
 	sagaId   string
 	status   string
 	sagaName string
+	limit    *int
+	offset   *int
 }
 
 func statusFromStr(str string) (status, error) {

@@ -307,11 +307,17 @@ func (s sqlStore) GetByFilter(ctx context.Context, filters ...FilterOption) ([]I
 		if i < len(conditions)-1 {
 			query += " AND"
 		}
-
-		if i == len(conditions)-1 {
-			query += ";"
-		}
 	}
+
+	if opts.offset != nil {
+		query += fmt.Sprintf(" OFFSET %d", opts.offset)
+	}
+
+	if opts.limit != nil {
+		query += fmt.Sprintf(" LIMIT %d", opts.limit)
+	}
+
+	query += ";"
 
 	rows, err := s.db.QueryContext(ctx, s.prepQuery(query), args...)
 
