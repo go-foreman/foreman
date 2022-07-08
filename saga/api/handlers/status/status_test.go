@@ -101,7 +101,11 @@ func TestStatusService(t *testing.T) {
 				}).
 				Return([]saga.Instance{sagaInstance}, nil)
 
-			resp, err := statusService.GetFilteredBy(ctx, sagaId, "in_progress", "someSagaType")
+			resp, err := statusService.GetFilteredBy(ctx, &Filters{
+				SagaID:   sagaId,
+				Status:   "in_progress",
+				SagaName: "someSagaType",
+			})
 			assert.NoError(t, err)
 
 			assert.Len(t, resp, 1)
@@ -123,14 +127,22 @@ func TestStatusService(t *testing.T) {
 				}).
 				Return(nil, errors.New("some error"))
 
-			resp, err := statusService.GetFilteredBy(ctx, sagaId, "in_progress", "someSagaType")
+			resp, err := statusService.GetFilteredBy(ctx, &Filters{
+				SagaID:   sagaId,
+				Status:   "in_progress",
+				SagaName: "someSagaType",
+			})
 			assert.Error(t, err)
 			assert.EqualError(t, err, "some error")
 			assert.Nil(t, resp)
 		})
 
 		t.Run("no filters specified", func(t *testing.T) {
-			_, err := statusService.GetFilteredBy(context.Background(), "", "", "")
+			_, err := statusService.GetFilteredBy(context.Background(), &Filters{
+				SagaID:   "",
+				Status:   "",
+				SagaName: "",
+			})
 			assert.Error(t, err)
 
 			respErr, ok := err.(ResponseError)
@@ -167,7 +179,7 @@ func TestHandler(t *testing.T) {
 			assert.Contains(t, rr.Body.String(), "Saga id is empty")
 		})
 
-		t.Run("get Status", func(t *testing.T) {
+		t.Run("get status", func(t *testing.T) {
 			req, err := http.NewRequest("GET", "http://localhost:8000/sagas/123", nil)
 			require.NoError(t, err)
 
@@ -205,7 +217,7 @@ func TestHandler(t *testing.T) {
 			assert.Contains(t, rr.Body.String(), "some error")
 		})
 
-		t.Run("service returns Status error", func(t *testing.T) {
+		t.Run("service returns status error", func(t *testing.T) {
 			req, err := http.NewRequest("GET", "http://localhost:8000/sagas/123", nil)
 			require.NoError(t, err)
 
@@ -224,7 +236,7 @@ func TestHandler(t *testing.T) {
 
 	t.Run("get by filter", func(t *testing.T) {
 		t.Run("all filters", func(t *testing.T) {
-			req, err := http.NewRequest("GET", "http://localhost:8000/sagas?&Status=created&SagaName=someType", nil)
+			req, err := http.NewRequest("GET", "http://localhost:8000/sagas?&status=created&sagaType=someType", nil)
 			require.NoError(t, err)
 
 			statuses := []StatusResponse{
@@ -240,7 +252,11 @@ func TestHandler(t *testing.T) {
 
 			statusServiceMock.
 				EXPECT().
-				GetFilteredBy(req.Context(), "", "created", "someType").
+				GetFilteredBy(req.Context(), &Filters{
+					SagaID:   "",
+					Status:   "created",
+					SagaName: "someType",
+				}).
 				Return(statuses, nil)
 
 			rr := httptest.NewRecorder()
@@ -252,12 +268,16 @@ func TestHandler(t *testing.T) {
 		})
 
 		t.Run("get filtered returns a response error", func(t *testing.T) {
-			req, err := http.NewRequest("GET", "http://localhost:8000/sagas?&Status=created&SagaName=someType", nil)
+			req, err := http.NewRequest("GET", "http://localhost:8000/sagas?&status=created&sagaType=someType", nil)
 			require.NoError(t, err)
 
 			statusServiceMock.
 				EXPECT().
-				GetFilteredBy(req.Context(), "", "created", "someType").
+				GetFilteredBy(req.Context(), &Filters{
+					SagaID:   "",
+					Status:   "created",
+					SagaName: "someType",
+				}).
 				Return(nil, NewResponseError(http.StatusBadRequest, errors.New("some error")))
 
 			rr := httptest.NewRecorder()
@@ -268,12 +288,16 @@ func TestHandler(t *testing.T) {
 		})
 
 		t.Run("get filtered returns an error", func(t *testing.T) {
-			req, err := http.NewRequest("GET", "http://localhost:8000/sagas?&Status=created&SagaName=someType", nil)
+			req, err := http.NewRequest("GET", "http://localhost:8000/sagas?&status=created&sagaType=someType", nil)
 			require.NoError(t, err)
 
 			statusServiceMock.
 				EXPECT().
-				GetFilteredBy(req.Context(), "", "created", "someType").
+				GetFilteredBy(req.Context(), &Filters{
+					SagaID:   "",
+					Status:   "created",
+					SagaName: "someType",
+				}).
 				Return(nil, errors.New("some error"))
 
 			rr := httptest.NewRecorder()

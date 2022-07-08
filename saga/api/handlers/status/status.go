@@ -152,8 +152,8 @@ func (h *StatusHandler) GetStatus(resp http.ResponseWriter, r *http.Request) {
 func (h *StatusHandler) GetFilteredBy(resp http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	sagaId := query.Get("sagaId")
-	status := query.Get("Status")
-	sagaName := query.Get("SagaName")
+	status := query.Get("status")
+	sagaName := query.Get("sagaType")
 
 	offset, err := h.getInt(query, "offset")
 
