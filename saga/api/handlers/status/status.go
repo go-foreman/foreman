@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/go-foreman/foreman/log"
@@ -24,9 +26,17 @@ type SagaEvent struct {
 
 //go:generate mockgen --build_flags=--mod=mod -destination ./mock_test.go -package status . StatusService
 
+type Filters struct {
+	SagaID   string
+	SagaName string
+	Status   string
+	Offset   *int
+	Limit    *int
+}
+
 type StatusService interface {
 	GetStatus(ctx context.Context, sagaId string) (*StatusResponse, error)
-	GetFilteredBy(ctx context.Context, sagaId, status, sagaType string) ([]StatusResponse, error)
+	GetFilteredBy(ctx context.Context, filters *Filters) ([]StatusResponse, error)
 }
 
 func NewStatusService(store saga.Store) StatusService {
@@ -57,20 +67,28 @@ func (s statusService) GetStatus(ctx context.Context, sagaId string) (*StatusRes
 	return &StatusResponse{SagaUID: sagaId, Status: sagaInstance.Status().String(), Payload: sagaInstance.Saga(), Events: events}, nil
 }
 
-func (s statusService) GetFilteredBy(ctx context.Context, sagaId, status, sagaName string) ([]StatusResponse, error) {
+func (s statusService) GetFilteredBy(ctx context.Context, filters *Filters) ([]StatusResponse, error) {
 
 	var opts []saga.FilterOption
 
-	if sagaId != "" {
-		opts = append(opts, saga.WithSagaId(sagaId))
+	if filters.SagaID != "" {
+		opts = append(opts, saga.WithSagaId(filters.SagaID))
 	}
 
-	if status != "" {
-		opts = append(opts, saga.WithStatus(status))
+	if filters.Status != "" {
+		opts = append(opts, saga.WithStatus(filters.Status))
 	}
 
-	if sagaName != "" {
-		opts = append(opts, saga.WithSagaName(sagaName))
+	if filters.SagaName != "" {
+		opts = append(opts, saga.WithSagaName(filters.SagaName))
+	}
+
+	if filters.Offset != nil {
+		opts = append(opts, saga.WithOffset(*filters.Offset))
+	}
+
+	if filters.Limit != nil {
+		opts = append(opts, saga.WithLimit(*filters.Limit))
 	}
 
 	if len(opts) == 0 {
@@ -117,82 +135,129 @@ func (h *StatusHandler) GetStatus(resp http.ResponseWriter, r *http.Request) {
 	sagaId := strings.TrimPrefix(r.URL.Path, "/sagas/")
 
 	if sagaId == "" {
-		resp.WriteHeader(http.StatusBadRequest)
-
-		if _, err := resp.Write([]byte("Saga id is empty")); err != nil {
-			h.logger.Log(log.ErrorLevel, err)
-		}
-
+		NewResponseWriterFromErrMsg("Saga id is empty", http.StatusBadRequest).write(resp, h.logger)
 		return
 	}
 
 	statusResp, err := h.service.GetStatus(r.Context(), sagaId)
 
 	if err != nil {
-		h.logger.Log(log.ErrorLevel, err)
-
-		if respErr, ok := err.(ResponseError); ok {
-			resp.WriteHeader(respErr.Status())
-		} else {
-			resp.WriteHeader(http.StatusInternalServerError)
-		}
-
-		if _, err := resp.Write([]byte(err.Error())); err != nil {
-			h.logger.Log(log.ErrorLevel, err)
-		}
+		NewResponseWriterFromError(err).write(resp, h.logger)
 		return
 	}
 
-	status, err := json.Marshal(statusResp)
-
-	if err != nil {
-		h.logger.Log(log.ErrorLevel, err)
-		resp.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	resp.Header().Set("Content-Type", "application/json")
-
-	if _, err := resp.Write(status); err != nil {
-		h.logger.Log(log.ErrorLevel, err)
-	}
+	NewResponseWriter(statusResp, http.StatusOK).write(resp, h.logger)
 }
 
 func (h *StatusHandler) GetFilteredBy(resp http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	sagaId := query.Get("sagaId")
+	status := query.Get("Status")
+	sagaName := query.Get("SagaName")
 
-	sagaId := r.URL.Query().Get("sagaId")
-	status := r.URL.Query().Get("status")
-	sagaType := r.URL.Query().Get("sagaType")
-
-	statusesResp, err := h.service.GetFilteredBy(r.Context(), sagaId, status, sagaType)
+	offset, err := h.getInt(query, "offset")
 
 	if err != nil {
-		h.logger.Log(log.ErrorLevel, err)
-
-		if respErr, ok := err.(ResponseError); ok {
-			resp.WriteHeader(respErr.Status())
-		} else {
-			resp.WriteHeader(http.StatusInternalServerError)
-		}
-
-		if _, err := resp.Write([]byte(err.Error())); err != nil {
-			h.logger.Log(log.ErrorLevel, err)
-		}
+		NewResponseWriterFromError(err).write(resp, h.logger)
 		return
 	}
 
-	rawResponse, err := json.Marshal(statusesResp)
+	limit, err := h.getInt(query, "limit")
 
 	if err != nil {
-		h.logger.Log(log.ErrorLevel, err)
+		NewResponseWriterFromError(err).write(resp, h.logger)
+		return
+	}
+
+	statusesResp, err := h.service.GetFilteredBy(r.Context(), &Filters{
+		SagaID:   sagaId,
+		SagaName: sagaName,
+		Status:   status,
+		Offset:   offset,
+		Limit:    limit,
+	})
+
+	if err != nil {
+		NewResponseWriterFromError(err).write(resp, h.logger)
+		return
+	}
+
+	NewResponseWriter(statusesResp, http.StatusOK).write(resp, h.logger)
+}
+
+func (h *StatusHandler) getInt(values url.Values, paramName string) (*int, error) {
+	paramValue := values.Get(paramName)
+	if paramValue != "" {
+		intValue, err := strconv.Atoi(paramValue)
+		if err != nil {
+			return nil, NewResponseError(http.StatusBadRequest, errors.Errorf("Query parameter '%s' is expected to be an integer", paramName))
+		}
+
+		return &intValue, nil
+	}
+
+	return nil, nil
+}
+
+type responseWriter struct {
+	body   interface{}
+	status int
+}
+
+func NewResponseWriterFromError(err error) *responseWriter {
+	if respErr, ok := err.(ResponseError); ok {
+		return &responseWriter{
+			body:   respErr,
+			status: respErr.Status(),
+		}
+	}
+
+	return &responseWriter{
+		body:   err,
+		status: http.StatusInternalServerError,
+	}
+}
+
+func NewResponseWriter(body interface{}, status int) *responseWriter {
+	return &responseWriter{
+		body:   body,
+		status: status,
+	}
+}
+
+func NewResponseWriterFromErrMsg(errMsg string, status int) *responseWriter {
+	return NewResponseWriterFromError(NewResponseError(status, errors.New(errMsg)))
+}
+
+func (rw *responseWriter) encode() ([]byte, error) {
+	var (
+		respBody []byte
+		err      error
+	)
+
+	if respErr, ok := rw.body.(error); ok {
+		respBody = []byte(respErr.Error())
+	} else {
+		respBody, err = json.Marshal(rw.body)
+	}
+
+	return respBody, err
+}
+
+func (rw *responseWriter) write(resp http.ResponseWriter, logger log.Logger) {
+	respBody, err := rw.encode()
+	if err != nil {
+		logger.Log(log.ErrorLevel, err)
 		resp.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
+	resp.WriteHeader(rw.status)
+
 	resp.Header().Set("Content-Type", "application/json")
 
-	if _, err := resp.Write(rawResponse); err != nil {
-		h.logger.Log(log.ErrorLevel, err)
+	if _, err = resp.Write(respBody); err != nil {
+		logger.Log(log.ErrorLevel, err)
 	}
 }
 

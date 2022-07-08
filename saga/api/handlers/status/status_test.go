@@ -155,7 +155,7 @@ func TestHandler(t *testing.T) {
 
 	handler := NewStatusHandler(testLogger, statusServiceMock)
 
-	t.Run("status", func(t *testing.T) {
+	t.Run("Status", func(t *testing.T) {
 		t.Run("sagaid is empty", func(t *testing.T) {
 
 			req, err := http.NewRequest("GET", "http://localhost:8000/sagas/", nil)
@@ -167,7 +167,7 @@ func TestHandler(t *testing.T) {
 			assert.Contains(t, rr.Body.String(), "Saga id is empty")
 		})
 
-		t.Run("get status", func(t *testing.T) {
+		t.Run("get Status", func(t *testing.T) {
 			req, err := http.NewRequest("GET", "http://localhost:8000/sagas/123", nil)
 			require.NoError(t, err)
 
@@ -205,7 +205,7 @@ func TestHandler(t *testing.T) {
 			assert.Contains(t, rr.Body.String(), "some error")
 		})
 
-		t.Run("service returns status error", func(t *testing.T) {
+		t.Run("service returns Status error", func(t *testing.T) {
 			req, err := http.NewRequest("GET", "http://localhost:8000/sagas/123", nil)
 			require.NoError(t, err)
 
@@ -224,7 +224,7 @@ func TestHandler(t *testing.T) {
 
 	t.Run("get by filter", func(t *testing.T) {
 		t.Run("all filters", func(t *testing.T) {
-			req, err := http.NewRequest("GET", "http://localhost:8000/sagas?&status=created&sagaType=someType", nil)
+			req, err := http.NewRequest("GET", "http://localhost:8000/sagas?&Status=created&SagaName=someType", nil)
 			require.NoError(t, err)
 
 			statuses := []StatusResponse{
@@ -252,7 +252,7 @@ func TestHandler(t *testing.T) {
 		})
 
 		t.Run("get filtered returns a response error", func(t *testing.T) {
-			req, err := http.NewRequest("GET", "http://localhost:8000/sagas?&status=created&sagaType=someType", nil)
+			req, err := http.NewRequest("GET", "http://localhost:8000/sagas?&Status=created&SagaName=someType", nil)
 			require.NoError(t, err)
 
 			statusServiceMock.
@@ -268,7 +268,7 @@ func TestHandler(t *testing.T) {
 		})
 
 		t.Run("get filtered returns an error", func(t *testing.T) {
-			req, err := http.NewRequest("GET", "http://localhost:8000/sagas?&status=created&sagaType=someType", nil)
+			req, err := http.NewRequest("GET", "http://localhost:8000/sagas?&Status=created&SagaName=someType", nil)
 			require.NoError(t, err)
 
 			statusServiceMock.
