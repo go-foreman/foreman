@@ -93,26 +93,31 @@ func TestStatusService(t *testing.T) {
 			sagaInstance := saga.NewSagaInstance(sagaId, "", sagaExample)
 			sagaInstance.AddHistoryEvent(&dataContract{}, nil)
 
+			instancesBatch := &saga.InstancesBatch{
+				Total: 1,
+				Items: []saga.Instance{sagaInstance},
+			}
+
 			storeMock.
 				EXPECT().
 				GetByFilter(ctx, gomock.Any()).
 				Do(func(ctx context.Context, filters ...saga.FilterOption) {
 					assert.Len(t, filters, 3)
 				}).
-				Return([]saga.Instance{sagaInstance}, nil)
+				Return(instancesBatch, nil)
 
 			resp, err := statusService.GetFilteredBy(ctx, &Filters{
 				SagaID:   sagaId,
 				Status:   "in_progress",
 				SagaName: "someSagaType",
-			})
+			}, nil)
 			assert.NoError(t, err)
 
-			assert.Len(t, resp, 1)
-			assert.Equal(t, resp[0].SagaUID, sagaId)
-			assert.Equal(t, resp[0].Status, "created")
-			assert.Equal(t, resp[0].Payload, sagaExample)
-			assert.Equal(t, resp[0].Events, []SagaEvent{{sagaInstance.HistoryEvents()[0]}})
+			assert.Len(t, resp.Items, 1)
+			assert.Equal(t, resp.Items[0].SagaUID, sagaId)
+			assert.Equal(t, resp.Items[0].Status, "created")
+			assert.Equal(t, resp.Items[0].Payload, sagaExample)
+			assert.Equal(t, resp.Items[0].Events, []SagaEvent{{sagaInstance.HistoryEvents()[0]}})
 		})
 
 		t.Run("error filtering", func(t *testing.T) {
@@ -131,7 +136,7 @@ func TestStatusService(t *testing.T) {
 				SagaID:   sagaId,
 				Status:   "in_progress",
 				SagaName: "someSagaType",
-			})
+			}, nil)
 			assert.Error(t, err)
 			assert.EqualError(t, err, "some error")
 			assert.Nil(t, resp)
@@ -142,13 +147,13 @@ func TestStatusService(t *testing.T) {
 				SagaID:   "",
 				Status:   "",
 				SagaName: "",
-			})
+			}, nil)
 			assert.Error(t, err)
 
 			respErr, ok := err.(ResponseError)
 			require.True(t, ok)
 
-			assert.Equal(t, respErr.Error(), "no filters specified")
+			assert.Equal(t, respErr.Error(), "Either filters or pagination must be specified")
 			assert.Equal(t, respErr.Status(), http.StatusBadRequest)
 		})
 	})
@@ -183,7 +188,7 @@ func TestHandler(t *testing.T) {
 			req, err := http.NewRequest("GET", "http://localhost:8000/sagas/123", nil)
 			require.NoError(t, err)
 
-			statusResp := &StatusResponse{
+			statusResp := &SagaStatus{
 				SagaUID: "123",
 				Status:  "in_progress",
 			}
@@ -239,14 +244,17 @@ func TestHandler(t *testing.T) {
 			req, err := http.NewRequest("GET", "http://localhost:8000/sagas?&status=created&sagaType=someType", nil)
 			require.NoError(t, err)
 
-			statuses := []StatusResponse{
-				{
-					SagaUID: "123",
-					Status:  "created",
-				},
-				{
-					SagaUID: "111",
-					Status:  "created",
+			statuses := &SagaBatch{
+				Total: 2,
+				Items: []SagaStatus{
+					{
+						SagaUID: "123",
+						Status:  "created",
+					},
+					{
+						SagaUID: "111",
+						Status:  "created",
+					},
 				},
 			}
 
@@ -256,7 +264,7 @@ func TestHandler(t *testing.T) {
 					SagaID:   "",
 					Status:   "created",
 					SagaName: "someType",
-				}).
+				}, nil).
 				Return(statuses, nil)
 
 			rr := httptest.NewRecorder()
@@ -277,7 +285,7 @@ func TestHandler(t *testing.T) {
 					SagaID:   "",
 					Status:   "created",
 					SagaName: "someType",
-				}).
+				}, nil).
 				Return(nil, NewResponseError(http.StatusBadRequest, errors.New("some error")))
 
 			rr := httptest.NewRecorder()
@@ -297,7 +305,7 @@ func TestHandler(t *testing.T) {
 					SagaID:   "",
 					Status:   "created",
 					SagaName: "someType",
-				}).
+				}, nil).
 				Return(nil, errors.New("some error"))
 
 			rr := httptest.NewRecorder()
@@ -314,14 +322,17 @@ func TestHandler(t *testing.T) {
 			offset := 10
 			limit := 10
 
-			statuses := []StatusResponse{
-				{
-					SagaUID: "123",
-					Status:  "created",
-				},
-				{
-					SagaUID: "111",
-					Status:  "created",
+			statuses := &SagaBatch{
+				Total: 2,
+				Items: []SagaStatus{
+					{
+						SagaUID: "123",
+						Status:  "created",
+					},
+					{
+						SagaUID: "111",
+						Status:  "created",
+					},
 				},
 			}
 
@@ -331,8 +342,9 @@ func TestHandler(t *testing.T) {
 					SagaID:   "",
 					Status:   "created",
 					SagaName: "someType",
-					Offset:   &offset,
-					Limit:    &limit,
+				}, &Pagination{
+					Offset: offset,
+					Limit:  limit,
 				}).
 				Return(statuses, nil)
 

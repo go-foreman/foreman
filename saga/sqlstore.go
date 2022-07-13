@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	sagaSql "github.com/go-foreman/foreman/saga/sql"
@@ -244,7 +245,7 @@ func (s sqlStore) GetById(ctx context.Context, sagaId string) (Instance, error) 
 	return sagaInstance, nil
 }
 
-func (s sqlStore) GetByFilter(ctx context.Context, filters ...FilterOption) ([]Instance, error) {
+func (s sqlStore) GetByFilter(ctx context.Context, filters ...FilterOption) (*InstancesBatch, error) {
 	if len(filters) == 0 {
 		return nil, errors.Errorf("no filters found, you have to specify at least one so result won't be whole store")
 	}
@@ -255,8 +256,10 @@ func (s sqlStore) GetByFilter(ctx context.Context, filters ...FilterOption) ([]I
 		filter(opts)
 	}
 
+	countQuery := fmt.Sprintf(`SELECT COUNT(s.uid) cnt FROM %s s`, sagaTableName)
+
 	//todo use https://github.com/Masterminds/squirrel ? +1 dependency, is it really needed?
-	query := fmt.Sprintf(
+	batchQuery := fmt.Sprintf(
 		`SELECT 
 			s.uid,
 			s.parent_uid,
@@ -265,17 +268,10 @@ func (s sqlStore) GetByFilter(ctx context.Context, filters ...FilterOption) ([]I
 			s.status,
 			s.last_failed_ev,
 			s.started_at,
-			s.updated_at,
-			sh.uid,
-			sh.name,
-			sh.status,
-			sh.payload,
-			sh.origin,
-			sh.created_at,
-			sh.trace_uid 
-		FROM %s s LEFT JOIN %s sh 
-		ON s.uid = sh.saga_uid WHERE`,
-		sagaTableName, sagaHistoryTableName)
+			s.updated_at
+		FROM %s s`,
+		sagaTableName,
+	)
 
 	var (
 		args       []interface{}
@@ -283,43 +279,51 @@ func (s sqlStore) GetByFilter(ctx context.Context, filters ...FilterOption) ([]I
 	)
 
 	if opts.sagaId != "" {
-		conditions = append(conditions, " s.uid = ?")
+		conditions = append(conditions, "s.uid = ?")
 		args = append(args, opts.sagaId)
 	}
 
 	if opts.status != "" {
-		conditions = append(conditions, " s.status = ?")
+		conditions = append(conditions, "s.status = ?")
 		args = append(args, opts.status)
 	}
 
 	if opts.sagaName != "" {
-		conditions = append(conditions, " s.name = ?")
+		conditions = append(conditions, "s.name = ?")
 		args = append(args, opts.sagaName)
 	}
 
-	if len(conditions) == 0 {
+	if len(conditions) > 0 {
+		batchQuery += fmt.Sprintf(" WHERE %s", strings.Join(conditions, " AND "))
+		countQuery += fmt.Sprintf(" WHERE %s", strings.Join(conditions, " AND "))
+	} else if opts.limit == nil {
 		return nil, errors.Errorf("all specified filters are empty, you have to specify at least one so result won't be whole store")
 	}
 
-	for i, condition := range conditions {
-		query += condition
-
-		if i < len(conditions)-1 {
-			query += " AND"
-		}
-	}
+	batchQuery += " ORDER BY started_at DESC"
 
 	if opts.offset != nil {
-		query += fmt.Sprintf(" OFFSET %d", opts.offset)
+		batchQuery += fmt.Sprintf(" OFFSET %d", *opts.offset)
 	}
 
 	if opts.limit != nil {
-		query += fmt.Sprintf(" LIMIT %d", opts.limit)
+		batchQuery += fmt.Sprintf(" LIMIT %d", *opts.limit)
 	}
 
-	query += ";"
+	batchQuery += ";"
+	countQuery += ";"
 
-	rows, err := s.db.QueryContext(ctx, s.prepQuery(query), args...)
+	totalRow := s.db.QueryRowContext(ctx, countQuery, args...)
+	if err := totalRow.Err(); err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	var total int
+	if err := totalRow.Scan(&total); err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	rows, err := s.db.QueryContext(ctx, s.prepQuery(batchQuery), args...)
 
 	if err != nil {
 		return nil, errors.Wrap(err, "querying sagas with filter")
@@ -327,22 +331,71 @@ func (s sqlStore) GetByFilter(ctx context.Context, filters ...FilterOption) ([]I
 
 	defer rows.Close()
 
+	sagaModels := make(map[string]sagaSqlModel, total)
+	sagaIDs := make([]interface{}, 0)
+
+	for rows.Next() {
+		sagaModel := sagaSqlModel{}
+
+		if err := rows.Scan(
+			&sagaModel.ID,
+			&sagaModel.ParentID,
+			&sagaModel.Name,
+			&sagaModel.Payload,
+			&sagaModel.Status,
+			&sagaModel.LastFailedMsg,
+			&sagaModel.StartedAt,
+			&sagaModel.UpdatedAt,
+		); err != nil {
+			return nil, errors.WithStack(err)
+		}
+
+		sagaModels[sagaModel.ID.String] = sagaModel
+		sagaIDs = append(sagaIDs, sagaModel.ID.String)
+	}
+
+	if rows.Err() != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	var sagaIDPlaceholders string
+	for i := 0; i < len(sagaIDs); i++ {
+		sagaIDPlaceholders += "?"
+		if i < len(sagaIDs)-1 {
+			sagaIDPlaceholders += ", "
+		}
+	}
+
+	eventsQuery := fmt.Sprintf(
+		`SELECT
+				sh.uid,
+				sh.saga_uid,
+				sh.name,
+				sh.status,
+				sh.payload,
+				sh.origin,
+				sh.created_at,
+				sh.trace_uid 
+			FROM %s sh
+			WHERE sh.saga_uid IN (%s);`,
+		sagaHistoryTableName,
+		sagaIDPlaceholders,
+	)
+
+	rows, err = s.db.QueryContext(ctx, s.prepQuery(eventsQuery), sagaIDs...)
+
+	if err != nil {
+		return nil, errors.Wrap(err, "querying saga events")
+	}
+
 	sagas := make(map[string]*sagaInstance)
 
 	for rows.Next() {
-		sagaData := sagaSqlModel{}
 		ev := historyEventSqlModel{}
 
 		if err := rows.Scan(
-			&sagaData.ID,
-			&sagaData.ParentID,
-			&sagaData.Name,
-			&sagaData.Payload,
-			&sagaData.Status,
-			&sagaData.LastFailedMsg,
-			&sagaData.StartedAt,
-			&sagaData.UpdatedAt,
 			&ev.ID,
+			&ev.SagaUID,
 			&ev.Name,
 			&ev.SagaStatus,
 			&ev.Payload,
@@ -353,15 +406,16 @@ func (s sqlStore) GetByFilter(ctx context.Context, filters ...FilterOption) ([]I
 			return nil, errors.WithStack(err)
 		}
 
-		sagaInstance, exists := sagas[sagaData.ID.String]
+		sagaModel := sagaModels[ev.SagaUID.String]
+		sagaInstance, exists := sagas[sagaModel.ID.String]
 
 		if !exists {
-			instance, err := s.instanceFromModel(sagaData)
+			instance, err := s.instanceFromModel(sagaModel)
 
 			if err != nil {
 				return nil, errors.WithStack(err)
 			}
-			sagas[sagaData.ID.String] = instance
+			sagas[sagaModel.ID.String] = instance
 			sagaInstance = instance
 		}
 
@@ -376,19 +430,18 @@ func (s sqlStore) GetByFilter(ctx context.Context, filters ...FilterOption) ([]I
 		}
 	}
 
-	if rows.Err() != nil {
-		return nil, errors.WithStack(err)
-	}
-
-	res := make([]Instance, len(sagas))
+	items := make([]Instance, len(sagas))
 
 	var i int
 	for _, instance := range sagas {
-		res[i] = instance
+		items[i] = instance
 		i++
 	}
 
-	return res, nil
+	return &InstancesBatch{
+		Total: total,
+		Items: items,
+	}, nil
 }
 
 func (s sqlStore) Delete(ctx context.Context, sagaId string) error {

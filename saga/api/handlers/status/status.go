@@ -13,7 +13,12 @@ import (
 	"github.com/pkg/errors"
 )
 
-type StatusResponse struct {
+type SagaBatch struct {
+	Total int          `json:"total"`
+	Items []SagaStatus `json:"items"`
+}
+
+type SagaStatus struct {
 	SagaUID string      `json:"saga_uid"`
 	Status  string      `json:"status"`
 	Payload interface{} `json:"payload"`
@@ -26,17 +31,20 @@ type SagaEvent struct {
 
 //go:generate mockgen --build_flags=--mod=mod -destination ./mock_test.go -package status . StatusService
 
+type Pagination struct {
+	Offset int
+	Limit  int
+}
+
 type Filters struct {
 	SagaID   string
 	SagaName string
 	Status   string
-	Offset   *int
-	Limit    *int
 }
 
 type StatusService interface {
-	GetStatus(ctx context.Context, sagaId string) (*StatusResponse, error)
-	GetFilteredBy(ctx context.Context, filters *Filters) ([]StatusResponse, error)
+	GetStatus(ctx context.Context, sagaId string) (*SagaStatus, error)
+	GetFilteredBy(ctx context.Context, filters *Filters, pagination *Pagination) (*SagaBatch, error)
 }
 
 func NewStatusService(store saga.Store) StatusService {
@@ -47,7 +55,7 @@ type statusService struct {
 	sagaStore saga.Store
 }
 
-func (s statusService) GetStatus(ctx context.Context, sagaId string) (*StatusResponse, error) {
+func (s statusService) GetStatus(ctx context.Context, sagaId string) (*SagaStatus, error) {
 	sagaInstance, err := s.sagaStore.GetById(ctx, sagaId)
 
 	if err != nil {
@@ -64,10 +72,10 @@ func (s statusService) GetStatus(ctx context.Context, sagaId string) (*StatusRes
 		events[i] = SagaEvent{ev}
 	}
 
-	return &StatusResponse{SagaUID: sagaId, Status: sagaInstance.Status().String(), Payload: sagaInstance.Saga(), Events: events}, nil
+	return &SagaStatus{SagaUID: sagaId, Status: sagaInstance.Status().String(), Payload: sagaInstance.Saga(), Events: events}, nil
 }
 
-func (s statusService) GetFilteredBy(ctx context.Context, filters *Filters) ([]StatusResponse, error) {
+func (s statusService) GetFilteredBy(ctx context.Context, filters *Filters, pagination *Pagination) (*SagaBatch, error) {
 
 	var opts []saga.FilterOption
 
@@ -83,34 +91,30 @@ func (s statusService) GetFilteredBy(ctx context.Context, filters *Filters) ([]S
 		opts = append(opts, saga.WithSagaName(filters.SagaName))
 	}
 
-	if filters.Offset != nil {
-		opts = append(opts, saga.WithOffset(*filters.Offset))
+	if len(opts) == 0 && pagination == nil {
+		return nil, NewResponseError(http.StatusBadRequest, errors.Errorf("Either filters or pagination must be specified"))
 	}
 
-	if filters.Limit != nil {
-		opts = append(opts, saga.WithLimit(*filters.Limit))
+	if pagination != nil {
+		opts = append(opts, saga.WithOffsetAndLimit(pagination.Offset, pagination.Limit))
 	}
 
-	if len(opts) == 0 {
-		return nil, NewResponseError(http.StatusBadRequest, errors.New("no filters specified"))
-	}
-
-	sagas, err := s.sagaStore.GetByFilter(ctx, opts...)
+	batch, err := s.sagaStore.GetByFilter(ctx, opts...)
 
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
 
-	resp := make([]StatusResponse, len(sagas))
+	statuses := make([]SagaStatus, len(batch.Items))
 
-	for i, instance := range sagas {
+	for i, instance := range batch.Items {
 		events := make([]SagaEvent, len(instance.HistoryEvents()))
 
 		for j, ev := range instance.HistoryEvents() {
 			events[j] = SagaEvent{ev}
 		}
 
-		resp[i] = StatusResponse{
+		statuses[i] = SagaStatus{
 			SagaUID: instance.UID(),
 			Status:  instance.Status().String(),
 			Payload: instance.Saga(),
@@ -118,7 +122,10 @@ func (s statusService) GetFilteredBy(ctx context.Context, filters *Filters) ([]S
 		}
 	}
 
-	return resp, nil
+	return &SagaBatch{
+		Total: batch.Total,
+		Items: statuses,
+	}, nil
 }
 
 type StatusHandler struct {
@@ -151,9 +158,15 @@ func (h *StatusHandler) GetStatus(resp http.ResponseWriter, r *http.Request) {
 
 func (h *StatusHandler) GetFilteredBy(resp http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
-	sagaId := query.Get("sagaId")
-	status := query.Get("status")
-	sagaName := query.Get("sagaType")
+
+	var (
+		filters    Filters
+		pagination *Pagination
+	)
+
+	filters.SagaID = query.Get("sagaId")
+	filters.Status = query.Get("status")
+	filters.SagaName = query.Get("sagaType")
 
 	offset, err := h.getInt(query, "offset")
 
@@ -169,13 +182,24 @@ func (h *StatusHandler) GetFilteredBy(resp http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	statusesResp, err := h.service.GetFilteredBy(r.Context(), &Filters{
-		SagaID:   sagaId,
-		SagaName: sagaName,
-		Status:   status,
-		Offset:   offset,
-		Limit:    limit,
-	})
+	if offset != nil && limit == nil {
+		NewResponseWriterFromErrMsg("Query param 'limit' must be specified along with 'offset'", http.StatusBadRequest).write(resp, h.logger)
+		return
+	}
+
+	if limit != nil && offset == nil {
+		NewResponseWriterFromErrMsg("Query param 'offset' must be specified along with 'limit'", http.StatusBadRequest).write(resp, h.logger)
+		return
+	}
+
+	if limit != nil || offset != nil {
+		pagination = &Pagination{
+			Offset: *offset,
+			Limit:  *limit,
+		}
+	}
+
+	statusesResp, err := h.service.GetFilteredBy(r.Context(), &filters, pagination)
 
 	if err != nil {
 		NewResponseWriterFromError(err).write(resp, h.logger)
@@ -252,9 +276,9 @@ func (rw *responseWriter) write(resp http.ResponseWriter, logger log.Logger) {
 		return
 	}
 
-	resp.WriteHeader(rw.status)
-
 	resp.Header().Set("Content-Type", "application/json")
+
+	resp.WriteHeader(rw.status)
 
 	if _, err = resp.Write(respBody); err != nil {
 		logger.Log(log.ErrorLevel, err)

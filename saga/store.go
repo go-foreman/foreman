@@ -16,10 +16,15 @@ type FilterOption func(opts *filterOptions)
 
 //go:generate mockgen --build_flags=--mod=mod -destination ../testing/mocks/saga/store.go -package saga . Store
 
+type InstancesBatch struct {
+	Total int
+	Items []Instance
+}
+
 type Store interface {
 	Create(ctx context.Context, saga Instance) error
 	GetById(ctx context.Context, sagaId string) (Instance, error)
-	GetByFilter(ctx context.Context, filters ...FilterOption) ([]Instance, error)
+	GetByFilter(ctx context.Context, filters ...FilterOption) (*InstancesBatch, error)
 	Update(ctx context.Context, saga Instance) error
 	Delete(ctx context.Context, sagaId string) error
 }
@@ -42,14 +47,9 @@ func WithSagaName(sagaName string) FilterOption {
 	}
 }
 
-func WithOffset(offset int) FilterOption {
+func WithOffsetAndLimit(offset int, limit int) FilterOption {
 	return func(opts *filterOptions) {
 		opts.offset = &offset
-	}
-}
-
-func WithLimit(limit int) FilterOption {
-	return func(opts *filterOptions) {
 		opts.limit = &limit
 	}
 }
@@ -86,6 +86,7 @@ type sagaSqlModel struct {
 
 type historyEventSqlModel struct {
 	ID           sql.NullString
+	SagaUID      sql.NullString
 	Name         sql.NullString
 	CreatedAt    sql.NullTime
 	Payload      []byte
