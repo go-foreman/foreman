@@ -7,6 +7,7 @@ COVERAGE_PKGS=`go list  ./... | grep -v -E './testing' | tr "\n" ',' | rev | cut
 INTEGRATION_TEST_PKGS=`go list ./... | grep "testing/integration"`
 
 INTEGRATION_TEST_PATH?=./.../testing
+INTEGRATION_TEST_PATH?=./.../testing
 
 # set of env variables that you need for testing
 ENV_LOCAL_TEST=\
