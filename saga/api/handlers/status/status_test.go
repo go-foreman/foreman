@@ -142,7 +142,7 @@ func TestStatusService(t *testing.T) {
 			assert.Nil(t, resp)
 		})
 
-		t.Run("no filters specified", func(t *testing.T) {
+		t.Run("there are no filters specified", func(t *testing.T) {
 			_, err := statusService.GetFilteredBy(context.Background(), &Filters{
 				SagaID:   "",
 				Status:   "",
