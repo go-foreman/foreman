@@ -388,6 +388,8 @@ func (s sqlStore) GetByFilter(ctx context.Context, filters ...FilterOption) (*In
 		return nil, errors.Wrap(err, "querying saga events")
 	}
 
+	defer rows.Close()
+
 	sagas := make(map[string]*sagaInstance)
 
 	for rows.Next() {
