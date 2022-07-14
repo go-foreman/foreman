@@ -1,4 +1,5 @@
 #! /usr/bin/make
+#! /usr/bin/make
 
 
 UNIT_TEST_PKGS=`go list ./... | grep -v -E './testing'`
