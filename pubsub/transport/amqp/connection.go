@@ -47,7 +47,7 @@ func Dial(url string, autoReconnect bool, logger log.Logger) (UnderlyingConnecti
 					time.Sleep(delay)
 
 					if reconnectedCount > reconnectCount {
-						logger.Logf(log.FatalLevel, "reached limit of reconnects %d", reconnectCount)
+						logger.Logf(log.FatalLevel, "reached limit of reconnects %d times", reconnectCount)
 					}
 					reconnectedCount++
 
