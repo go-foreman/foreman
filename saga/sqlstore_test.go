@@ -938,6 +938,182 @@ func TestSqlStore_GetByFilter(t *testing.T) {
 
 		assert.Len(t, sagas.Items[0].HistoryEvents(), 2)
 	})
+
+	t.Run("count query fails", func(t *testing.T) {
+		store, dbMock, _ := createStore(t, ctrl, MYSQLDriver)
+
+		dbMock.ExpectQuery("SELECT COUNT(s.uid) cnt FROM saga s;").
+			WillReturnError(errors.New("fail"))
+
+		_, err := store.GetByFilter(ctx, WithOffsetAndLimit(1, 2))
+		assert.Error(t, err, "fail")
+	})
+
+	t.Run("count sagas query fails", func(t *testing.T) {
+		store, dbMock, _ := createStore(t, ctrl, MYSQLDriver)
+
+		dbMock.ExpectQuery("SELECT COUNT(s.uid) cnt FROM saga s;").
+			WillReturnRows(
+				sqlmock.NewRows([]string{"cnt"}).
+					AddRow(1),
+			)
+
+		dbMock.ExpectQuery("SELECT s.uid, s.parent_uid, s.name, s.payload, s.status, s.last_failed_ev, s.started_at, s.updated_at FROM saga s ORDER BY started_at DESC LIMIT 2 OFFSET 1;").
+			WillReturnError(errors.New("fail"))
+
+		_, err := store.GetByFilter(ctx, WithOffsetAndLimit(1, 2))
+		assert.Error(t, err, "fail")
+	})
+
+	t.Run("count sagas query fails", func(t *testing.T) {
+		store, dbMock, _ := createStore(t, ctrl, MYSQLDriver)
+
+		timeNow := time.Now()
+
+		sagaData := &sagaSqlModel{
+			ID: sql.NullString{
+				String: "sagaId",
+				Valid:  true,
+			},
+			ParentID: sql.NullString{
+				String: "parentSagaId",
+				Valid:  true,
+			},
+			Name: sql.NullString{
+				String: "example.SagaExample",
+				Valid:  true,
+			},
+			Payload: []byte("payload"),
+			Status: sql.NullString{
+				String: "failed",
+				Valid:  true,
+			},
+			LastFailedMsg: []byte("payload"),
+			StartedAt: sql.NullTime{
+				Time:  timeNow,
+				Valid: true,
+			},
+			UpdatedAt: sql.NullTime{
+				Time:  timeNow,
+				Valid: true,
+			},
+		}
+
+		dbMock.ExpectQuery("SELECT COUNT(s.uid) cnt FROM saga s;").
+			WillReturnRows(
+				sqlmock.NewRows([]string{"cnt"}).
+					AddRow(1),
+			)
+
+		dbMock.ExpectQuery("SELECT s.uid, s.parent_uid, s.name, s.payload, s.status, s.last_failed_ev, s.started_at, s.updated_at FROM saga s ORDER BY started_at DESC LIMIT 2 OFFSET 1;").
+			WillReturnRows(
+				sqlmock.NewRows([]string{
+					"s.uid", "s.parent_uid", "s.name", "s.payload", "s.status", "s.last_failed_ev", "s.started_at", "s.updated_at",
+				}).AddRow(
+					sagaData.ID.String,
+					sagaData.ParentID.String,
+					sagaData.Name.String,
+					sagaData.Payload,
+					sagaData.Status.String,
+					sagaData.LastFailedMsg,
+					sagaData.StartedAt.Time,
+					sagaData.UpdatedAt.Time,
+				),
+			)
+
+		dbMock.ExpectQuery(`SELECT sh.uid, sh.saga_uid, sh.name, sh.status, sh.payload, sh.origin, sh.created_at, sh.trace_uid FROM saga_history sh WHERE sh.saga_uid IN (?);`).
+			WillReturnError(errors.New("fail"))
+
+		_, err := store.GetByFilter(ctx, WithOffsetAndLimit(1, 2))
+		assert.Error(t, err, "fail")
+	})
+
+	t.Run("saga without events", func(t *testing.T) {
+		store, dbMock, marshallerMock := createStore(t, ctrl, MYSQLDriver)
+
+		timeNow := time.Now()
+
+		sagaData := &sagaSqlModel{
+			ID: sql.NullString{
+				String: "sagaId",
+				Valid:  true,
+			},
+			ParentID: sql.NullString{
+				String: "parentSagaId",
+				Valid:  true,
+			},
+			Name: sql.NullString{
+				String: "example.SagaExample",
+				Valid:  true,
+			},
+			Payload: []byte("payload"),
+			Status: sql.NullString{
+				String: "failed",
+				Valid:  true,
+			},
+			LastFailedMsg: []byte("payload"),
+			StartedAt: sql.NullTime{
+				Time:  timeNow,
+				Valid: true,
+			},
+			UpdatedAt: sql.NullTime{
+				Time:  timeNow,
+				Valid: true,
+			},
+		}
+
+		dbMock.ExpectQuery("SELECT COUNT(s.uid) cnt FROM saga s;").
+			WillReturnRows(
+				sqlmock.NewRows([]string{"cnt"}).
+					AddRow(1),
+			)
+
+		dbMock.ExpectQuery("SELECT s.uid, s.parent_uid, s.name, s.payload, s.status, s.last_failed_ev, s.started_at, s.updated_at FROM saga s ORDER BY started_at DESC LIMIT 2 OFFSET 1;").
+			WillReturnRows(
+				sqlmock.NewRows([]string{
+					"s.uid", "s.parent_uid", "s.name", "s.payload", "s.status", "s.last_failed_ev", "s.started_at", "s.updated_at",
+				}).AddRow(
+					sagaData.ID.String,
+					sagaData.ParentID.String,
+					sagaData.Name.String,
+					sagaData.Payload,
+					sagaData.Status.String,
+					sagaData.LastFailedMsg,
+					sagaData.StartedAt.Time,
+					sagaData.UpdatedAt.Time,
+				),
+			)
+
+		dbMock.ExpectQuery(`SELECT sh.uid, sh.saga_uid, sh.name, sh.status, sh.payload, sh.origin, sh.created_at, sh.trace_uid FROM saga_history sh WHERE sh.saga_uid IN (?);`).
+			WithArgs("sagaId").
+			WillReturnRows(
+				sqlmock.NewRows([]string{
+					"sh.uid", "sh.saga_uid,", "sh.name", "sh.status", "sh.payload", "sh.origin", "sh.created_at", "sh.trace_uid",
+				}),
+			)
+
+		marshallerMock.
+			EXPECT().
+			Unmarshal(sagaData.LastFailedMsg).
+			Return(&DataContract{Message: "failed-ev"}, nil)
+
+		marshallerMock.
+			EXPECT().
+			Unmarshal(sagaData.Payload).
+			Return(&SagaExample{Data: "saga"}, nil)
+
+		sagas, err := store.GetByFilter(ctx, WithOffsetAndLimit(1, 2))
+		assert.NoError(t, err)
+
+		require.Equal(t, sagas.Total, 1)
+		require.Len(t, sagas.Items, 1)
+		assert.Equal(t, sagaData.ID.String, sagas.Items[0].UID())
+		assert.Equal(t, sagaData.ParentID.String, sagas.Items[0].ParentID())
+		assert.Equal(t, sagaData.Status.String, sagas.Items[0].Status().String())
+		assert.Equal(t, &SagaExample{Data: "saga"}, sagas.Items[0].Saga())
+
+		assert.Len(t, sagas.Items[0].HistoryEvents(), 0)
+	})
 }
 
 func createStore(t *testing.T, ctrl *gomock.Controller, provider SQLDriver) (Store, sqlmock.Sqlmock, *mockMessage.MockMarshaller) {
