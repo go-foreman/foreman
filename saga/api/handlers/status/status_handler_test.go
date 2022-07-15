@@ -1,13 +1,14 @@
 package status
 
 import (
+	"io"
+	"net/url"
+	"testing"
+
 	"github.com/go-foreman/foreman/log"
 	sagaMock "github.com/go-foreman/foreman/testing/mocks/saga"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
-	"io"
-	"net/url"
-	"testing"
 )
 
 func TestStatusHandler(t *testing.T) {
