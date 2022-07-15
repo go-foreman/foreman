@@ -64,14 +64,14 @@ func (mr *MockStoreMockRecorder) Delete(arg0, arg1 interface{}) *gomock.Call {
 }
 
 // GetByFilter mocks base method.
-func (m *MockStore) GetByFilter(arg0 context.Context, arg1 ...saga.FilterOption) ([]saga.Instance, error) {
+func (m *MockStore) GetByFilter(arg0 context.Context, arg1 ...saga.FilterOption) (*saga.InstancesBatch, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{arg0}
 	for _, a := range arg1 {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetByFilter", varargs...)
-	ret0, _ := ret[0].([]saga.Instance)
+	ret0, _ := ret[0].(*saga.InstancesBatch)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

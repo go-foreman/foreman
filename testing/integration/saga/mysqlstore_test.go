@@ -170,6 +170,11 @@ func testSQLStoreUseCases(t *testing.T, store saga.Store, schemeRegistry scheme.
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 		defer cancel()
 
+		fetchedSagaInstances, err := store.GetByFilter(ctx, saga.WithOffsetAndLimit(0, 10))
+		require.NoError(t, err)
+		assert.Equal(t, 0, fetchedSagaInstances.Total)
+		assert.Len(t, fetchedSagaInstances.Items, 0)
+
 		anotherSaga := &FilterSaga{WorkFlow: WorkflowSaga{
 			Field: "field",
 			Value: "value",
@@ -179,11 +184,12 @@ func testSQLStoreUseCases(t *testing.T, store saga.Store, schemeRegistry scheme.
 		require.NotNil(t, anotherSagaInstance)
 		assert.EqualValues(t, anotherSaga, anotherSagaInstance.Saga())
 
-		fetchedSagaInstances, err := store.GetByFilter(ctx, saga.WithSagaId(anotherSagaInstance.UID()))
+		fetchedSagaInstances, err = store.GetByFilter(ctx, saga.WithSagaId(anotherSagaInstance.UID()))
 		assert.NoError(t, err)
 		require.NotNil(t, fetchedSagaInstances)
-		assert.Len(t, fetchedSagaInstances, 1)
-		assert.EqualValues(t, anotherSagaInstance, fetchedSagaInstances[0])
+		assert.Equal(t, fetchedSagaInstances.Total, 1)
+		assert.Len(t, fetchedSagaInstances.Items, 1)
+		assert.EqualValues(t, anotherSagaInstance, fetchedSagaInstances.Items[0])
 
 		gk, err := schemeRegistry.ObjectKind(anotherSaga)
 		require.NoError(t, err)
@@ -191,28 +197,56 @@ func testSQLStoreUseCases(t *testing.T, store saga.Store, schemeRegistry scheme.
 		fetchedSagaInstances, err = store.GetByFilter(ctx, saga.WithSagaName(gk.String()))
 		assert.NoError(t, err)
 		require.NotNil(t, fetchedSagaInstances)
-		assert.Len(t, fetchedSagaInstances, 1)
-		assert.EqualValues(t, anotherSagaInstance, fetchedSagaInstances[0])
+		assert.Equal(t, fetchedSagaInstances.Total, 1)
+		assert.Len(t, fetchedSagaInstances.Items, 1)
+		assert.EqualValues(t, anotherSagaInstance, fetchedSagaInstances.Items[0])
 
 		fetchedSagaInstances, err = store.GetByFilter(ctx, saga.WithStatus("created"))
 		assert.NoError(t, err)
 		require.NotNil(t, fetchedSagaInstances)
-		assert.Len(t, fetchedSagaInstances, 1)
+		assert.Equal(t, fetchedSagaInstances.Total, 1)
+		assert.Len(t, fetchedSagaInstances.Items, 1)
 
 		noSagas, err := store.GetByFilter(ctx, saga.WithSagaName("xxx"))
 		assert.NoError(t, err)
 		require.NotNil(t, noSagas)
-		assert.Len(t, noSagas, 0)
+		assert.Equal(t, 0, noSagas.Total)
+		assert.Len(t, noSagas.Items, 0)
 
 		noSagas, err = store.GetByFilter(ctx, saga.WithSagaId("xxxx"))
 		assert.NoError(t, err)
 		require.NotNil(t, noSagas)
-		assert.Len(t, noSagas, 0)
+		assert.Equal(t, noSagas.Total, 0)
+		assert.Len(t, noSagas.Items, 0)
 
 		noSagas, err = store.GetByFilter(ctx, saga.WithStatus("completed"))
 		assert.NoError(t, err)
 		require.NotNil(t, noSagas)
-		assert.Len(t, noSagas, 0)
+		assert.Equal(t, noSagas.Total, 0)
+		assert.Len(t, noSagas.Items, 0)
+
+		secondSaga := &FilterSaga{WorkFlow: WorkflowSaga{
+			Field: "field",
+			Value: "value",
+		}}
+		secondSagaInstance := saga.NewSagaInstance(uuid.New().String(), "foo", secondSaga)
+		require.NoError(t, store.Create(ctx, secondSagaInstance))
+		require.NotNil(t, secondSagaInstance)
+		assert.EqualValues(t, secondSaga, secondSagaInstance.Saga())
+
+		thirdSaga := &FilterSaga{WorkFlow: WorkflowSaga{
+			Field: "field",
+			Value: "value",
+		}}
+		thirdSagaInstance := saga.NewSagaInstance(uuid.New().String(), "bar", thirdSaga)
+		require.NoError(t, store.Create(ctx, thirdSagaInstance))
+		require.NotNil(t, thirdSagaInstance)
+		assert.EqualValues(t, thirdSaga, thirdSagaInstance.Saga())
+
+		limitOffsetSagas, err := store.GetByFilter(ctx, saga.WithOffsetAndLimit(1, 2))
+		require.NoError(t, err)
+		assert.Equal(t, 3, limitOffsetSagas.Total)
+		assert.Len(t, limitOffsetSagas.Items, 2)
 	})
 }
 

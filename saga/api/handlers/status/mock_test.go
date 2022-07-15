@@ -35,25 +35,25 @@ func (m *MockStatusService) EXPECT() *MockStatusServiceMockRecorder {
 }
 
 // GetFilteredBy mocks base method.
-func (m *MockStatusService) GetFilteredBy(arg0 context.Context, arg1, arg2, arg3 string) ([]StatusResponse, error) {
+func (m *MockStatusService) GetFilteredBy(arg0 context.Context, arg1 *Filters, arg2 *Pagination) (*SagaBatch, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetFilteredBy", arg0, arg1, arg2, arg3)
-	ret0, _ := ret[0].([]StatusResponse)
+	ret := m.ctrl.Call(m, "GetFilteredBy", arg0, arg1, arg2)
+	ret0, _ := ret[0].(*SagaBatch)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetFilteredBy indicates an expected call of GetFilteredBy.
-func (mr *MockStatusServiceMockRecorder) GetFilteredBy(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+func (mr *MockStatusServiceMockRecorder) GetFilteredBy(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFilteredBy", reflect.TypeOf((*MockStatusService)(nil).GetFilteredBy), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFilteredBy", reflect.TypeOf((*MockStatusService)(nil).GetFilteredBy), arg0, arg1, arg2)
 }
 
 // GetStatus mocks base method.
-func (m *MockStatusService) GetStatus(arg0 context.Context, arg1 string) (*StatusResponse, error) {
+func (m *MockStatusService) GetStatus(arg0 context.Context, arg1 string) (*SagaStatus, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetStatus", arg0, arg1)
-	ret0, _ := ret[0].(*StatusResponse)
+	ret0, _ := ret[0].(*SagaStatus)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

@@ -29,7 +29,7 @@ func TestStatusService(t *testing.T) {
 
 	statusService := NewStatusService(storeMock)
 
-	t.Run("getStatus", func(t *testing.T) {
+	t.Run("get status", func(t *testing.T) {
 		t.Run("no error", func(t *testing.T) {
 			ctx := context.Background()
 			sagaId := "123"
@@ -93,22 +93,31 @@ func TestStatusService(t *testing.T) {
 			sagaInstance := saga.NewSagaInstance(sagaId, "", sagaExample)
 			sagaInstance.AddHistoryEvent(&dataContract{}, nil)
 
+			instancesBatch := &saga.InstancesBatch{
+				Total: 1,
+				Items: []saga.Instance{sagaInstance},
+			}
+
 			storeMock.
 				EXPECT().
 				GetByFilter(ctx, gomock.Any()).
 				Do(func(ctx context.Context, filters ...saga.FilterOption) {
 					assert.Len(t, filters, 3)
 				}).
-				Return([]saga.Instance{sagaInstance}, nil)
+				Return(instancesBatch, nil)
 
-			resp, err := statusService.GetFilteredBy(ctx, sagaId, "in_progress", "someSagaType")
+			resp, err := statusService.GetFilteredBy(ctx, &Filters{
+				SagaID:   sagaId,
+				Status:   "in_progress",
+				SagaName: "someSagaType",
+			}, nil)
 			assert.NoError(t, err)
 
-			assert.Len(t, resp, 1)
-			assert.Equal(t, resp[0].SagaUID, sagaId)
-			assert.Equal(t, resp[0].Status, "created")
-			assert.Equal(t, resp[0].Payload, sagaExample)
-			assert.Equal(t, resp[0].Events, []SagaEvent{{sagaInstance.HistoryEvents()[0]}})
+			assert.Len(t, resp.Items, 1)
+			assert.Equal(t, resp.Items[0].SagaUID, sagaId)
+			assert.Equal(t, resp.Items[0].Status, "created")
+			assert.Equal(t, resp.Items[0].Payload, sagaExample)
+			assert.Equal(t, resp.Items[0].Events, []SagaEvent{{sagaInstance.HistoryEvents()[0]}})
 		})
 
 		t.Run("error filtering", func(t *testing.T) {
@@ -123,21 +132,63 @@ func TestStatusService(t *testing.T) {
 				}).
 				Return(nil, errors.New("some error"))
 
-			resp, err := statusService.GetFilteredBy(ctx, sagaId, "in_progress", "someSagaType")
+			resp, err := statusService.GetFilteredBy(ctx, &Filters{
+				SagaID:   sagaId,
+				Status:   "in_progress",
+				SagaName: "someSagaType",
+			}, nil)
 			assert.Error(t, err)
 			assert.EqualError(t, err, "some error")
 			assert.Nil(t, resp)
 		})
 
-		t.Run("no filters specified", func(t *testing.T) {
-			_, err := statusService.GetFilteredBy(context.Background(), "", "", "")
+		t.Run("there are no filters specified", func(t *testing.T) {
+			_, err := statusService.GetFilteredBy(context.Background(), &Filters{
+				SagaID:   "",
+				Status:   "",
+				SagaName: "",
+			}, nil)
 			assert.Error(t, err)
 
 			respErr, ok := err.(ResponseError)
 			require.True(t, ok)
 
-			assert.Equal(t, respErr.Error(), "no filters specified")
+			assert.Equal(t, respErr.Error(), "Either filters or pagination must be specified")
 			assert.Equal(t, respErr.Status(), http.StatusBadRequest)
+		})
+
+		t.Run("with pagination", func(t *testing.T) {
+			ctx := context.Background()
+			sagaId := "123"
+
+			sagaExample := sagaMock.NewMockSaga(ctrl)
+			sagaInstance := saga.NewSagaInstance(sagaId, "", sagaExample)
+			sagaInstance.AddHistoryEvent(&dataContract{}, nil)
+
+			instancesBatch := &saga.InstancesBatch{
+				Total: 1,
+				Items: []saga.Instance{sagaInstance},
+			}
+
+			storeMock.
+				EXPECT().
+				GetByFilter(ctx, gomock.Any()).
+				Do(func(ctx context.Context, filters ...saga.FilterOption) {
+					assert.Len(t, filters, 1)
+				}).
+				Return(instancesBatch, nil)
+
+			resp, err := statusService.GetFilteredBy(ctx, &Filters{}, &Pagination{
+				Offset: 1,
+				Limit:  2,
+			})
+			assert.NoError(t, err)
+
+			assert.Len(t, resp.Items, 1)
+			assert.Equal(t, resp.Items[0].SagaUID, sagaId)
+			assert.Equal(t, resp.Items[0].Status, "created")
+			assert.Equal(t, resp.Items[0].Payload, sagaExample)
+			assert.Equal(t, resp.Items[0].Events, []SagaEvent{{sagaInstance.HistoryEvents()[0]}})
 		})
 	})
 }
@@ -155,7 +206,7 @@ func TestHandler(t *testing.T) {
 
 	handler := NewStatusHandler(testLogger, statusServiceMock)
 
-	t.Run("status", func(t *testing.T) {
+	t.Run("Status", func(t *testing.T) {
 		t.Run("sagaid is empty", func(t *testing.T) {
 
 			req, err := http.NewRequest("GET", "http://localhost:8000/sagas/", nil)
@@ -171,7 +222,7 @@ func TestHandler(t *testing.T) {
 			req, err := http.NewRequest("GET", "http://localhost:8000/sagas/123", nil)
 			require.NoError(t, err)
 
-			statusResp := &StatusResponse{
+			statusResp := &SagaStatus{
 				SagaUID: "123",
 				Status:  "in_progress",
 			}
@@ -227,20 +278,27 @@ func TestHandler(t *testing.T) {
 			req, err := http.NewRequest("GET", "http://localhost:8000/sagas?&status=created&sagaType=someType", nil)
 			require.NoError(t, err)
 
-			statuses := []StatusResponse{
-				{
-					SagaUID: "123",
-					Status:  "created",
-				},
-				{
-					SagaUID: "111",
-					Status:  "created",
+			statuses := &SagaBatch{
+				Total: 2,
+				Items: []SagaStatus{
+					{
+						SagaUID: "123",
+						Status:  "created",
+					},
+					{
+						SagaUID: "111",
+						Status:  "created",
+					},
 				},
 			}
 
 			statusServiceMock.
 				EXPECT().
-				GetFilteredBy(req.Context(), "", "created", "someType").
+				GetFilteredBy(req.Context(), &Filters{
+					SagaID:   "",
+					Status:   "created",
+					SagaName: "someType",
+				}, nil).
 				Return(statuses, nil)
 
 			rr := httptest.NewRecorder()
@@ -257,7 +315,11 @@ func TestHandler(t *testing.T) {
 
 			statusServiceMock.
 				EXPECT().
-				GetFilteredBy(req.Context(), "", "created", "someType").
+				GetFilteredBy(req.Context(), &Filters{
+					SagaID:   "",
+					Status:   "created",
+					SagaName: "someType",
+				}, nil).
 				Return(nil, NewResponseError(http.StatusBadRequest, errors.New("some error")))
 
 			rr := httptest.NewRecorder()
@@ -273,7 +335,11 @@ func TestHandler(t *testing.T) {
 
 			statusServiceMock.
 				EXPECT().
-				GetFilteredBy(req.Context(), "", "created", "someType").
+				GetFilteredBy(req.Context(), &Filters{
+					SagaID:   "",
+					Status:   "created",
+					SagaName: "someType",
+				}, nil).
 				Return(nil, errors.New("some error"))
 
 			rr := httptest.NewRecorder()
@@ -281,6 +347,47 @@ func TestHandler(t *testing.T) {
 
 			assert.Equal(t, rr.Code, http.StatusInternalServerError)
 			assert.Contains(t, rr.Body.String(), "some error")
+		})
+
+		t.Run("pass limit and offset through from API to Store", func(t *testing.T) {
+			req, err := http.NewRequest("GET", "http://localhost:8000/sagas?&status=created&sagaType=someType&offset=10&limit=10", nil)
+			require.NoError(t, err)
+
+			offset := 10
+			limit := 10
+
+			statuses := &SagaBatch{
+				Total: 2,
+				Items: []SagaStatus{
+					{
+						SagaUID: "123",
+						Status:  "created",
+					},
+					{
+						SagaUID: "111",
+						Status:  "created",
+					},
+				},
+			}
+
+			statusServiceMock.
+				EXPECT().
+				GetFilteredBy(req.Context(), &Filters{
+					SagaID:   "",
+					Status:   "created",
+					SagaName: "someType",
+				}, &Pagination{
+					Offset: offset,
+					Limit:  limit,
+				}).
+				Return(statuses, nil)
+
+			rr := httptest.NewRecorder()
+			handler.GetFilteredBy(rr, req)
+
+			statusRespMarshalled, _ := json.Marshal(statuses)
+			assert.Contains(t, rr.Body.String(), string(statusRespMarshalled))
+			assert.Equal(t, rr.Header().Get("Content-Type"), "application/json")
 		})
 	})
 }

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/go-foreman/foreman/log"
@@ -11,7 +13,12 @@ import (
 	"github.com/pkg/errors"
 )
 
-type StatusResponse struct {
+type SagaBatch struct {
+	Total int          `json:"total"`
+	Items []SagaStatus `json:"items"`
+}
+
+type SagaStatus struct {
 	SagaUID string      `json:"saga_uid"`
 	Status  string      `json:"status"`
 	Payload interface{} `json:"payload"`
@@ -24,9 +31,20 @@ type SagaEvent struct {
 
 //go:generate mockgen --build_flags=--mod=mod -destination ./mock_test.go -package status . StatusService
 
+type Pagination struct {
+	Offset int
+	Limit  int
+}
+
+type Filters struct {
+	SagaID   string
+	SagaName string
+	Status   string
+}
+
 type StatusService interface {
-	GetStatus(ctx context.Context, sagaId string) (*StatusResponse, error)
-	GetFilteredBy(ctx context.Context, sagaId, status, sagaType string) ([]StatusResponse, error)
+	GetStatus(ctx context.Context, sagaId string) (*SagaStatus, error)
+	GetFilteredBy(ctx context.Context, filters *Filters, pagination *Pagination) (*SagaBatch, error)
 }
 
 func NewStatusService(store saga.Store) StatusService {
@@ -37,7 +55,7 @@ type statusService struct {
 	sagaStore saga.Store
 }
 
-func (s statusService) GetStatus(ctx context.Context, sagaId string) (*StatusResponse, error) {
+func (s statusService) GetStatus(ctx context.Context, sagaId string) (*SagaStatus, error) {
 	sagaInstance, err := s.sagaStore.GetById(ctx, sagaId)
 
 	if err != nil {
@@ -54,45 +72,49 @@ func (s statusService) GetStatus(ctx context.Context, sagaId string) (*StatusRes
 		events[i] = SagaEvent{ev}
 	}
 
-	return &StatusResponse{SagaUID: sagaId, Status: sagaInstance.Status().String(), Payload: sagaInstance.Saga(), Events: events}, nil
+	return &SagaStatus{SagaUID: sagaId, Status: sagaInstance.Status().String(), Payload: sagaInstance.Saga(), Events: events}, nil
 }
 
-func (s statusService) GetFilteredBy(ctx context.Context, sagaId, status, sagaName string) ([]StatusResponse, error) {
+func (s statusService) GetFilteredBy(ctx context.Context, filters *Filters, pagination *Pagination) (*SagaBatch, error) {
 
 	var opts []saga.FilterOption
 
-	if sagaId != "" {
-		opts = append(opts, saga.WithSagaId(sagaId))
+	if filters != nil && filters.SagaID != "" {
+		opts = append(opts, saga.WithSagaId(filters.SagaID))
 	}
 
-	if status != "" {
-		opts = append(opts, saga.WithStatus(status))
+	if filters != nil && filters.Status != "" {
+		opts = append(opts, saga.WithStatus(filters.Status))
 	}
 
-	if sagaName != "" {
-		opts = append(opts, saga.WithSagaName(sagaName))
+	if filters != nil && filters.SagaName != "" {
+		opts = append(opts, saga.WithSagaName(filters.SagaName))
 	}
 
-	if len(opts) == 0 {
-		return nil, NewResponseError(http.StatusBadRequest, errors.New("no filters specified"))
+	if len(opts) == 0 && pagination == nil {
+		return nil, NewResponseError(http.StatusBadRequest, errors.Errorf("Either filters or pagination must be specified"))
 	}
 
-	sagas, err := s.sagaStore.GetByFilter(ctx, opts...)
+	if pagination != nil {
+		opts = append(opts, saga.WithOffsetAndLimit(pagination.Offset, pagination.Limit))
+	}
+
+	batch, err := s.sagaStore.GetByFilter(ctx, opts...)
 
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
 
-	resp := make([]StatusResponse, len(sagas))
+	statuses := make([]SagaStatus, len(batch.Items))
 
-	for i, instance := range sagas {
+	for i, instance := range batch.Items {
 		events := make([]SagaEvent, len(instance.HistoryEvents()))
 
 		for j, ev := range instance.HistoryEvents() {
 			events[j] = SagaEvent{ev}
 		}
 
-		resp[i] = StatusResponse{
+		statuses[i] = SagaStatus{
 			SagaUID: instance.UID(),
 			Status:  instance.Status().String(),
 			Payload: instance.Saga(),
@@ -100,7 +122,10 @@ func (s statusService) GetFilteredBy(ctx context.Context, sagaId, status, sagaNa
 		}
 	}
 
-	return resp, nil
+	return &SagaBatch{
+		Total: batch.Total,
+		Items: statuses,
+	}, nil
 }
 
 type StatusHandler struct {
@@ -117,82 +142,146 @@ func (h *StatusHandler) GetStatus(resp http.ResponseWriter, r *http.Request) {
 	sagaId := strings.TrimPrefix(r.URL.Path, "/sagas/")
 
 	if sagaId == "" {
-		resp.WriteHeader(http.StatusBadRequest)
-
-		if _, err := resp.Write([]byte("Saga id is empty")); err != nil {
-			h.logger.Log(log.ErrorLevel, err)
-		}
-
+		NewResponseWriterFromErrMsg("Saga id is empty", http.StatusBadRequest).write(resp, h.logger)
 		return
 	}
 
 	statusResp, err := h.service.GetStatus(r.Context(), sagaId)
 
 	if err != nil {
-		h.logger.Log(log.ErrorLevel, err)
-
-		if respErr, ok := err.(ResponseError); ok {
-			resp.WriteHeader(respErr.Status())
-		} else {
-			resp.WriteHeader(http.StatusInternalServerError)
-		}
-
-		if _, err := resp.Write([]byte(err.Error())); err != nil {
-			h.logger.Log(log.ErrorLevel, err)
-		}
+		NewResponseWriterFromError(err).write(resp, h.logger)
 		return
 	}
 
-	status, err := json.Marshal(statusResp)
-
-	if err != nil {
-		h.logger.Log(log.ErrorLevel, err)
-		resp.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	resp.Header().Set("Content-Type", "application/json")
-
-	if _, err := resp.Write(status); err != nil {
-		h.logger.Log(log.ErrorLevel, err)
-	}
+	NewResponseWriter(statusResp, http.StatusOK).write(resp, h.logger)
 }
 
 func (h *StatusHandler) GetFilteredBy(resp http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
 
-	sagaId := r.URL.Query().Get("sagaId")
-	status := r.URL.Query().Get("status")
-	sagaType := r.URL.Query().Get("sagaType")
+	var (
+		filters    Filters
+		pagination *Pagination
+	)
 
-	statusesResp, err := h.service.GetFilteredBy(r.Context(), sagaId, status, sagaType)
+	filters.SagaID = query.Get("sagaId")
+	filters.Status = query.Get("status")
+	filters.SagaName = query.Get("sagaType")
+
+	offset, err := h.getInt(query, "offset")
 
 	if err != nil {
-		h.logger.Log(log.ErrorLevel, err)
-
-		if respErr, ok := err.(ResponseError); ok {
-			resp.WriteHeader(respErr.Status())
-		} else {
-			resp.WriteHeader(http.StatusInternalServerError)
-		}
-
-		if _, err := resp.Write([]byte(err.Error())); err != nil {
-			h.logger.Log(log.ErrorLevel, err)
-		}
+		NewResponseWriterFromError(err).write(resp, h.logger)
 		return
 	}
 
-	rawResponse, err := json.Marshal(statusesResp)
+	limit, err := h.getInt(query, "limit")
 
 	if err != nil {
-		h.logger.Log(log.ErrorLevel, err)
+		NewResponseWriterFromError(err).write(resp, h.logger)
+		return
+	}
+
+	if offset != nil && limit == nil {
+		NewResponseWriterFromErrMsg("Query param 'limit' must be specified along with 'offset'", http.StatusBadRequest).write(resp, h.logger)
+		return
+	}
+
+	if limit != nil && offset == nil {
+		NewResponseWriterFromErrMsg("Query param 'offset' must be specified along with 'limit'", http.StatusBadRequest).write(resp, h.logger)
+		return
+	}
+
+	if limit != nil || offset != nil {
+		pagination = &Pagination{
+			Offset: *offset,
+			Limit:  *limit,
+		}
+	}
+
+	statusesResp, err := h.service.GetFilteredBy(r.Context(), &filters, pagination)
+
+	if err != nil {
+		NewResponseWriterFromError(err).write(resp, h.logger)
+		return
+	}
+
+	NewResponseWriter(statusesResp, http.StatusOK).write(resp, h.logger)
+}
+
+func (h *StatusHandler) getInt(values url.Values, paramName string) (*int, error) {
+	paramValue := values.Get(paramName)
+	if paramValue != "" {
+		intValue, err := strconv.Atoi(paramValue)
+		if err != nil {
+			return nil, NewResponseError(http.StatusBadRequest, errors.Errorf("Query parameter '%s' is expected to be an integer", paramName))
+		}
+
+		return &intValue, nil
+	}
+
+	return nil, nil
+}
+
+type responseWriter struct {
+	body   interface{}
+	status int
+}
+
+func NewResponseWriterFromError(err error) *responseWriter {
+	if respErr, ok := err.(ResponseError); ok {
+		return &responseWriter{
+			body:   respErr,
+			status: respErr.Status(),
+		}
+	}
+
+	return &responseWriter{
+		body:   err,
+		status: http.StatusInternalServerError,
+	}
+}
+
+func NewResponseWriter(body interface{}, status int) *responseWriter {
+	return &responseWriter{
+		body:   body,
+		status: status,
+	}
+}
+
+func NewResponseWriterFromErrMsg(errMsg string, status int) *responseWriter {
+	return NewResponseWriterFromError(NewResponseError(status, errors.New(errMsg)))
+}
+
+func (rw *responseWriter) encode() ([]byte, error) {
+	var (
+		respBody []byte
+		err      error
+	)
+
+	if respErr, ok := rw.body.(error); ok {
+		respBody = []byte(respErr.Error())
+	} else {
+		respBody, err = json.Marshal(rw.body)
+	}
+
+	return respBody, err
+}
+
+func (rw *responseWriter) write(resp http.ResponseWriter, logger log.Logger) {
+	respBody, err := rw.encode()
+	if err != nil {
+		logger.Log(log.ErrorLevel, err)
 		resp.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	resp.Header().Set("Content-Type", "application/json")
 
-	if _, err := resp.Write(rawResponse); err != nil {
-		h.logger.Log(log.ErrorLevel, err)
+	resp.WriteHeader(rw.status)
+
+	if _, err = resp.Write(respBody); err != nil {
+		logger.Log(log.ErrorLevel, err)
 	}
 }
 
