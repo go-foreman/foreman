@@ -789,6 +789,155 @@ func TestSqlStore_GetByFilter(t *testing.T) {
 
 		assert.Len(t, sagas.Items[0].HistoryEvents(), 2)
 	})
+
+	t.Run("get with offset and limit", func(t *testing.T) {
+		store, dbMock, marshallerMock := createStore(t, ctrl, MYSQLDriver)
+
+		timeNow := time.Now()
+
+		sagaData := &sagaSqlModel{
+			ID: sql.NullString{
+				String: "sagaId",
+				Valid:  true,
+			},
+			ParentID: sql.NullString{
+				String: "parentSagaId",
+				Valid:  true,
+			},
+			Name: sql.NullString{
+				String: "example.SagaExample",
+				Valid:  true,
+			},
+			Payload: []byte("payload"),
+			Status: sql.NullString{
+				String: "failed",
+				Valid:  true,
+			},
+			LastFailedMsg: []byte("payload"),
+			StartedAt: sql.NullTime{
+				Time:  timeNow,
+				Valid: true,
+			},
+			UpdatedAt: sql.NullTime{
+				Time:  timeNow,
+				Valid: true,
+			},
+		}
+
+		evData1 := &historyEventSqlModel{
+			ID: sql.NullString{
+				String: "xxx",
+				Valid:  true,
+			},
+			SagaUID: sql.NullString{
+				String: "sagaId",
+				Valid:  true,
+			},
+			Name: sql.NullString{
+				String: "example.DataExample",
+				Valid:  true,
+			},
+			CreatedAt: sql.NullTime{
+				Time:  timeNow,
+				Valid: true,
+			},
+			Payload: []byte("payload"),
+			OriginSource: sql.NullString{
+				String: "origin",
+				Valid:  true,
+			},
+			SagaStatus: sql.NullString{
+				String: "created",
+				Valid:  true,
+			},
+			TraceUID: sql.NullString{
+				String: "gg",
+				Valid:  true,
+			},
+		}
+		evData2 := evData1
+		evData2.ID.String = "yyy"
+
+		dbMock.ExpectQuery("SELECT COUNT(s.uid) cnt FROM saga s;").
+			WillReturnRows(
+				sqlmock.NewRows([]string{"cnt"}).
+					AddRow(1),
+			)
+
+		dbMock.ExpectQuery("SELECT s.uid, s.parent_uid, s.name, s.payload, s.status, s.last_failed_ev, s.started_at, s.updated_at FROM saga s ORDER BY started_at DESC LIMIT 2 OFFSET 1;").
+			WillReturnRows(
+				sqlmock.NewRows([]string{
+					"s.uid", "s.parent_uid", "s.name", "s.payload", "s.status", "s.last_failed_ev", "s.started_at", "s.updated_at",
+				}).AddRow(
+					sagaData.ID.String,
+					sagaData.ParentID.String,
+					sagaData.Name.String,
+					sagaData.Payload,
+					sagaData.Status.String,
+					sagaData.LastFailedMsg,
+					sagaData.StartedAt.Time,
+					sagaData.UpdatedAt.Time,
+				),
+			)
+
+		dbMock.ExpectQuery(`SELECT sh.uid, sh.saga_uid, sh.name, sh.status, sh.payload, sh.origin, sh.created_at, sh.trace_uid FROM saga_history sh WHERE sh.saga_uid IN (?);`).
+			WithArgs("sagaId").
+			WillReturnRows(
+				sqlmock.NewRows([]string{
+					"sh.uid", "sh.saga_uid,", "sh.name", "sh.status", "sh.payload", "sh.origin", "sh.created_at", "sh.trace_uid",
+				}).AddRow(
+					evData1.ID.String,
+					evData1.SagaUID.String,
+					evData1.Name.String,
+					evData1.SagaStatus.String,
+					evData1.Payload,
+					evData1.OriginSource.String,
+					evData1.CreatedAt.Time,
+					evData1.TraceUID.String,
+				).AddRow(
+					evData2.ID.String,
+					evData1.SagaUID.String,
+					evData2.Name.String,
+					evData2.SagaStatus.String,
+					evData2.Payload,
+					evData2.OriginSource.String,
+					evData2.CreatedAt.Time,
+					evData2.TraceUID.String,
+				),
+			)
+
+		marshallerMock.
+			EXPECT().
+			Unmarshal(sagaData.LastFailedMsg).
+			Return(&DataContract{Message: "failed-ev"}, nil)
+
+		marshallerMock.
+			EXPECT().
+			Unmarshal(sagaData.Payload).
+			Return(&SagaExample{Data: "saga"}, nil)
+
+		marshallerMock.
+			EXPECT().
+			Unmarshal(evData1.Payload).
+			Return(&DataContract{Message: "h1"}, nil)
+
+		marshallerMock.
+			EXPECT().
+			Unmarshal(evData2.Payload).
+			Return(&DataContract{Message: "h2"}, nil)
+
+		sagas, err := store.GetByFilter(ctx, WithOffsetAndLimit(1, 2))
+		assert.NoError(t, err)
+
+		require.Equal(t, sagas.Total, 1)
+		require.Len(t, sagas.Items, 1)
+		assert.Equal(t, sagaData.ID.String, sagas.Items[0].UID())
+		assert.Equal(t, sagaData.ParentID.String, sagas.Items[0].ParentID())
+		assert.Equal(t, sagaData.Status.String, sagas.Items[0].Status().String())
+		assert.Equal(t, &SagaExample{Data: "saga"}, sagas.Items[0].Saga())
+
+		assert.Len(t, sagas.Items[0].HistoryEvents(), 2)
+	})
 }
 
 func createStore(t *testing.T, ctrl *gomock.Controller, provider SQLDriver) (Store, sqlmock.Sqlmock, *mockMessage.MockMarshaller) {

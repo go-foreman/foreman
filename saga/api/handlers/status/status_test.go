@@ -29,7 +29,7 @@ func TestStatusService(t *testing.T) {
 
 	statusService := NewStatusService(storeMock)
 
-	t.Run("getStatus", func(t *testing.T) {
+	t.Run("get status", func(t *testing.T) {
 		t.Run("no error", func(t *testing.T) {
 			ctx := context.Background()
 			sagaId := "123"
@@ -155,6 +155,40 @@ func TestStatusService(t *testing.T) {
 
 			assert.Equal(t, respErr.Error(), "Either filters or pagination must be specified")
 			assert.Equal(t, respErr.Status(), http.StatusBadRequest)
+		})
+
+		t.Run("with pagination", func(t *testing.T) {
+			ctx := context.Background()
+			sagaId := "123"
+
+			sagaExample := sagaMock.NewMockSaga(ctrl)
+			sagaInstance := saga.NewSagaInstance(sagaId, "", sagaExample)
+			sagaInstance.AddHistoryEvent(&dataContract{}, nil)
+
+			instancesBatch := &saga.InstancesBatch{
+				Total: 1,
+				Items: []saga.Instance{sagaInstance},
+			}
+
+			storeMock.
+				EXPECT().
+				GetByFilter(ctx, gomock.Any()).
+				Do(func(ctx context.Context, filters ...saga.FilterOption) {
+					assert.Len(t, filters, 1)
+				}).
+				Return(instancesBatch, nil)
+
+			resp, err := statusService.GetFilteredBy(ctx, &Filters{}, &Pagination{
+				Offset: 1,
+				Limit:  2,
+			})
+			assert.NoError(t, err)
+
+			assert.Len(t, resp.Items, 1)
+			assert.Equal(t, resp.Items[0].SagaUID, sagaId)
+			assert.Equal(t, resp.Items[0].Status, "created")
+			assert.Equal(t, resp.Items[0].Payload, sagaExample)
+			assert.Equal(t, resp.Items[0].Events, []SagaEvent{{sagaInstance.HistoryEvents()[0]}})
 		})
 	})
 }

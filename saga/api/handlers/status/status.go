@@ -79,15 +79,15 @@ func (s statusService) GetFilteredBy(ctx context.Context, filters *Filters, pagi
 
 	var opts []saga.FilterOption
 
-	if filters.SagaID != "" {
+	if filters != nil && filters.SagaID != "" {
 		opts = append(opts, saga.WithSagaId(filters.SagaID))
 	}
 
-	if filters.Status != "" {
+	if filters != nil && filters.Status != "" {
 		opts = append(opts, saga.WithStatus(filters.Status))
 	}
 
-	if filters.SagaName != "" {
+	if filters != nil && filters.SagaName != "" {
 		opts = append(opts, saga.WithSagaName(filters.SagaName))
 	}
 
