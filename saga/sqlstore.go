@@ -302,18 +302,18 @@ func (s sqlStore) GetByFilter(ctx context.Context, filters ...FilterOption) (*In
 
 	batchQuery += " ORDER BY started_at DESC"
 
-	if opts.offset != nil {
-		batchQuery += fmt.Sprintf(" OFFSET %d", *opts.offset)
-	}
-
 	if opts.limit != nil {
 		batchQuery += fmt.Sprintf(" LIMIT %d", *opts.limit)
+	}
+
+	if opts.offset != nil {
+		batchQuery += fmt.Sprintf(" OFFSET %d", *opts.offset)
 	}
 
 	batchQuery += ";"
 	countQuery += ";"
 
-	totalRow := s.db.QueryRowContext(ctx, countQuery, args...)
+	totalRow := s.db.QueryRowContext(ctx, s.prepQuery(countQuery), args...)
 	if err := totalRow.Err(); err != nil {
 		return nil, errors.WithStack(err)
 	}
@@ -358,6 +358,13 @@ func (s sqlStore) GetByFilter(ctx context.Context, filters ...FilterOption) (*In
 		return nil, errors.WithStack(err)
 	}
 
+	if len(sagaIDs) == 0 {
+		return &InstancesBatch{
+			Total: 0,
+			Items: make([]Instance, 0),
+		}, nil
+	}
+
 	var sagaIDPlaceholders string
 	for i := 0; i < len(sagaIDs); i++ {
 		sagaIDPlaceholders += "?"
@@ -390,7 +397,7 @@ func (s sqlStore) GetByFilter(ctx context.Context, filters ...FilterOption) (*In
 
 	defer rows.Close()
 
-	sagas := make(map[string]*sagaInstance)
+	events := make(map[string][]historyEventSqlModel, 0)
 
 	for rows.Next() {
 		ev := historyEventSqlModel{}
@@ -408,22 +415,30 @@ func (s sqlStore) GetByFilter(ctx context.Context, filters ...FilterOption) (*In
 			return nil, errors.WithStack(err)
 		}
 
-		sagaModel := sagaModels[ev.SagaUID.String]
-		sagaInstance, exists := sagas[sagaModel.ID.String]
+		if ev.SagaUID.String != "" {
+			events[ev.SagaUID.String] = append(events[ev.SagaUID.String], ev)
+		}
+	}
 
-		if !exists {
-			instance, err := s.instanceFromModel(sagaModel)
+	sagas := make([]Instance, len(sagaModels))
 
-			if err != nil {
-				return nil, errors.WithStack(err)
-			}
-			sagas[sagaModel.ID.String] = instance
-			sagaInstance = instance
+	idx := 0
+	for _, sagaModel := range sagaModels {
+		sagaInstance, err := s.instanceFromModel(sagaModel)
+		if err != nil {
+			return nil, errors.WithStack(err)
 		}
 
-		if ev.ID.String != "" {
-			historyEvent, err := s.eventFromModel(ev)
+		sagas[idx] = sagaInstance
+		idx++
 
+		sagaEvents, ok := events[sagaModel.ID.String]
+		if !ok {
+			continue
+		}
+
+		for _, ev := range sagaEvents {
+			historyEvent, err := s.eventFromModel(ev)
 			if err != nil {
 				return nil, errors.WithStack(err)
 			}
@@ -432,17 +447,9 @@ func (s sqlStore) GetByFilter(ctx context.Context, filters ...FilterOption) (*In
 		}
 	}
 
-	items := make([]Instance, len(sagas))
-
-	var i int
-	for _, instance := range sagas {
-		items[i] = instance
-		i++
-	}
-
 	return &InstancesBatch{
 		Total: total,
-		Items: items,
+		Items: sagas,
 	}, nil
 }
 
