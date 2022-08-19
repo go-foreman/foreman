@@ -2,12 +2,40 @@ package amqp
 
 import "github.com/go-foreman/foreman/pubsub/transport"
 
-func Queue(name string, durable, autoDelete, exclusive, noWait bool) transport.Queue {
-	return amqpQueue{queueName: name, durable: durable, autoDelete: autoDelete, exclusive: exclusive, noWait: noWait}
+type QueueType string
+
+const (
+	QueueTypeClassic QueueType = "classic"
+	QueueTypeQuorum  QueueType = "quorum"
+)
+
+type QueueOptionsPatch func(options *amqpQueue)
+
+func WithQueueType(v QueueType) QueueOptionsPatch {
+	return func(options *amqpQueue) {
+		options.queueType = v
+	}
+}
+
+func Queue(name string, durable, autoDelete, exclusive, noWait bool, patches ...QueueOptionsPatch) transport.Queue {
+	q := amqpQueue{
+		queueName:  name,
+		durable:    durable,
+		autoDelete: autoDelete,
+		exclusive:  exclusive,
+		noWait:     noWait,
+	}
+
+	for _, patch := range patches {
+		patch(&q)
+	}
+
+	return q
 }
 
 type amqpQueue struct {
 	queueName  string
+	queueType  QueueType
 	durable    bool
 	autoDelete bool
 	exclusive  bool
