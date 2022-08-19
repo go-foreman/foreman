@@ -84,7 +84,7 @@ func (t *amqpTransport) CreateQueue(ctx context.Context, q transport.Queue, qbs 
 		queueBinds = append(queueBinds, queueBind)
 	}
 
-	var table amqp.Table
+	table := make(amqp.Table, 1)
 
 	switch queue.queueType {
 	case QueueTypeQuorum:
