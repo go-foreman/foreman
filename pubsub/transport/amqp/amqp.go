@@ -84,13 +84,17 @@ func (t *amqpTransport) CreateQueue(ctx context.Context, q transport.Queue, qbs 
 		queueBinds = append(queueBinds, queueBind)
 	}
 
-	table := make(amqp.Table, 1)
+	var table amqp.Table
 
 	switch queue.queueType {
 	case QueueTypeQuorum:
-		table["x-queue-type"] = "quorum"
+		table = amqp.Table{
+			"x-queue-type": "quorum",
+		}
 	case QueueTypeClassic:
-		table["x-queue-type"] = "classic"
+		table = amqp.Table{
+			"x-queue-type": "classic",
+		}
 	}
 
 	if _, err := t.publishingChannel.QueueDeclare(

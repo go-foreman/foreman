@@ -24,7 +24,6 @@ func Queue(name string, durable, autoDelete, exclusive, noWait bool, patches ...
 		autoDelete: autoDelete,
 		exclusive:  exclusive,
 		noWait:     noWait,
-		queueType:  QueueTypeClassic,
 	}
 
 	for _, patch := range patches {
