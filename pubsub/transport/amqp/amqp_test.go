@@ -194,6 +194,74 @@ func TestAmqpTransport(t *testing.T) {
 		})
 	})
 
+	t.Run("create queue with explicit classic type", func(t *testing.T) {
+		defer testLogger.Clear()
+
+		transport := amqpTransport{
+			connection:        connMock,
+			publishingChannel: channMock,
+			logger:            testLogger,
+		}
+
+		channMock.
+			EXPECT().
+			QueueDeclare("queueName", true, true, true, true, amqp.Table{
+				"x-queue-type": "classic",
+			}).
+			Return(amqp.Queue{}, nil)
+
+		channMock.
+			EXPECT().
+			QueueBind("queueName", "binding1", "dest1", true, nil).
+			Return(nil)
+		channMock.
+			EXPECT().
+			QueueBind("queueName", "binding2", "dest2", false, nil).
+			Return(nil)
+
+		err := transport.CreateQueue(
+			context.Background(),
+			Queue("queueName", true, true, true, true, WithQueueType(QueueTypeClassic)),
+			QueueBind("dest1", "binding1", true),
+			QueueBind("dest2", "binding2", false),
+		)
+		assert.NoError(t, err)
+	})
+
+	t.Run("create queue with explicit quorum type", func(t *testing.T) {
+		defer testLogger.Clear()
+
+		transport := amqpTransport{
+			connection:        connMock,
+			publishingChannel: channMock,
+			logger:            testLogger,
+		}
+
+		channMock.
+			EXPECT().
+			QueueDeclare("queueName", true, true, true, true, amqp.Table{
+				"x-queue-type": "quorum",
+			}).
+			Return(amqp.Queue{}, nil)
+
+		channMock.
+			EXPECT().
+			QueueBind("queueName", "binding1", "dest1", true, nil).
+			Return(nil)
+		channMock.
+			EXPECT().
+			QueueBind("queueName", "binding2", "dest2", false, nil).
+			Return(nil)
+
+		err := transport.CreateQueue(
+			context.Background(),
+			Queue("queueName", true, true, true, true, WithQueueType(QueueTypeQuorum)),
+			QueueBind("dest1", "binding1", true),
+			QueueBind("dest2", "binding2", false),
+		)
+		assert.NoError(t, err)
+	})
+
 	t.Run("send", func(t *testing.T) {
 		defer testLogger.Clear()
 
