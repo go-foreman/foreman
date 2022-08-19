@@ -5,8 +5,8 @@ import "github.com/go-foreman/foreman/pubsub/transport"
 type QueueType string
 
 const (
-	QueueTypeClassic = "classic"
-	QueueTypeQuorum  = "quorum"
+	QueueTypeClassic QueueType = "classic"
+	QueueTypeQuorum  QueueType = "quorum"
 )
 
 type QueueOptionsPatch func(options *amqpQueue)
