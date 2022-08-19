@@ -18,7 +18,14 @@ func WithQueueType(v QueueType) QueueOptionsPatch {
 }
 
 func Queue(name string, durable, autoDelete, exclusive, noWait bool, patches ...QueueOptionsPatch) transport.Queue {
-	q := amqpQueue{queueName: name, durable: durable, autoDelete: autoDelete, exclusive: exclusive, noWait: noWait}
+	q := amqpQueue{
+		queueName:  name,
+		durable:    durable,
+		autoDelete: autoDelete,
+		exclusive:  exclusive,
+		noWait:     noWait,
+		queueType:  QueueTypeClassic,
+	}
 
 	for _, patch := range patches {
 		patch(&q)
