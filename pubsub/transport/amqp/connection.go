@@ -74,6 +74,15 @@ type Connection struct {
 	chReconnectionDelay time.Duration
 }
 
+func NewReconnectConnection(logger log.Logger, underlyingConn UnderlyingConnection, chReconnectionDelay time.Duration) *Connection {
+
+	return &Connection{
+		logger:              logger,
+		underlyingConn:      underlyingConn,
+		chReconnectionDelay: chReconnectionDelay,
+	}
+}
+
 func (c *Connection) Close() error {
 	return c.underlyingConn.Close()
 }
