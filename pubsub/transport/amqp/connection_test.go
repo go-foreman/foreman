@@ -228,3 +228,15 @@ func TestConnection_Channel(t *testing.T) {
 	//	testLogger.AssertContainsSubstr(t, "channel recreation succeed")
 	//})
 }
+
+func TestReconnectConnection(t *testing.T) {
+	t.Run("basic constructor", func(t *testing.T) {
+		testLogger := log.NewNilLogger()
+		uc := &MockUnderlyingConnection{}
+		rc := NewReconnectConnection(testLogger, uc, time.Second)
+
+		assert.Equal(t, rc.underlyingConn, uc)
+		assert.Equal(t, rc.chReconnectionDelay, time.Second)
+		assert.NotEmpty(t, rc.logger)
+	})
+}
