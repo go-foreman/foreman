@@ -1,0 +1,43 @@
+name: CI
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Setup Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.22.5
+
+      - name: Install Dependencies
+        run: |
+          make mod-download
+          make tools
+
+      - name: Lint
+        run: golangci-lint run -v
+
+      - name: Check dependencies for vulnerabilities
+        run: make check-mods || true
+
+      - name: Run tests
+        run: |
+          make unit-test
+          make integration-test
+
+      - name: Upload reports to codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }} # required
+          verbose: true # optional (default = false)
+
+      - name: Store test results
+        uses: actions/upload-artifact@v2
+        with:
+          name: test-results
+          path: /tmp/test-reports

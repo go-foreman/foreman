@@ -290,7 +290,7 @@ type ResponseError struct {
 	status int
 }
 
-//Status returns http status code
+// Status returns http status code
 func (e ResponseError) Status() int {
 	return e.status
 }

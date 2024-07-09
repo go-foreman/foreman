@@ -11,8 +11,8 @@ import (
 
 //go:generate mockgen --build_flags=--mod=mod -destination ./context_mock_test.go -package saga . SagaContext
 
-//SagaContext is sealed interface due to deliver method, that takes all dispatched deliveries and start sending out them
-//Still its' not decided if this interface users should be able to implement
+// SagaContext is sealed interface due to deliver method, that takes all dispatched deliveries and start sending out them
+// Still its' not decided if this interface users should be able to implement
 type SagaContext interface {
 	//execution.MessageExecutionCtx
 	Message() *message.ReceivedMessage
@@ -37,28 +37,28 @@ type sagaCtx struct {
 	deliveries   []*Delivery
 }
 
-func (s sagaCtx) Message() *message.ReceivedMessage {
+func (s *sagaCtx) Message() *message.ReceivedMessage {
 	return s.execCtx.Message()
 }
 
-func (s sagaCtx) Context() context.Context {
+func (s *sagaCtx) Context() context.Context {
 	return s.execCtx.Context()
 }
 
-func (s sagaCtx) Valid() bool {
+func (s *sagaCtx) Valid() bool {
 	return s.execCtx.Valid()
 }
 
-func (s sagaCtx) Return(options ...endpoint.DeliveryOption) error {
+func (s *sagaCtx) Return(options ...endpoint.DeliveryOption) error {
 	s.Logger().Log(log.InfoLevel, "returning saga event")
 	return s.execCtx.Return(options...)
 }
 
-func (s sagaCtx) Logger() log.Logger {
+func (s *sagaCtx) Logger() log.Logger {
 	return s.logger
 }
 
-func (s sagaCtx) SagaInstance() Instance {
+func (s *sagaCtx) SagaInstance() Instance {
 	return s.sagaInstance
 }
 
@@ -69,7 +69,7 @@ func (s *sagaCtx) Dispatch(toDeliver message.Object, options ...endpoint.Deliver
 	})
 }
 
-func (s sagaCtx) Deliveries() []*Delivery {
+func (s *sagaCtx) Deliveries() []*Delivery {
 	return s.deliveries
 }
 

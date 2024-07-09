@@ -145,7 +145,7 @@ func (h SagaControlHandler) Handle(execCtx execution.MessageExecutionCtx) error 
 	return h.store.Update(ctx, sagaInstance)
 }
 
-//saga is map[string]interface{} on this step
+// saga is map[string]interface{} on this step
 func (h SagaControlHandler) createSaga(startCmd *contracts.StartSagaCommand) (sagaPkg.Instance, error) {
 	if startCmd.SagaUID == "" {
 		return nil, errors.Errorf("sagaId is empty")

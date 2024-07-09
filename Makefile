@@ -25,7 +25,7 @@ tools:
 	go install github.com/sonatype-nexus-community/nancy@latest
 	go install github.com/golang/mock/mockgen@v1.6.0
 	## using wget because go get is not working for 1.40.1
-	wget -O- -nv https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | BINDIR=${GOPATH}/bin sh -s v1.46.2
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.59.1
 
 .PHONY: docker-start
 docker-start:
@@ -75,7 +75,7 @@ lint:
 
 .PHONY: lint-report
 lint-report:
-	golangci-lintgolangci-lint run -v --issues-exit-code=0 --out-format checkstyle > lint-report.xml
+	golangci-lint run -v --issues-exit-code=0 --out-format checkstyle > lint-report.xml
 
 .PHONY: create_reports_dir
 create_reports_dir:

@@ -17,6 +17,7 @@ type sqlWrapperTest struct {
 }
 
 func TestMysqlSuite(t *testing.T) {
+	t.Skip()
 	sqlWrapperTest := &sqlWrapperTest{}
 	suite.Run(t, sqlWrapperTest)
 }

@@ -7,7 +7,7 @@ import (
 	"sync"
 )
 
-//DefaultLogger returns an implementation of logger for MessageBus, used by default if other isn't specified
+// DefaultLogger returns an implementation of logger for MessageBus, used by default if other isn't specified
 func DefaultLogger(out io.Writer) Logger {
 	l := &defaultLogger{mutex: &sync.Mutex{}, out: out, level: InfoLevel}
 	l.internalLogger = l.createInternalLogger(out)

@@ -45,6 +45,7 @@ func TestMessageExecutionCtx_Send(t *testing.T) {
 
 		receivedMessage := message.NewReceivedMessage("123", &someTestType{}, message.Headers{}, time.Now(), "bus")
 		outcomingMsg := message.NewOutcomingMessage(&someTestType{})
+		ctx := context.Background()
 
 		testRouter.
 			EXPECT().
@@ -52,7 +53,7 @@ func TestMessageExecutionCtx_Send(t *testing.T) {
 			Return(nil).
 			Times(1)
 
-		execCtx := factory.CreateCtx(context.Background(), receivedMessage)
+		execCtx := factory.CreateCtx(ctx, receivedMessage)
 		err := execCtx.Send(outcomingMsg)
 		assert.NoError(t, err)
 
@@ -221,7 +222,7 @@ func TestMessageExecutionCtx(t *testing.T) {
 
 	execCtx := factory.CreateCtx(ctx, receivedMessage)
 
-	assert.Same(t, execCtx.Context(), ctx)
+	assert.Equal(t, execCtx.Context(), ctx)
 	assert.Same(t, execCtx.Logger(), testLogger)
 	assert.True(t, execCtx.Valid())
 	assert.Same(t, execCtx.Message(), receivedMessage)

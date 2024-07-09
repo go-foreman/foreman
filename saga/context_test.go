@@ -36,7 +36,7 @@ func TestSagaContext(t *testing.T) {
 	msgExecCtxMock.EXPECT().Context().Return(runningCtx)
 
 	ctx := sagaCtx.Context()
-	assert.Same(t, ctx, runningCtx)
+	assert.Equal(t, ctx, runningCtx)
 	assert.Same(t, loggerMock, sagaCtx.Logger())
 
 	msgExecCtxMock.EXPECT().Valid().Return(true)

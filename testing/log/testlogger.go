@@ -11,7 +11,7 @@ import (
 	"github.com/go-foreman/foreman/log"
 )
 
-//NewNilLogger is used mostly in testing, prints nothing
+// NewNilLogger is used mostly in testing, prints nothing
 func NewNilLogger() *TestLogger {
 	return &TestLogger{entriesStore: &entriesStore{}, mutex: &sync.Mutex{}, level: log.InfoLevel}
 }

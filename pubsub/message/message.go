@@ -120,7 +120,7 @@ func (m OutcomingMessage) Payload() Object {
 	return m.obj
 }
 
-//NewOutcomingMessage accepts only structs as payload. If you want to pass scalar data type - wrap it in a struct.
+// NewOutcomingMessage accepts only structs as payload. If you want to pass scalar data type - wrap it in a struct.
 func NewOutcomingMessage(payload Object, passedOptions ...MsgOption) *OutcomingMessage {
 	opts := &opts{}
 

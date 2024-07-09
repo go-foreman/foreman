@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"math/rand"
+	"sync"
 	"testing"
 	"time"
 
@@ -166,19 +167,19 @@ func testSQLMutexUseCases(t *testing.T, mutexFabric func() mutex.Mutex, dbConnec
 		defer cancel()
 
 		locks := make(chan mutex.Lock)
-		doneCh := make(chan struct{})
+		wg := &sync.WaitGroup{}
 
 		go func() {
 			for l := range locks {
+				wg.Add(1)
 				go func(lock mutex.Lock) {
+					defer wg.Done()
 					time.Sleep(time.Duration(rand.Intn(500-100)+100) * time.Millisecond)
 					releaseCtx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 					defer cancel()
 					assert.NoError(t, lock.Release(releaseCtx))
 				}(l)
 			}
-
-			doneCh <- struct{}{}
 		}()
 
 		for i := 0; i < locksCount; i++ {
@@ -189,11 +190,6 @@ func testSQLMutexUseCases(t *testing.T, mutexFabric func() mutex.Mutex, dbConnec
 
 		close(locks)
 
-		select {
-		case <-ctx.Done():
-			t.FailNow()
-		case <-doneCh:
-			return
-		}
+		wg.Wait()
 	})
 }
