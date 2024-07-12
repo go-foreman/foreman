@@ -43,7 +43,6 @@ linters-settings:
 
 issues:
   exclude-dirs:
-    - pkg/kubernetes/fabric
     - testing/mocks
   max-same-issues: 0
   max-issues-per-linter: 0
