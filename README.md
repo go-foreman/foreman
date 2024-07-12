@@ -1,4 +1,4 @@
-[![go-foreman](https://circleci.com/gh/go-foreman/foreman.svg?style=shield)](https://app.circleci.com/pipelines/github/go-foreman)
+![CI](https://github.com/go-foreman/foreman/actions/workflows/ci.yaml/badge.svg)
 [![codecov](https://codecov.io/gh/go-foreman/foreman/branch/master/graph/badge.svg?token=CLU9K2QJVE)](https://codecov.io/gh/go-foreman/foreman)
 
 # Foreman
