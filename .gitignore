@@ -19,3 +19,4 @@ lint-report.xml
 .DS_Store
 .svn
 examples
+.claude

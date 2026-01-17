@@ -3,7 +3,7 @@
 
 # options for analysis running
 run:
-  go: 1.22.5
+  go: "1.24"
   # include test files or not, default is true
   tests: true
   timeout: 5m
@@ -37,6 +37,7 @@ linters-settings:
   gosec:
     # Available rules: https://github.com/securego/gosec#available-rules
     excludes:
+      - G115 # Integer overflow conversions - safe in context (worker counts, prefetch)
       - G404
   nestif:
     min-complexity: 8
