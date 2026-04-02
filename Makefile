@@ -24,7 +24,7 @@ ENV_LOCAL_TEST=\
 tools:
 	go install github.com/sonatype-nexus-community/nancy@latest
 	go install github.com/golang/mock/mockgen@v1.6.0
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.6
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.4
 
 .PHONY: docker-start
 docker-start:

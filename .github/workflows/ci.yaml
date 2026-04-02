@@ -20,7 +20,9 @@ jobs:
           make tools
 
       - name: Lint
-        run: golangci-lint run -v
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.11.4
 
       - name: Check dependencies for vulnerabilities
         run: make check-mods || true

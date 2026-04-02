@@ -1,0 +1,59 @@
+# This file contains all available configuration options
+# with their default values.
+
+# options for analysis running
+run:
+  go: "1.24"
+  # include test files or not, default is true
+  tests: true
+  timeout: 5m
+
+  # Allow multiple parallel golangci-lint instances running.
+  # If false (default) - golangci-lint acquires file lock on start.
+  allow-parallel-runners: false
+
+#issue:
+#  exclude-use-default: false
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - goimports
+    - typecheck
+    - gofmt
+    - misspell
+    - nestif
+    - sqlclosecheck
+    - gosec
+  disable-all: true
+
+#em, not sure it's needed for every lint though... I'll check it later :)
+linters-settings:
+  gosec:
+    # Available rules: https://github.com/securego/gosec#available-rules
+    excludes:
+      - G115 # Integer overflow conversions - safe in context (worker counts, prefetch)
+      - G404
+  nestif:
+    min-complexity: 8
+
+issues:
+  exclude-dirs:
+    - testing/mocks
+  max-same-issues: 0
+  max-issues-per-linter: 0
+  # Excluding configuration per-path, per-linter, per-text and per-source
+  exclude-rules:
+    # Exclude some staticcheck messages
+    - linters:
+        - staticcheck
+      text: "SA1019:"
+    # Exclude some linters from running on tests files.
+#    - path: \.go
+#      linters:
+#        - typecheck
