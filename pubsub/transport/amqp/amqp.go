@@ -97,6 +97,10 @@ func (t *amqpTransport) CreateQueue(ctx context.Context, q transport.Queue, qbs 
 		}
 	}
 
+	if queue.singleActiveConsumer {
+		table["x-single-active-consumer"] = true
+	}
+
 	if _, err := t.publishingChannel.QueueDeclare(
 		queue.Name(),
 		queue.durable,

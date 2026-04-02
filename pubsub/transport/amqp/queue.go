@@ -17,6 +17,12 @@ func WithQueueType(v QueueType) QueueOptionsPatch {
 	}
 }
 
+func WithSingleActiveConsumer() QueueOptionsPatch {
+	return func(options *amqpQueue) {
+		options.singleActiveConsumer = true
+	}
+}
+
 func Queue(name string, durable, autoDelete, exclusive, noWait bool, patches ...QueueOptionsPatch) transport.Queue {
 	q := amqpQueue{
 		queueName:  name,
@@ -34,12 +40,13 @@ func Queue(name string, durable, autoDelete, exclusive, noWait bool, patches ...
 }
 
 type amqpQueue struct {
-	queueName  string
-	queueType  QueueType
-	durable    bool
-	autoDelete bool
-	exclusive  bool
-	noWait     bool
+	queueName            string
+	queueType            QueueType
+	durable              bool
+	autoDelete           bool
+	exclusive            bool
+	noWait               bool
+	singleActiveConsumer bool
 }
 
 func (q amqpQueue) Name() string {
