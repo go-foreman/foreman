@@ -25,7 +25,7 @@ jobs:
           version: v2.11.4
 
       - name: Check dependencies for vulnerabilities
-        run: make check-mods || true
+        run: make check-mods
 
       - name: Run tests
         run: |

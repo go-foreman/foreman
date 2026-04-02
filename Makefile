@@ -22,7 +22,7 @@ ENV_LOCAL_TEST=\
 
 .PHONY: tools
 tools:
-	go install github.com/sonatype-nexus-community/nancy@latest
+	go install golang.org/x/vuln/cmd/govulncheck@latest
 	go install github.com/golang/mock/mockgen@v1.6.0
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11.4
 
@@ -86,7 +86,7 @@ mod-download:
 
 .PHONY: check-mods
 check-mods:
-	go list -json -m all | nancy sleuth
+	govulncheck ./...
 
 .PHONY: generate
 generate:
