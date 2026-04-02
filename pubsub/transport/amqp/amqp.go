@@ -84,17 +84,13 @@ func (t *amqpTransport) CreateQueue(ctx context.Context, q transport.Queue, qbs 
 		queueBinds = append(queueBinds, queueBind)
 	}
 
-	var table amqp.Table
+	table := amqp.Table{}
 
 	switch queue.queueType {
 	case QueueTypeQuorum:
-		table = amqp.Table{
-			"x-queue-type": "quorum",
-		}
+		table["x-queue-type"] = "quorum"
 	case QueueTypeClassic:
-		table = amqp.Table{
-			"x-queue-type": "classic",
-		}
+		table["x-queue-type"] = "classic"
 	}
 
 	if queue.singleActiveConsumer {
