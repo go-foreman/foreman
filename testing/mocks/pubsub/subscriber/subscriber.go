@@ -36,7 +36,7 @@ func (m *MockSubscriber) EXPECT() *MockSubscriberMockRecorder {
 }
 
 // Run mocks base method.
-func (m *MockSubscriber) Run(arg0 context.Context, arg1 ...transport.Queue) error {
+func (m *MockSubscriber) Run(arg0 context.Context, arg1 ...transport.ConsumableQueueGroup) error {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{arg0}
 	for _, a := range arg1 {

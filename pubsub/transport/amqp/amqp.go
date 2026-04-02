@@ -21,7 +21,7 @@ func NewTransport(conn UnderlyingConnection, logger log.Logger) transport.Transp
 			chReconnectionDelay: delay,
 		},
 		mutex:             &sync.Mutex{},
-		consumingChannels: map[AmqpChannel]struct{}{},
+		consumingChannels: make(map[string]AmqpChannel),
 		logger:            logger,
 	}
 }
@@ -30,7 +30,7 @@ type amqpTransport struct {
 	connection        AmqpConnection
 	publishingChannel AmqpChannel
 	mutex             *sync.Mutex
-	consumingChannels map[AmqpChannel]struct{}
+	consumingChannels map[string]AmqpChannel
 	logger            log.Logger
 }
 
@@ -157,115 +157,127 @@ func (t *amqpTransport) Send(ctx context.Context, outboundPkg transport.Outbound
 	return nil
 }
 
-func (t *amqpTransport) Consume(ctx context.Context, queues []transport.Queue, options ...transport.ConsumeOpt) (<-chan transport.IncomingPkg, error) {
+func (t *amqpTransport) Consume(ctx context.Context, groups ...transport.ConsumableQueueGroup) (<-chan transport.IncomingPkg, error) {
 	if err := t.checkConnection(); err != nil {
 		return nil, errors.WithStack(err)
 	}
 
-	consumingChannel, err := t.connection.Channel()
-	if err != nil {
-		return nil, errors.WithStack(err)
-	}
-
-	t.mutex.Lock()
-	t.consumingChannels[consumingChannel] = struct{}{}
-	t.mutex.Unlock()
-
-	consumeOptions := &consumeOptions{}
-
-	for _, opt := range options {
-		if err := opt(consumeOptions); err != nil {
-			return nil, errors.WithStack(err)
-		}
-	}
-
-	if consumeOptions.PrefetchCount > 0 {
-		if err := consumingChannel.Qos(int(consumeOptions.PrefetchCount), 0, false); err != nil {
-			return nil, errors.WithStack(err)
-		}
-	}
-
-	income := make(chan transport.IncomingPkg)
-
 	consumersWait := &sync.WaitGroup{}
-
-	consumersCtx, cancelConsumers := context.WithCancel(ctx) //nolint:govet
-
+	income := make(chan transport.IncomingPkg)
+	consumersCtx, cancelConsumers := context.WithCancel(ctx)
 	var consumersErr error
+	success := false
+	defer func() {
+		if !success {
+			cancelConsumers()
+		}
+	}()
 
-	for _, q := range queues {
-		consumingCh, err := consumingChannel.Consume(
-			q.Name(),
-			q.Name(),
-			false,
-			consumeOptions.Exclusive,
-			consumeOptions.NoLocal,
-			consumeOptions.NoWait,
-			nil,
-		)
+	var groupKeys []string
 
+	for _, group := range groups {
+		consumingChannel, err := t.connection.Channel()
 		if err != nil {
-			cancelConsumers() // this will shut down all goroutines previously created in this loop
-			consumersErr = errors.Wrapf(err, "consuming %s", q.Name())
-			break
+			return nil, errors.WithStack(err)
 		}
 
-		consumersWait.Add(1)
+		groupKeys = append(groupKeys, group.String())
 
-		go func(consumersCtx context.Context, queue transport.Queue, deliveries <-chan amqp.Delivery) {
-			defer consumersWait.Done()
+		t.mutex.Lock()
+		t.consumingChannels[group.String()] = consumingChannel
+		t.mutex.Unlock()
 
-			defer func() {
-				t.logger.Logf(log.InfoLevel, "canceling consumer %s", queue.Name())
-				if err := consumingChannel.Cancel(queue.Name(), false); err != nil {
-					t.logger.Logf(log.ErrorLevel, "error canceling consumer %s. %s", queue.Name(), err)
-				} else {
-					t.logger.Logf(log.InfoLevel, "canceled consumer %s", queue.Name())
-				}
-			}()
+		opts := &consumeOptions{}
 
-			for {
-				select {
-				case msg, open := <-deliveries:
-					if !open {
-						t.logger.Logf(log.WarnLevel, "amqp consumer closed channel for queue %s", queue.Name())
+		for _, opt := range group.Opts() {
+			if err := opt(opts); err != nil {
+				return nil, errors.WithStack(err)
+			}
+		}
+
+		if opts.PrefetchCount > 0 {
+			if err := consumingChannel.Qos(int(opts.PrefetchCount), 0, false); err != nil {
+				return nil, errors.WithStack(err)
+			}
+		}
+
+		for _, q := range group.Queues() {
+			consumingCh, err := consumingChannel.Consume(
+				q.Name(),
+				q.Name(),
+				false,
+				opts.Exclusive,
+				opts.NoLocal,
+				opts.NoWait,
+				nil,
+			)
+
+			if err != nil {
+				cancelConsumers() // this will shut down all goroutines previously created in this loop
+				consumersErr = errors.Wrapf(err, "consuming %s", q.Name())
+				break
+			}
+
+			consumersWait.Add(1)
+
+			go func(consumersCtx context.Context, queue transport.Queue, deliveries <-chan amqp.Delivery) {
+				defer consumersWait.Done()
+
+				defer func() {
+					t.logger.Logf(log.InfoLevel, "canceling consumer %s", queue.Name())
+					if err := consumingChannel.Cancel(queue.Name(), false); err != nil {
+						t.logger.Logf(log.ErrorLevel, "error canceling consumer %s. %s", queue.Name(), err)
+					} else {
+						t.logger.Logf(log.InfoLevel, "canceled consumer %s", queue.Name())
+					}
+				}()
+
+				for {
+					select {
+					case msg, open := <-deliveries:
+						if !open {
+							t.logger.Logf(log.WarnLevel, "amqp consumer closed channel for queue %s", queue.Name())
+							return
+						}
+
+						select {
+						case income <- &inAmqpPkg{origin: queue.Name(), receivedAt: time.Now(), delivery: &delivery{msg: &msg}}:
+						case <-consumersCtx.Done():
+							break
+						}
+					case <-consumersCtx.Done():
+						t.logger.Logf(log.WarnLevel, "canceled context. Stopped consuming queue %s", queue.Name())
 						return
 					}
-
-					select {
-					case income <- &inAmqpPkg{origin: queue.Name(), receivedAt: time.Now(), delivery: &delivery{msg: &msg}}:
-					case <-consumersCtx.Done():
-						break
-					}
-				case <-consumersCtx.Done():
-					t.logger.Logf(log.WarnLevel, "canceled context. Stopped consuming queue %s", queue.Name())
-					return
 				}
-			}
-		}(consumersCtx, q, consumingCh)
+			}(consumersCtx, q, consumingCh)
+		}
 	}
 
 	go func() {
 		consumersWait.Wait()
 		close(income)
 
-		if err := consumingChannel.Close(); err != nil {
-			t.logger.Logf(log.ErrorLevel, "error closing amqp channel. %s", err)
-		} else {
-			t.logger.Log(log.InfoLevel, "closed consumer channel")
-		}
-
 		t.mutex.Lock()
-		delete(t.consumingChannels, consumingChannel)
+		for _, key := range groupKeys {
+			if ch, ok := t.consumingChannels[key]; ok {
+				if err := ch.Close(); err != nil {
+					t.logger.Logf(log.ErrorLevel, "error closing amqp channel for group %s. %s", key, err)
+				} else {
+					t.logger.Logf(log.InfoLevel, "closed consumer channel for group %s", key)
+				}
+				delete(t.consumingChannels, key)
+			}
+		}
 		t.mutex.Unlock()
 	}()
 
 	if consumersErr != nil {
-		cancelConsumers()
 		return nil, consumersErr
 	}
 
-	return income, nil //nolint:govet
+	success = true
+	return income, nil
 }
 
 func (t *amqpTransport) Disconnect(ctx context.Context) error {
@@ -280,10 +292,11 @@ func (t *amqpTransport) Disconnect(ctx context.Context) error {
 
 	t.mutex.Lock()
 
-	for ch := range t.consumingChannels {
+	for key, ch := range t.consumingChannels {
 		if err := ch.Close(); err != nil {
 			return errors.Wrap(err, "closing one of consuming channels")
 		}
+		delete(t.consumingChannels, key)
 	}
 
 	t.mutex.Unlock()

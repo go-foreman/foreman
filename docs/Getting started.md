@@ -94,7 +94,7 @@ bus.Dispatcher().SubscribeForEvent(&SomeEvent{}, h.handleSomeEvent)
 bus.Router().RegisterEndpoint(amqpEndpoint, &SomeEvent{}, &SomeCommand{})
 ```
 
-And start the subscriber `bus.Subscriber().Run(ctx, queue)`
+And start the subscriber `bus.Subscriber().Run(ctx, transport.NewConsumableQueueGroup([]transport.Queue{queue}))`
 
 Handlers & messages
 

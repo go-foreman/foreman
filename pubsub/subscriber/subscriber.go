@@ -19,7 +19,7 @@ import (
 // Subscriber starts listening for queues and processes messages
 type Subscriber interface {
 	// Run listens queues for packages and processes them. Gracefully shuts down either on os.Signal or ctx.Done()
-	Run(ctx context.Context, queues ...transport.Queue) error
+	Run(ctx context.Context, groups ...transport.ConsumableQueueGroup) error
 }
 
 // Config allows to configure subscriber workflow
@@ -42,8 +42,7 @@ var DefaultConfig = Config{
 }
 
 type subscriberOpts struct {
-	config      *Config
-	consumeOpts []transport.ConsumeOpt
+	config *Config
 }
 
 type Opt func(o *subscriberOpts)
@@ -51,12 +50,6 @@ type Opt func(o *subscriberOpts)
 func WithConfig(c *Config) Opt {
 	return func(o *subscriberOpts) {
 		o.config = c
-	}
-}
-
-func WithConsumeOpts(opts ...transport.ConsumeOpt) Opt {
-	return func(o *subscriberOpts) {
-		o.consumeOpts = opts
 	}
 }
 
@@ -89,8 +82,8 @@ type subscriber struct {
 	opts             *subscriberOpts
 }
 
-func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
-	s.logger.Logf(log.InfoLevel, "Started subscriber. Listening to queues: %v", queues)
+func (s *subscriber) Run(ctx context.Context, groups ...transport.ConsumableQueueGroup) error {
+	s.logger.Logf(log.InfoLevel, "Started subscriber. Listening to groups: %v", groups)
 
 	ctx, cancelSignal := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer cancelSignal()
@@ -99,7 +92,7 @@ func (s *subscriber) Run(ctx context.Context, queues ...transport.Queue) error {
 
 	consumerCtx, cancelConsumerCtx := context.WithCancel(ctx)
 
-	consumedPkgs, err := s.transport.Consume(consumerCtx, queues, s.opts.consumeOpts...)
+	consumedPkgs, err := s.transport.Consume(consumerCtx, groups...)
 
 	if err != nil {
 		cancelConsumerCtx()

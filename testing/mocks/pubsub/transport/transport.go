@@ -36,10 +36,10 @@ func (m *MockTransport) EXPECT() *MockTransportMockRecorder {
 }
 
 // Consume mocks base method.
-func (m *MockTransport) Consume(arg0 context.Context, arg1 []transport.Queue, arg2 ...transport.ConsumeOpt) (<-chan transport.IncomingPkg, error) {
+func (m *MockTransport) Consume(arg0 context.Context, arg1 ...transport.ConsumableQueueGroup) (<-chan transport.IncomingPkg, error) {
 	m.ctrl.T.Helper()
-	varargs := []interface{}{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []interface{}{arg0}
+	for _, a := range arg1 {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Consume", varargs...)
@@ -49,9 +49,9 @@ func (m *MockTransport) Consume(arg0 context.Context, arg1 []transport.Queue, ar
 }
 
 // Consume indicates an expected call of Consume.
-func (mr *MockTransportMockRecorder) Consume(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+func (mr *MockTransportMockRecorder) Consume(arg0 interface{}, arg1 ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{arg0, arg1}, arg2...)
+	varargs := append([]interface{}{arg0}, arg1...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Consume", reflect.TypeOf((*MockTransport)(nil).Consume), varargs...)
 }
 

@@ -373,8 +373,8 @@ func TestAmqpTransport(t *testing.T) {
 				connection:        connMock,
 				publishingChannel: channMock,
 				mutex:             &sync.Mutex{},
-				consumingChannels: map[AmqpChannel]struct{}{
-					additionalChMock: {},
+				consumingChannels: map[string]AmqpChannel{
+					"test": additionalChMock,
 				},
 				logger: testLogger,
 			}
@@ -401,8 +401,8 @@ func TestAmqpTransport(t *testing.T) {
 				connection:        connMock,
 				publishingChannel: channMock,
 				mutex:             &sync.Mutex{},
-				consumingChannels: map[AmqpChannel]struct{}{
-					additionalChMock: {},
+				consumingChannels: map[string]AmqpChannel{
+					"test": additionalChMock,
 				},
 				logger: testLogger,
 			}
@@ -428,8 +428,9 @@ func TestAmqpTransport(t *testing.T) {
 
 			transport := amqpTransport{
 				connection:        connMock,
+				publishingChannel: channMock,
 				mutex:             &sync.Mutex{},
-				consumingChannels: map[AmqpChannel]struct{}{},
+				consumingChannels: make(map[string]AmqpChannel),
 				logger:            testLogger,
 			}
 
@@ -449,7 +450,7 @@ func TestAmqpTransport(t *testing.T) {
 			connMock.
 				EXPECT().
 				Channel().
-				Return(channMock, nil).Times(2)
+				Return(channMock, nil)
 
 			channMock.
 				EXPECT().
@@ -477,14 +478,15 @@ func TestAmqpTransport(t *testing.T) {
 				Close().
 				Return(nil)
 
-			packagesChan, err := transport.Consume(
-				ctx,
+			group := transportMain.NewConsumableQueueGroup(
 				[]transportMain.Queue{q1, q2},
 				WithNoLocal(),
 				WithQosPrefetchCount(100),
 				WithExclusive(),
 				WithNoWait(),
 			)
+
+			packagesChan, err := transport.Consume(ctx, group)
 
 			assert.NoError(t, err)
 
@@ -501,7 +503,7 @@ func TestAmqpTransport(t *testing.T) {
 				if !firstPackageDone {
 					transport.mutex.Lock()
 					// once all consume goroutines started need to verify that consuming channel is recorded in the map. Need to verify just once, but at each package is also fine.
-					assert.Contains(t, transport.consumingChannels, channMock)
+					assert.Contains(t, transport.consumingChannels, group.String())
 					transport.mutex.Unlock()
 					firstPackageDone = true
 				}
@@ -519,7 +521,10 @@ func TestAmqpTransport(t *testing.T) {
 			testLogger.AssertContainsSubstr(t, fmt.Sprintf("canceled consumer %s", q1.Name()))
 			testLogger.AssertContainsSubstr(t, fmt.Sprintf("canceled consumer %s", q2.Name()))
 
-			testLogger.AssertContainsSubstr(t, "closed consumer channel")
+			// wait for cleanup goroutine to finish closing channels after income is closed
+			time.Sleep(time.Millisecond * 200)
+
+			testLogger.AssertContainsSubstr(t, fmt.Sprintf("closed consumer channel for group %s", group.String()))
 
 			transport.mutex.Lock()
 			assert.Empty(t, transport.consumingChannels)
@@ -531,8 +536,9 @@ func TestAmqpTransport(t *testing.T) {
 
 			transport := amqpTransport{
 				connection:        connMock,
+				publishingChannel: channMock,
 				mutex:             &sync.Mutex{},
-				consumingChannels: map[AmqpChannel]struct{}{},
+				consumingChannels: make(map[string]AmqpChannel),
 				logger:            testLogger,
 			}
 
@@ -550,7 +556,7 @@ func TestAmqpTransport(t *testing.T) {
 			connMock.
 				EXPECT().
 				Channel().
-				Return(channMock, nil).Times(2)
+				Return(channMock, nil)
 
 			channMock.
 				EXPECT().
@@ -570,9 +576,11 @@ func TestAmqpTransport(t *testing.T) {
 				Close().
 				Return(errors.New("error Close()"))
 
+			group := transportMain.NewConsumableQueueGroup([]transportMain.Queue{q1, q2})
+
 			packagesChan, err := transport.Consume(
 				ctx,
-				[]transportMain.Queue{q1, q2},
+				group,
 			)
 
 			assert.Error(t, err)
@@ -585,7 +593,7 @@ func TestAmqpTransport(t *testing.T) {
 			testLogger.AssertContainsSubstr(t, fmt.Sprintf("canceled context. Stopped consuming queue %s", q1.Name()))
 			testLogger.AssertContainsSubstr(t, fmt.Sprintf("canceling consumer %s", q1.Name()))
 			testLogger.AssertContainsSubstr(t, fmt.Sprintf("error canceling consumer %s. error Cancel(q1)", q1.Name()))
-			testLogger.AssertContainsSubstr(t, "error closing amqp channel. error Close()")
+			testLogger.AssertContainsSubstr(t, fmt.Sprintf("error closing amqp channel for group %s. error Close()", group.String()))
 		})
 
 		t.Run("error creating consuming channel", func(t *testing.T) {
@@ -595,7 +603,7 @@ func TestAmqpTransport(t *testing.T) {
 				connection:        connMock,
 				publishingChannel: channMock,
 				mutex:             &sync.Mutex{},
-				consumingChannels: map[AmqpChannel]struct{}{},
+				consumingChannels: make(map[string]AmqpChannel),
 				logger:            testLogger,
 			}
 
@@ -609,9 +617,11 @@ func TestAmqpTransport(t *testing.T) {
 				Channel().
 				Return(nil, errors.New("some error"))
 
+			group := transportMain.NewConsumableQueueGroup([]transportMain.Queue{q1})
+
 			packagesChan, err := transport.Consume(
 				ctx,
-				[]transportMain.Queue{q1},
+				group,
 			)
 
 			assert.Error(t, err)

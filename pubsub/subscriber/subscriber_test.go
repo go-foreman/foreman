@@ -37,22 +37,15 @@ func TestSubscriber(t *testing.T) {
 		queues := []transport.Queue{
 			amqp.Queue("first", false, false, false, false),
 		}
+		group := transport.NewConsumableQueueGroup(queues, amqp.WithQosPrefetchCount(100))
+
 		testTransport.
 			EXPECT().
-			Consume(gomock.Any(), queues, gomock.AssignableToTypeOf([]transport.ConsumeOpt{})).
-			Do(func(ctx context.Context, queues []transport.Queue, options ...transport.ConsumeOpt) {
-				if queues[0].Name() != "first" {
-					panic("queue name is not equal")
-				}
-
-				if len(options) != 1 {
-					panic("Consume expects exactly one option")
-				}
-			}).
+			Consume(gomock.Any(), group).
 			Return(nil, errors.New("consume err"))
 
-		subscriber := NewSubscriber(testTransport, testProcessor, testLogger, WithConsumeOpts(amqp.WithQosPrefetchCount(100)))
-		err := subscriber.Run(ctx, queues...)
+		subscriber := NewSubscriber(testTransport, testProcessor, testLogger)
+		err := subscriber.Run(ctx, group)
 		assert.Error(t, err)
 		assert.EqualError(t, err, "consume err")
 
@@ -65,12 +58,13 @@ func TestSubscriber(t *testing.T) {
 		queues := []transport.Queue{
 			amqp.Queue("second", false, false, false, false),
 		}
+		group := transport.NewConsumableQueueGroup(queues)
 
 		respChan := make(chan transport.IncomingPkg)
 
 		testTransport.
 			EXPECT().
-			Consume(gomock.Any(), queues).
+			Consume(gomock.Any(), group).
 			Return(respChan, nil)
 
 		config := &Config{
@@ -83,7 +77,7 @@ func TestSubscriber(t *testing.T) {
 		subscriber := NewSubscriber(testTransport, testProcessor, testLogger, WithConfig(config))
 
 		go func() {
-			err := subscriber.Run(ctx, queues...)
+			err := subscriber.Run(ctx, group)
 			assert.NoError(t, err)
 		}()
 
@@ -102,6 +96,7 @@ func TestSubscriber(t *testing.T) {
 		queues := []transport.Queue{
 			amqp.Queue("third", false, false, false, false),
 		}
+		group := transport.NewConsumableQueueGroup(queues)
 		subscriber := NewSubscriber(testTransport, testProcessor, testLogger)
 		ctx, cancel := context.WithCancel(context.Background())
 
@@ -111,14 +106,14 @@ func TestSubscriber(t *testing.T) {
 
 		testTransport.
 			EXPECT().
-			Consume(gomock.AssignableToTypeOf(ctx), queues).
+			Consume(gomock.AssignableToTypeOf(ctx), group).
 			Return(pkgsChan, nil)
 
 		wg := &sync.WaitGroup{}
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := subscriber.Run(ctx, queues...); err != nil {
+			if err := subscriber.Run(ctx, group); err != nil {
 				assert.NoError(t, err)
 			}
 		}()
@@ -141,6 +136,7 @@ func TestSubscriber(t *testing.T) {
 		queues := []transport.Queue{
 			amqp.Queue("fourth", false, false, false, false),
 		}
+		group := transport.NewConsumableQueueGroup(queues)
 		subscriber := NewSubscriber(testTransport, testProcessor, testLogger, WithConfig(&Config{
 			WorkersCount:                   10,
 			WorkerWaitingAssignmentTimeout: time.Second * 3,
@@ -153,7 +149,7 @@ func TestSubscriber(t *testing.T) {
 
 		testTransport.
 			EXPECT().
-			Consume(gomock.AssignableToTypeOf(ctx), queues).
+			Consume(gomock.AssignableToTypeOf(ctx), group).
 			Return(pkgsChan, nil)
 
 		inPkg := transportMock.NewMockIncomingPkg(ctrl)
@@ -180,7 +176,7 @@ func TestSubscriber(t *testing.T) {
 			cancel()
 		}()
 
-		if err := subscriber.Run(ctx, queues...); err != nil {
+		if err := subscriber.Run(ctx, group); err != nil {
 			assert.NoError(t, err)
 		}
 
@@ -196,6 +192,7 @@ func TestSubscriber(t *testing.T) {
 		queues := []transport.Queue{
 			amqp.Queue("fifth", false, false, false, false),
 		}
+		group := transport.NewConsumableQueueGroup(queues)
 		subscriber := NewSubscriber(testTransport, testProcessor, testLogger, WithConfig(&Config{
 			WorkersCount:                   10,
 			WorkerWaitingAssignmentTimeout: time.Second * 3,
@@ -208,7 +205,7 @@ func TestSubscriber(t *testing.T) {
 
 		testTransport.
 			EXPECT().
-			Consume(gomock.AssignableToTypeOf(ctx), queues).
+			Consume(gomock.AssignableToTypeOf(ctx), group).
 			Return(pkgsChan, nil)
 
 		for i := 0; i < 10; i++ {
@@ -235,7 +232,7 @@ func TestSubscriber(t *testing.T) {
 			cancel()
 		}()
 
-		if err := subscriber.Run(ctx, queues...); err != nil {
+		if err := subscriber.Run(ctx, group); err != nil {
 			assert.NoError(t, err)
 		}
 
@@ -252,6 +249,7 @@ func TestSubscriber(t *testing.T) {
 		queues := []transport.Queue{
 			amqp.Queue("sixth", false, false, false, false),
 		}
+		group := transport.NewConsumableQueueGroup(queues)
 		subscriber := NewSubscriber(testTransport, testProcessor, testLogger, WithConfig(&Config{
 			WorkersCount:                   10,
 			WorkerWaitingAssignmentTimeout: time.Second * 3,
@@ -264,7 +262,7 @@ func TestSubscriber(t *testing.T) {
 
 		testTransport.
 			EXPECT().
-			Consume(gomock.AssignableToTypeOf(ctx), queues).
+			Consume(gomock.AssignableToTypeOf(ctx), group).
 			Return(pkgsChan, nil)
 
 		for i := 0; i < 10; i++ {
@@ -287,7 +285,7 @@ func TestSubscriber(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := subscriber.Run(ctx, queues...); err != nil {
+			if err := subscriber.Run(ctx, group); err != nil {
 				assert.NoError(t, err)
 			}
 		}()
@@ -312,6 +310,7 @@ func TestSubscriber(t *testing.T) {
 		queues := []transport.Queue{
 			amqp.Queue("seventh", false, false, false, false),
 		}
+		group := transport.NewConsumableQueueGroup(queues)
 		subscriber := NewSubscriber(testTransport, testProcessor, testLogger, WithConfig(&Config{
 			WorkersCount:                   10,
 			WorkerWaitingAssignmentTimeout: time.Second * 3,
@@ -324,7 +323,7 @@ func TestSubscriber(t *testing.T) {
 
 		testTransport.
 			EXPECT().
-			Consume(gomock.AssignableToTypeOf(ctx), queues).
+			Consume(gomock.AssignableToTypeOf(ctx), group).
 			Return(pkgsChan, nil)
 
 		inPkg := transportMock.NewMockIncomingPkg(ctrl)
@@ -342,7 +341,7 @@ func TestSubscriber(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := subscriber.Run(ctx, queues...); err != nil {
+			if err := subscriber.Run(ctx, group); err != nil {
 				assert.NoError(t, err)
 			}
 		}()
@@ -365,6 +364,7 @@ func TestSubscriber(t *testing.T) {
 		queues := []transport.Queue{
 			amqp.Queue("eights", false, false, false, false),
 		}
+		group := transport.NewConsumableQueueGroup(queues)
 		subscriber := NewSubscriber(testTransport, testProcessor, testLogger, WithConfig(&Config{
 			WorkersCount:                   10,
 			WorkerWaitingAssignmentTimeout: time.Second * 3,
@@ -378,14 +378,14 @@ func TestSubscriber(t *testing.T) {
 
 		testTransport.
 			EXPECT().
-			Consume(gomock.AssignableToTypeOf(ctx), queues).
+			Consume(gomock.AssignableToTypeOf(ctx), group).
 			Return(pkgsChan, nil)
 
 		wg := &sync.WaitGroup{}
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := subscriber.Run(ctx, queues...); err != nil {
+			if err := subscriber.Run(ctx, group); err != nil {
 				assert.NoError(t, err)
 			}
 		}()
