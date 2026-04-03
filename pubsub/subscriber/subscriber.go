@@ -145,8 +145,11 @@ func (s *subscriber) processPackage(ctx context.Context, inPkg transport.Incomin
 	s.logger.Logf(log.DebugLevel, "started processing package id %s", inPkg.UID())
 
 	if err := s.processor.Process(processorCtx, inPkg); err != nil {
-		s.logger.Logf(log.ErrorLevel, "error happened while processing pkg %s from %s. %s", inPkg.UID(), inPkg.Origin(), err)
+		s.logger.Logf(log.ErrorLevel, "error happened while processing pkg %s from %s. %s. Rejecting", inPkg.UID(), inPkg.Origin(), err)
 
+		if rejectErr := inPkg.Reject(); rejectErr != nil {
+			s.logger.Logf(log.ErrorLevel, "error rejecting pkg %s. %s", inPkg.UID(), rejectErr)
+		}
 		return
 	}
 

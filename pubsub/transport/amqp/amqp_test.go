@@ -118,7 +118,7 @@ func TestAmqpTransport(t *testing.T) {
 
 		channMock.
 			EXPECT().
-			QueueDeclare("queueName", true, true, true, true, nil).
+			QueueDeclare("queueName", true, true, true, true, amqp.Table{}).
 			Return(amqp.Queue{}, nil)
 
 		channMock.
@@ -141,7 +141,7 @@ func TestAmqpTransport(t *testing.T) {
 		t.Run("create queue with an error", func(t *testing.T) {
 			channMock.
 				EXPECT().
-				QueueDeclare("queueName", true, true, true, true, nil).
+				QueueDeclare("queueName", true, true, true, true, amqp.Table{}).
 				Return(amqp.Queue{}, errors.New("some error queue"))
 
 			err := transport.CreateQueue(
@@ -155,7 +155,7 @@ func TestAmqpTransport(t *testing.T) {
 		t.Run("create queue with an error of bindings", func(t *testing.T) {
 			channMock.
 				EXPECT().
-				QueueDeclare("queueName", true, true, true, true, nil).
+				QueueDeclare("queueName", true, true, true, true, amqp.Table{}).
 				Return(amqp.Queue{}, nil)
 			channMock.
 				EXPECT().
@@ -258,6 +258,53 @@ func TestAmqpTransport(t *testing.T) {
 			Queue("queueName", true, true, true, true, WithQueueType(QueueTypeQuorum)),
 			QueueBind("dest1", "binding1", true),
 			QueueBind("dest2", "binding2", false),
+		)
+		assert.NoError(t, err)
+	})
+
+	t.Run("create queue with dead letter exchange", func(t *testing.T) {
+		defer testLogger.Clear()
+
+		transport := amqpTransport{
+			connection:        connMock,
+			publishingChannel: channMock,
+			logger:            testLogger,
+		}
+
+		channMock.
+			EXPECT().
+			QueueDeclare("queueName", true, true, true, true, amqp.Table{
+				"x-dead-letter-exchange":    "my-dlx",
+				"x-dead-letter-routing-key": "dead-letters",
+			}).
+			Return(amqp.Queue{}, nil)
+
+		err := transport.CreateQueue(
+			context.Background(),
+			Queue("queueName", true, true, true, true, WithDeadLetterExchange("my-dlx"), WithDeadLetterRoutingKey("dead-letters")),
+		)
+		assert.NoError(t, err)
+	})
+
+	t.Run("create queue with dead letter exchange only", func(t *testing.T) {
+		defer testLogger.Clear()
+
+		transport := amqpTransport{
+			connection:        connMock,
+			publishingChannel: channMock,
+			logger:            testLogger,
+		}
+
+		channMock.
+			EXPECT().
+			QueueDeclare("queueName", true, true, true, true, amqp.Table{
+				"x-dead-letter-exchange": "my-dlx",
+			}).
+			Return(amqp.Queue{}, nil)
+
+		err := transport.CreateQueue(
+			context.Background(),
+			Queue("queueName", true, true, true, true, WithDeadLetterExchange("my-dlx")),
 		)
 		assert.NoError(t, err)
 	})

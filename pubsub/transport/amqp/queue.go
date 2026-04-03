@@ -23,6 +23,18 @@ func WithSingleActiveConsumer() QueueOptionsPatch {
 	}
 }
 
+func WithDeadLetterExchange(exchange string) QueueOptionsPatch {
+	return func(options *amqpQueue) {
+		options.deadLetterExchange = exchange
+	}
+}
+
+func WithDeadLetterRoutingKey(routingKey string) QueueOptionsPatch {
+	return func(options *amqpQueue) {
+		options.deadLetterRoutingKey = routingKey
+	}
+}
+
 func Queue(name string, durable, autoDelete, exclusive, noWait bool, patches ...QueueOptionsPatch) transport.Queue {
 	q := amqpQueue{
 		queueName:  name,
@@ -47,6 +59,8 @@ type amqpQueue struct {
 	exclusive            bool
 	noWait               bool
 	singleActiveConsumer bool
+	deadLetterExchange   string
+	deadLetterRoutingKey string
 }
 
 func (q amqpQueue) Name() string {

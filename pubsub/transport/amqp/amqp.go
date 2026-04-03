@@ -97,6 +97,14 @@ func (t *amqpTransport) CreateQueue(ctx context.Context, q transport.Queue, qbs 
 		table["x-single-active-consumer"] = true
 	}
 
+	if queue.deadLetterExchange != "" {
+		table["x-dead-letter-exchange"] = queue.deadLetterExchange
+	}
+
+	if queue.deadLetterRoutingKey != "" {
+		table["x-dead-letter-routing-key"] = queue.deadLetterRoutingKey
+	}
+
 	if _, err := t.publishingChannel.QueueDeclare(
 		queue.Name(),
 		queue.durable,
