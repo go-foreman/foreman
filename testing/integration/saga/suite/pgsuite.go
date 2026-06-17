@@ -58,7 +58,7 @@ func (t *PgSuite) SetupSuite() {
 	dbPort, err := dbContainer.MappedPort(t.ctx, "5432")
 	t.Require().NoError(err)
 
-	connectionStr := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable", dbCreds.user, dbCreds.password, dbHost, dbPort.Int(), dbCreds.dbName)
+	connectionStr := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable", dbCreds.user, dbCreds.password, dbHost, dbPort.Num(), dbCreds.dbName)
 
 	if v := os.Getenv("PG_CONNECTION"); v != "" {
 		connectionStr = v

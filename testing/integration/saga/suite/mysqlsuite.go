@@ -65,7 +65,7 @@ func (t *MysqlSuite) SetupSuite() {
 	dbPort, err := dbContainer.MappedPort(t.ctx, "3306")
 	t.Require().NoError(err)
 
-	connectionStr := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8&parseTime=True", dbCreds.user, dbCreds.password, dbHost, dbPort.Int(), dbCreds.dbName)
+	connectionStr := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8&parseTime=True", dbCreds.user, dbCreds.password, dbHost, dbPort.Num(), dbCreds.dbName)
 
 	if v := os.Getenv("MYSQL_CONNECTION"); v != "" {
 		connectionStr = v
