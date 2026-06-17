@@ -269,6 +269,7 @@ func TestSubscriber(t *testing.T) {
 			inPkg := transportMock.NewMockIncomingPkg(ctrl)
 			inPkg.EXPECT().UID().Return(fmt.Sprintf("%d", i)).Times(2)
 			inPkg.EXPECT().Origin().Return("m_bus")
+			inPkg.EXPECT().Reject().Return(nil)
 
 			testProcessor.
 				EXPECT().
@@ -300,7 +301,7 @@ func TestSubscriber(t *testing.T) {
 		wg.Wait()
 
 		for i := 0; i < 10; i++ {
-			assert.Contains(t, testLogger.Messages(), fmt.Sprintf("error happened while processing pkg %d from m_bus. some error", i))
+			assert.Contains(t, testLogger.Messages(), fmt.Sprintf("error happened while processing pkg %d from m_bus. some error. Rejecting", i))
 		}
 	})
 
