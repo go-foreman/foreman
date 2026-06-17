@@ -1,4 +1,4 @@
-![CI](https://github.com/go-foreman/foreman/actions/workflows/ci.yaml/badge.svg)
+[![CI](https://github.com/go-foreman/foreman/actions/workflows/ci.yaml/badge.svg?branch=master)](https://github.com/go-foreman/foreman/actions/workflows/ci.yaml)
 [![codecov](https://codecov.io/gh/go-foreman/foreman/branch/master/graph/badge.svg?token=CLU9K2QJVE)](https://codecov.io/gh/go-foreman/foreman)
 
 # Foreman
