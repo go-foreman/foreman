@@ -51,3 +51,35 @@ func TestNewReceivedMessage(t *testing.T) {
 		assert.Equal(t, m.TraceID(), "")
 	})
 }
+
+func TestReturnsCount(t *testing.T) {
+	t.Run("absent header is zero", func(t *testing.T) {
+		assert.Equal(t, 0, Headers{}.ReturnsCount())
+	})
+
+	t.Run("reads numeric types from any transport", func(t *testing.T) {
+		assert.Equal(t, 3, Headers{"returnsCount": int(3)}.ReturnsCount())     // in-process
+		assert.Equal(t, 3, Headers{"returnsCount": int32(3)}.ReturnsCount())   // AMQP round-trip
+		assert.Equal(t, 3, Headers{"returnsCount": float64(3)}.ReturnsCount()) // JSON round-trip
+	})
+
+	t.Run("non-numeric is zero", func(t *testing.T) {
+		assert.Equal(t, 0, Headers{"returnsCount": "oops"}.ReturnsCount())
+	})
+}
+
+func TestRegisterReturn(t *testing.T) {
+	t.Run("sets one when absent", func(t *testing.T) {
+		h := Headers{}
+		h.RegisterReturn()
+		assert.Equal(t, 1, h.ReturnsCount())
+	})
+
+	t.Run("increments across transport type changes", func(t *testing.T) {
+		h := Headers{"returnsCount": int32(1)} // value as it returns from AMQP
+		h.RegisterReturn()
+		assert.Equal(t, 2, h.ReturnsCount())
+		h.RegisterReturn()
+		assert.Equal(t, 3, h.ReturnsCount())
+	})
+}

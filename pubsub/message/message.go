@@ -10,30 +10,29 @@ import (
 type Headers map[string]interface{}
 
 func (m Headers) ReturnsCount() int {
-	v, exists := m["returnsCount"]
-	if !exists {
-		return 0
-	}
-	returnsCount, ok := v.(int)
-	if !ok {
-		return 0
-	}
-	return returnsCount
+	return asInt(m["returnsCount"])
 }
 
 func (m Headers) RegisterReturn() {
-	v, exists := m["returnsCount"]
-	if !exists {
-		m["returnsCount"] = 1
-		return
-	}
+	m["returnsCount"] = asInt(m["returnsCount"]) + 1
+}
 
-	returnsCount, ok := v.(int)
-	if !ok {
-		return
+// asInt normalizes a header value into an int. A value stored as a Go int can
+// come back from a transport as a different numeric type — AMQP decodes an int
+// field to int32, and a JSON-based transport would decode numbers to float64 —
+// so a strict v.(int) assertion is not safe across a round-trip. A missing or
+// non-numeric value normalizes to 0.
+func asInt(v interface{}) int {
+	switch n := v.(type) {
+	case int:
+		return n // set in-process before sending
+	case int32:
+		return int(n) // AMQP round-trip
+	case float64:
+		return int(n) // JSON round-trip
+	default:
+		return 0
 	}
-	returnsCount++
-	m["returnsCount"] = returnsCount
 }
 
 type Object interface {
