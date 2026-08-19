@@ -240,3 +240,94 @@ func TestReconnectConnection(t *testing.T) {
 		assert.NotEmpty(t, rc.logger)
 	})
 }
+
+// recoveringConnection stands in for an amqp091 connection dialled with a Recovery
+// config: the driver reconnects it and everything opened on it.
+type recoveringConnection struct {
+	UnderlyingConnection
+	recoveryEnabled bool
+	channelCalls    int
+}
+
+func (c *recoveringConnection) IsRecoveryEnabled() bool { return c.recoveryEnabled }
+
+func (c *recoveringConnection) Channel() (*amqp.Channel, error) {
+	c.channelCalls++
+	return &amqp.Channel{}, nil
+}
+
+func TestSelfRecovering(t *testing.T) {
+	t.Run("connection that recovers itself", func(t *testing.T) {
+		assert.True(t, selfRecovering(&recoveringConnection{recoveryEnabled: true}))
+	})
+
+	t.Run("connection dialled without recovery", func(t *testing.T) {
+		assert.False(t, selfRecovering(&recoveringConnection{recoveryEnabled: false}))
+	})
+
+	t.Run("connection that knows nothing about recovery", func(t *testing.T) {
+		assert.False(t, selfRecovering(&MockUnderlyingConnection{}))
+	})
+}
+
+func TestConnection_ChannelOfRecoveringConnection(t *testing.T) {
+	testLogger := log.NewNilLogger()
+
+	t.Run("channel is left to the driver", func(t *testing.T) {
+		conn := NewReconnectConnection(testLogger, &recoveringConnection{recoveryEnabled: true}, time.Millisecond)
+
+		ch, err := conn.Channel()
+		require.NoError(t, err)
+		require.NotNil(t, ch)
+
+		assert.True(t, ch.(*Channel).selfRecovering)
+	})
+
+	t.Run("channel is supervised by foreman", func(t *testing.T) {
+		conn := NewReconnectConnection(testLogger, &recoveringConnection{recoveryEnabled: false}, time.Millisecond)
+
+		ch, err := conn.Channel()
+		require.NoError(t, err)
+		require.NotNil(t, ch)
+
+		assert.False(t, ch.(*Channel).selfRecovering)
+	})
+}
+
+func TestChannel_ConsumeOfRecoveringConnection(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// A recovered consumer keeps delivering on the channel the driver handed out, so the
+	// wrapper must return that channel as is instead of copying deliveries across its own.
+	channMock := NewMockAmqpChannel(ctrl)
+	deliveries := make(chan amqp.Delivery, 1)
+
+	channMock.
+		EXPECT().
+		Consume("q1", "q1", false, false, false, false, nil).
+		Return((<-chan amqp.Delivery)(deliveries), nil).
+		Times(1)
+
+	ch := Channel{
+		AmqpChannel:    channMock,
+		logger:         log.NewNilLogger(),
+		selfRecovering: true,
+	}
+
+	d, err := ch.Consume("q1", "q1", false, false, false, false, nil)
+	require.NoError(t, err)
+
+	deliveries <- amqp.Delivery{ConsumerTag: "q1"}
+	select {
+	case msg := <-d:
+		assert.Equal(t, "q1", msg.ConsumerTag)
+	case <-time.After(time.Second):
+		t.Fatal("delivery was not passed through")
+	}
+
+	// The driver owns the channel's lifetime: closing it ends the deliveries.
+	close(deliveries)
+	_, open := <-d
+	assert.False(t, open)
+}

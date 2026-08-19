@@ -1,7 +1,6 @@
 package amqp
 
 import (
-	"reflect"
 	"sync/atomic"
 	"time"
 
@@ -14,57 +13,59 @@ import (
 const (
 	delay          = time.Second * 3 // reconnect after delay seconds
 	reconnectCount = 20
+	locale         = "en_US" // what amqp.Dial passes to amqp.DialConfig
 )
 
-// Dial wrap amqp.Dial, dial and get a reconnect connection
+// Dial wraps amqp.DialConfig, dial and get a reconnect connection.
+//
+// With autoReconnect the driver's own recovery is enabled: it redials the connection,
+// reopens its channels, redeclares the recorded topology (exchanges, queues, bindings)
+// and re-subscribes active consumers onto the very same delivery channels their callers
+// already hold. Closing the connection stops recovery, so nothing is left running behind
+// a shut-down application.
 func Dial(url string, autoReconnect bool, logger log.Logger) (UnderlyingConnection, error) {
-	var connPtr UnderlyingConnection
+	config := amqp.Config{Locale: locale}
 
-	conn, err := amqp.Dial(url)
+	if autoReconnect {
+		config.Recovery = &amqp.Recovery{
+			ReconnectionConfig: &amqp.ReconnectionConfig{
+				MaxRetryCount: reconnectCount,
+				RetryInterval: delay,
+			},
+			ConnectionRecovery: &loggingRecovery{logger: logger},
+		}
+	}
+
+	conn, err := amqp.DialConfig(url, config)
 	if err != nil {
 		return nil, err
 	}
 
-	connPtr = conn
+	return conn, nil
+}
 
-	if autoReconnect {
-		go func() {
-			for {
-				var reconnectedCount uint
+// loggingRecovery reports connection and channel losses through foreman's logger and
+// leaves the recovery itself to the driver's default implementation.
+type loggingRecovery struct {
+	logger   log.Logger
+	delegate amqp.DefaultConnectionRecovery
+}
 
-				reason, ok := <-conn.NotifyClose(make(chan *amqp.Error))
-				// exit this goroutine if closed by developer
-				if !ok {
-					logger.Log(log.InfoLevel, "connection closed explicitly")
-					break
-				}
+func (r *loggingRecovery) OnConnectionClose(conn *amqp.Connection, err *amqp.Error) {
+	r.logger.Logf(log.WarnLevel, "connection closed, reason: %v", err)
+	r.delegate.OnConnectionClose(conn, err)
+}
 
-				logger.Logf(log.WarnLevel, "connection closed, reason: %v", reason)
+func (r *loggingRecovery) OnChannelClose(ch *amqp.Channel, err *amqp.Error) {
+	r.logger.Logf(log.WarnLevel, "channel closed, reason: %v", err)
+	r.delegate.OnChannelClose(ch, err)
+}
 
-				// reconnect if not closed by developer
-				for {
-					// wait for reconnect
-					time.Sleep(delay)
-
-					if reconnectedCount > reconnectCount {
-						logger.Logf(log.FatalLevel, "reached limit of reconnects %d", reconnectCount)
-					}
-					reconnectedCount++
-
-					conn, err := amqp.Dial(url)
-					if err == nil {
-						reflect.ValueOf(connPtr).Elem().Set(reflect.ValueOf(conn).Elem())
-						logger.Log(log.InfoLevel, "successfully reconnected amqp.Connection")
-						break
-					}
-
-					logger.Logf(log.ErrorLevel, "reconnect failed, err: %v", err)
-				}
-			}
-		}()
-	}
-
-	return connPtr, nil
+// selfRecovering reports whether the driver takes care of reconnecting this connection
+// and everything opened on it, making foreman's own supervision unnecessary.
+func selfRecovering(conn UnderlyingConnection) bool {
+	recoverable, ok := conn.(interface{ IsRecoveryEnabled() bool })
+	return ok && recoverable.IsRecoveryEnabled()
 }
 
 type Connection struct {
@@ -102,6 +103,13 @@ func (c *Connection) Channel() (AmqpChannel, error) {
 		AmqpChannel:              ch,
 		logger:                   c.logger,
 		consumeReconnectionDelay: c.chReconnectionDelay,
+		selfRecovering:           selfRecovering(c.underlyingConn),
+	}
+
+	// A driver-recovered channel reopens itself and comes back with its topology and
+	// consumers intact, so watching it here would only race with that recovery.
+	if channel.selfRecovering {
+		return channel, nil
 	}
 
 	go func() {
@@ -151,6 +159,7 @@ type Channel struct {
 	closed                   int32
 	logger                   log.Logger
 	consumeReconnectionDelay time.Duration
+	selfRecovering           bool
 }
 
 // IsClosed indicate closed by developer
@@ -170,6 +179,13 @@ func (ch *Channel) Close() error {
 
 // Consume warp amqp.Channel.Consume, the returned delivery will end only when channel closed by developer
 func (ch *Channel) Consume(queue, consumer string, autoAck, exclusive, noLocal, noWait bool, args amqp.Table) (<-chan amqp.Delivery, error) {
+	// The driver re-subscribes a recovered consumer onto the same delivery channel it
+	// returned here, which stays open across reconnects and closes only once the channel
+	// itself is closed — exactly the contract this wrapper exists to provide.
+	if ch.selfRecovering {
+		return ch.AmqpChannel.Consume(queue, consumer, autoAck, exclusive, noLocal, noWait, args)
+	}
+
 	deliveries := make(chan amqp.Delivery)
 
 	var reconnectedCount uint
